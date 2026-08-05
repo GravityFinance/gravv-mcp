@@ -262,7 +262,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "completeAccountApplicationTos",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/tos",
     "description": "Complete TOS acceptance — Record the applicant's acceptance of the provider terms of service for a draft application.",
@@ -385,7 +385,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "createAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications",
     "description": "Create account application — Create a new account application for a given customer. For sandbox and testing integrations, use `polygon` as the `blockchain_network`.",
@@ -3337,7 +3337,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "deleteAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "delete",
     "path": "/v1/accounts/applications/{id}",
     "description": "Delete account application — Delete a single application.",
@@ -3596,7 +3596,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "getAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/{id}",
     "description": "Get account application — Retrieve details of a single application by ID.",
@@ -3626,7 +3626,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "getAccountApplicationHistory",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/{id}/history",
     "description": "Get application history — Get the audit log or history of an application.",
@@ -4439,7 +4439,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "listAccountApplications",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications",
     "description": "Get account applications — Retrieve a list of applications with optional filters and pagination.",
@@ -5046,7 +5046,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "listPendingAccountApplications",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/pending",
     "description": "Get pending applications — Retrieve a list of pending applications.",
@@ -5406,7 +5406,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "processAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/process",
     "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: processing may be handed to a background worker rather than completing inline. Do not assume the response is terminal — poll getAccountApplication until status is APPROVED or REJECTED.",
@@ -5530,7 +5530,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "submitAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit",
     "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
@@ -5560,7 +5560,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "submitAndProcessAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit-and-process",
     "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: combines submit and process. May still complete in the background — poll getAccountApplication until status is APPROVED or REJECTED.",
@@ -5590,7 +5590,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "updateAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "put",
     "path": "/v1/accounts/applications/{id}",
     "description": "Update account application — Update data for a draft or rejected application.",
@@ -7194,7 +7194,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "validateAccountApplication",
-    "toolset": "accounts",
+    "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/validate",
     "description": "Validate application data — Validates an application payload against provider specific rules without saving.",

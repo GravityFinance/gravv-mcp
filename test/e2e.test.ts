@@ -144,7 +144,12 @@ describe("end-to-end over MCP stdio", () => {
 
       assert.ok(names.includes("createCustomer"));
       assert.ok(names.includes("createTransfer"));
-      assert.ok(!names.includes("createCard"), "cards is not a default toolset");
+      assert.ok(names.includes("createCard"), "cards ships by default");
+      assert.ok(names.includes("createWallet"), "wallets ships by default — no restart to create one");
+      assert.ok(
+        !names.includes("createAccountApplication"),
+        "the heavy account-application schemas are opt-in",
+      );
       assert.ok(
         !names.includes("getCardSensitiveDetails"),
         "cardholder-data endpoints must never be advertised",
@@ -299,9 +304,9 @@ describe("end-to-end over MCP stdio", () => {
     });
     try {
       await mcp.initialize();
-      const res = await mcp.request("tools/call", { name: "createCard", arguments: {} });
+      const res = await mcp.request("tools/call", { name: "createAccountApplication", arguments: {} });
       assert.equal(res.result.isError, true);
-      assert.match(textOf(res), /--toolsets=cards/);
+      assert.match(textOf(res), /--toolsets=account-applications/);
     } finally {
       mcp.kill();
     }

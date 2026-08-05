@@ -13,6 +13,7 @@ import { DEFAULT_TOOLSETS, type Toolset } from "../curation.ts";
 const VALID_TOOLSETS: Toolset[] = [
   "customers",
   "accounts",
+  "account-applications",
   "transfers",
   "transactions",
   "external-accounts",

@@ -99,8 +99,21 @@ for those.
 
 ## Toolsets
 
-80 tools across 13 groups. Loading all of them floods the model's context and burns the
-rate limit, so they are opt-in.
+80 tools across 14 groups. **Everything except `account-applications` loads by default.**
+
+Gating most domains behind flags turned out to cost context rather than save it. Measured
+on the generated surface:
+
+| Selection | Tools | ~Tokens |
+|---|---|---|
+| Default (all but `account-applications`) | 68 | **20k** |
+| Previous "core Recipes" default | 39 | 30k |
+| Everything | 80 | 39k |
+
+Three account-application tools carry ~24 KB of schema each — the `Unified*Data`
+onboarding payloads with 31- and 40-field variants — and account for 18k on their own.
+Excluding those three buys more than gating half the API did, so everything else ships by
+default and nobody restarts the server to create a wallet.
 
 ```bash
 npx @gravv/mcp                                       # default set
@@ -111,18 +124,19 @@ npx @gravv/mcp --toolsets=all                        # everything not blockliste
 | Toolset | Default | Covers |
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
-| `accounts` | ✓ | accounts, applications, status, sweep rules |
+| `accounts` | ✓ | accounts, status |
 | `transfers` | ✓ | transfers, rates, supported countries/currencies |
 | `transactions` | ✓ | history, volume, export |
 | `external-accounts` | ✓ | recipients, verification, institutions |
 | `kyc` | ✓ | KYC start, S2S, document upload, status |
-| `cards` | | issue, balance, status, withdraw, applications |
-| `wallets` | | blockchain wallet creation and lookup |
-| `fx` | | quotes, rates, OTC orders |
-| `collections` | | deposits, payment intents, saved cards |
-| `payment-links` | | stablecoin payment links |
-| `features` | | feature eligibility and activation |
-| `webhooks` | | event history, delivery calls, retry |
+| `cards` | ✓ | issue, balance, status, withdraw, applications |
+| `wallets` | ✓ | blockchain wallet creation and lookup |
+| `fx` | ✓ | quotes, rates, OTC orders |
+| `collections` | ✓ | deposits, payment intents, saved cards |
+| `payment-links` | ✓ | stablecoin payment links |
+| `features` | ✓ | feature eligibility and activation |
+| `webhooks` | ✓ | event history, delivery calls, retry |
+| `account-applications` | | account onboarding — 12 tools, ~19k tokens of schema |
 
 ---
 

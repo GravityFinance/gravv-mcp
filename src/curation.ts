@@ -23,6 +23,7 @@ export const opKey = (method: string, path: string) => `${method.toUpperCase()} 
 export type Toolset =
   | "customers"
   | "accounts"
+  | "account-applications"
   | "transfers"
   | "transactions"
   | "external-accounts"
@@ -35,7 +36,24 @@ export type Toolset =
   | "features"
   | "webhooks";
 
-/** Loaded when the operator passes no --toolsets flag. Covers the documented Recipes plus reporting. */
+/**
+ * Loaded when the operator passes no --toolsets flag: everything except
+ * `account-applications`.
+ *
+ * The obvious design — gate most domains behind opt-in flags — turned out to cost
+ * context rather than save it. Measured on the generated surface:
+ *
+ *   68 tools, everything except account-applications   ~20k tokens
+ *   39 tools, the previous "core Recipes" default      ~30k tokens
+ *
+ * Three account-application tools carry ~24 KB of schema each — the Unified*Data
+ * onboarding payloads, with 31- and 40-field variants — and alone account for 18k of
+ * that. Excluding those three buys more than gating half the API does, so everything
+ * else ships by default and nobody hits a restart to create a wallet.
+ *
+ * Account onboarding is a deliberate, infrequent flow; `--toolsets=all` or
+ * `--toolsets=account-applications` turns it on when it is actually needed.
+ */
 export const DEFAULT_TOOLSETS: Toolset[] = [
   "customers",
   "accounts",
@@ -43,6 +61,13 @@ export const DEFAULT_TOOLSETS: Toolset[] = [
   "transactions",
   "external-accounts",
   "kyc",
+  "cards",
+  "wallets",
+  "fx",
+  "collections",
+  "payment-links",
+  "features",
+  "webhooks",
 ];
 
 interface Op {
@@ -75,21 +100,21 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/accounts": { name: "listAccounts", toolset: "accounts" },
   "GET /v1/accounts/{account_id}": { name: "getAccount", toolset: "accounts" },
   "PATCH /v1/accounts/{account_id}/status": { name: "updateAccountStatus", toolset: "accounts" },
-  "POST /v1/accounts/applications": { name: "createAccountApplication", toolset: "accounts" },
-  "GET /v1/accounts/applications": { name: "listAccountApplications", toolset: "accounts" },
-  "GET /v1/accounts/applications/pending": { name: "listPendingAccountApplications", toolset: "accounts" },
-  "GET /v1/accounts/applications/{id}": { name: "getAccountApplication", toolset: "accounts" },
-  "PUT /v1/accounts/applications/{id}": { name: "updateAccountApplication", toolset: "accounts" },
-  "DELETE /v1/accounts/applications/{id}": { name: "deleteAccountApplication", toolset: "accounts" },
-  "POST /v1/accounts/applications/{id}/submit": { name: "submitAccountApplication", toolset: "accounts" },
-  "POST /v1/accounts/applications/{id}/process": { name: "processAccountApplication", toolset: "accounts" },
+  "POST /v1/accounts/applications": { name: "createAccountApplication", toolset: "account-applications" },
+  "GET /v1/accounts/applications": { name: "listAccountApplications", toolset: "account-applications" },
+  "GET /v1/accounts/applications/pending": { name: "listPendingAccountApplications", toolset: "account-applications" },
+  "GET /v1/accounts/applications/{id}": { name: "getAccountApplication", toolset: "account-applications" },
+  "PUT /v1/accounts/applications/{id}": { name: "updateAccountApplication", toolset: "account-applications" },
+  "DELETE /v1/accounts/applications/{id}": { name: "deleteAccountApplication", toolset: "account-applications" },
+  "POST /v1/accounts/applications/{id}/submit": { name: "submitAccountApplication", toolset: "account-applications" },
+  "POST /v1/accounts/applications/{id}/process": { name: "processAccountApplication", toolset: "account-applications" },
   "POST /v1/accounts/applications/{id}/submit-and-process": {
     name: "submitAndProcessAccountApplication",
-    toolset: "accounts",
+    toolset: "account-applications",
   },
-  "GET /v1/accounts/applications/{id}/history": { name: "getAccountApplicationHistory", toolset: "accounts" },
-  "POST /v1/accounts/applications/tos": { name: "completeAccountApplicationTos", toolset: "accounts" },
-  "POST /v1/accounts/applications/validate": { name: "validateAccountApplication", toolset: "accounts" },
+  "GET /v1/accounts/applications/{id}/history": { name: "getAccountApplicationHistory", toolset: "account-applications" },
+  "POST /v1/accounts/applications/tos": { name: "completeAccountApplicationTos", toolset: "account-applications" },
+  "POST /v1/accounts/applications/validate": { name: "validateAccountApplication", toolset: "account-applications" },
 
   // ---- external accounts (payees) -----------------------------------------
   "POST /v1/external-accounts": { name: "createExternalAccount", toolset: "external-accounts" },
