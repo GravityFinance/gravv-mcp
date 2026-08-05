@@ -2,9 +2,27 @@
   "name": "@gravv/mcp",
   "version": "0.1.0",
   "description": "MCP server for the Gravv payments API — onboard customers, open accounts, move money, issue cards.",
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "MIT",
   "type": "module",
+  "homepage": "https://gravv-docs.syntext.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GravityFinance/gravv-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GravityFinance/gravv-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "gravv",
+    "payments",
+    "stablecoin",
+    "fintech"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "gravv-mcp": "dist/bin/gravv-mcp.js"
   },

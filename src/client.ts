@@ -15,8 +15,7 @@ export type Environment = "sandbox" | "live" | "unknown";
 
 /**
  * Sandbox and live share one base URL — the API key alone decides which database a
- * request reaches. `grvSec_sandbox_` / `grvSec_live_` prefixes are read by the gateway
- * at api-gateway/src/internal/utils/grpc-services.go:41.
+ * request reaches, via its `grvSec_sandbox_` / `grvSec_live_` prefix.
  *
  * Returning "unknown" rather than guessing matters: the safety layer treats unknown as
  * potentially-live, so an unrecognised key format fails closed.
@@ -45,12 +44,11 @@ export class GravvApiError extends Error {
  * Token bucket matching the server-side limiter so we queue locally instead of
  * generating 429s.
  *
- * NOTE: the real ceiling is unclear. throttler.go:15 configures rate.Limit(15/60) with
- * burst 30, its own comment says 5/min, and the published docs say 10/min — but 40
- * consecutive sandbox requests measured zero 429s, so none of those is being enforced
- * there. Throttling at 10/min would make the server feel broken for no reason, so the
- * default is a courtesy 60/min. If live turns out to be stricter, the 429 handler backs
- * off and GRAVV_RATE_PER_MINUTE lowers the ceiling.
+ * NOTE: the enforced ceiling is not clearly documented. The published limit is 10/min,
+ * but 40 consecutive sandbox requests measured zero 429s, so throttling that hard would
+ * make the server feel broken for no reason. The default is a courtesy 60/min; if a
+ * given environment is stricter the 429 handler backs off, and GRAVV_RATE_PER_MINUTE
+ * lowers the ceiling.
  */
 export class RateLimiter {
   private tokens: number;
@@ -169,9 +167,8 @@ export class GravvClient {
       "User-Agent": "gravv-mcp",
     };
 
-    // The gateway rejects any POST without an Idempotency-Key with a 400
-    // (middleware/idempotency.go:587), so we always generate one rather than relying
-    // on the caller. Exemptions are encoded in curation.ts.
+    // The API rejects any POST without an Idempotency-Key with a 400, so we always
+    // generate one rather than relying on the caller. Exemptions are in curation.ts.
     let idempotencyKey: string | undefined;
     if (tool.needsIdempotency) {
       idempotencyKey = opts.idempotencyKey ?? randomUUID();
@@ -252,6 +249,7 @@ export class GravvClient {
  * The shape is not consistent across statuses — verified against sandbox:
  *   400 -> {"data":null,"error":"missing idempotency key in request headers"}
  *   422 -> {"data":null,"error":{"code":"idempotency_key_reused","message":"..."}}
+ *
  *
  * Naively stringifying the second form yields "[object Object]", which tells the model
  * nothing and sends it guessing.

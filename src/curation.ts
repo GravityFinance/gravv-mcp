@@ -258,9 +258,8 @@ export const MONEY_OPS = new Set<string>([
 ]);
 
 /**
- * The gateway requires an Idempotency-Key on every POST and returns 400 without one
- * (api-gateway middleware/idempotency.go:587). These paths are the documented
- * exceptions — sending a key to them is harmless but pointless.
+ * The API requires an Idempotency-Key on every POST and returns 400 without one. These
+ * paths are the documented exceptions — sending a key to them is harmless but pointless.
  */
 export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1/webhooks/"];
 

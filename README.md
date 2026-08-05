@@ -150,10 +150,10 @@ npx @gravv/mcp --toolsets=all                        # everything not blockliste
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 
-> **Rate limit caveat.** Measured: 40 consecutive sandbox requests returned zero 429s,
-> so none of the three documented figures (`throttler.go` 15/min, its comment 5/min, the
-> docs 10/min) is enforced there. The default is a courtesy 60/min. If live proves
-> stricter the 429 handler backs off; lower `GRAVV_RATE_PER_MINUTE` to be safe.
+> **Rate limit caveat.** The published limit is 10 requests/minute, but 40 consecutive
+> sandbox requests measured zero 429s. Throttling at 10 would make the server feel broken
+> for no reason, so the default is a courtesy 60/min. If your environment is stricter the
+> 429 handler backs off; lower `GRAVV_RATE_PER_MINUTE` to be safe.
 
 ---
 
@@ -229,17 +229,16 @@ Two things this surfaced, both fixed here:
 
 - The gateway's `error` field is a **string** on 400 but an **object** on 422. Naive
   stringification produced `[object Object]`; `extractErrorMessage` now handles both.
-- `/v1/accounts` responds in 4–6s where `/v1/customers` takes ~1.2s, and one call
-  exceeded 30s. The client timeout is 60s as a result.
+- Response times vary considerably by endpoint, and one call exceeded 30 seconds. The
+  client timeout is 60s as a result.
 
 ## Known gaps
 - **~20 live endpoints have no OpenAPI spec** and therefore no tool: all of
   `/v1/billings/*`, `/v1/settlement-instructions/*`, `/v1/open-trade/*`,
   `/v1/accounts/sweep-rules/*`, `/v1/wallets/balances`, `/v1/wallets/total-balance`,
   `/v1/customers/email/{email}`, `/v1/cards/{id}/chain-details`.
-- **Approve/reject is unavailable by design.** `middleware.DashboardOnly()` 403s
-  API-key callers on the transfer, payee, and FX approval routes. Approvals are a
-  dashboard action.
+- **Approve/reject is unavailable by design.** The API rejects API-key callers on the
+  transfer, payee, and FX approval routes — approvals are a dashboard action.
 - **stdio only.** The hosted remote transport is not built.
 - **Docs search is keyword-based**, with payments-domain synonym expansion — not
   semantic. It handles the vocabulary gap well ("send money" finds the remit recipe) but
