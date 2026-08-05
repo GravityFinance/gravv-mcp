@@ -10,12 +10,22 @@ Works with Claude, Cursor, VS Code, and any [MCP](https://modelcontextprotocol.i
 
 ## Quick start
 
+**Requires Node.js 20 or later.** Check with `node --version`.
+
 ```bash
 GRAVV_API_KEY=grvSec_sandbox_... npx @gravv/mcp
 ```
 
 Get an API key from your [Gravv dashboard](https://gravv-docs.syntext.dev/getting-started/authentication).
 Start with a sandbox key — the key itself decides which environment you reach.
+
+To confirm it's wired up, ask your assistant:
+
+> *What Gravv accounts do I have?*
+
+It should call `listAccounts` and come back with real data. If you have no accounts yet,
+try *"Search the Gravv docs for how to open an account"* — the documentation tools work
+even before you have any.
 
 ### Claude Code
 
@@ -129,6 +139,174 @@ npx @gravv/mcp --toolsets=all                        # everything
 | `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
 | `account-applications` | | account onboarding |
+
+---
+
+## Tool reference
+
+`*` marks a tool that moves money and therefore requires `confirm: true`.
+
+**Documentation** — always available, no API key needed
+`searchGravvDocs` · `getGravvDocPage`
+
+**customers**
+`createCustomer` · `getCustomer` · `listCustomers` · `updateCustomer`
+
+**kyc**
+`startCustomerKyc` · `startCustomerKycS2S` · `uploadCustomerKycDocument` ·
+`getCustomerKycDocuments` · `getCustomerKycStatus`
+
+**accounts**
+`createAccount` · `getAccount` · `listAccounts` · `updateAccountStatus`
+
+**external-accounts** — recipients you pay out to
+`createExternalAccount` · `getExternalAccount` · `listExternalAccounts` ·
+`verifyExternalAccount` · `listExternalAccountInstitutions`
+
+**transfers**
+`createTransfer*` · `getTransferRates` · `listTransferSupportedCurrencies` ·
+`listTransferSupportedCountries` · `listTransferSupportedCountriesForAddress`
+
+**transactions**
+`listTransactions` · `getTransaction` · `getTransactionsVolume` · `exportTransactions`
+
+**cards**
+`createCard` · `getCard` · `listCards` · `getCardBalance` · `updateCardStatus` ·
+`withdrawFromCard*` · `createCardApplication` · `getCardApplication` · `listCardApplications`
+
+**wallets**
+`createWallet` · `getWallet` · `listWallets`
+
+**fx**
+`getFxQuote` · `listFxRates` · `listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` ·
+`listFxOrders` · `cancelFxOrder` · `listFxPendingApprovals`
+
+**collections** — taking money in
+`createCollection*` · `getCollection` · `createCardPaymentIntent` · `chargeSavedCard*` ·
+`listSavedCards` · `getSavedCard` · `deleteSavedCard`
+
+**payment-links**
+`createPaymentLink` · `getPaymentLink` · `listPaymentLinks` · `updatePaymentLink` ·
+`updatePaymentLinkStatus` · `deletePaymentLink` · `getPublicPaymentLink`
+
+**features**
+`listFeatures` · `checkFeatureEligibility` · `activateFeature`
+
+**webhooks**
+`getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
+
+**account-applications** — opt-in via `--toolsets=account-applications`
+`createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
+`listAccountApplications` · `listPendingAccountApplications` · `deleteAccountApplication` ·
+`submitAccountApplication` · `processAccountApplication` ·
+`submitAndProcessAccountApplication` · `getAccountApplicationHistory` ·
+`validateAccountApplication` · `completeAccountApplicationTos`
+
+Each tool's description carries its own prerequisites — several operations depend on
+something else having happened first, and the assistant reads those before calling.
+
+---
+
+## A worked example
+
+Asking an assistant to *"pay a supplier in Nigeria 200 USD from my main account"*:
+
+```
+1. searchGravvDocs("send money to a Nigerian bank account")
+   -> finds the remittance guide, learns the recipient must be `active`
+      before a transfer will succeed
+
+2. listAccounts()
+   -> finds the funded USD account to pay from
+
+3. listExternalAccountInstitutions({ country: "NG" })
+   -> resolves the recipient's bank
+
+4. createExternalAccount({ ...recipient details })
+   -> returns status "pending" — not yet usable
+
+5. getExternalAccount({ external_account_id })
+   -> polls until status is "active"
+
+6. createTransfer({ amount: 200, source, destination })
+   -> returns a PREVIEW, does not execute:
+      "Transfer 200 USD from acc_1 to external_account ext_9.
+       Once submitted this cannot be reversed from the API."
+
+   [you review and agree]
+
+7. createTransfer({ ...same arguments, confirm: true })
+   -> executes; returns transfer_id and status
+```
+
+Step 1 is what stops step 6 failing. Without the guides, an assistant tends to create the
+recipient and immediately transfer to it, before the payment rail has finished setting
+them up.
+
+---
+
+## Going live
+
+1. Test the whole flow with your sandbox key first. Sandbox and live hold **entirely
+   separate data** — an id from one does not exist in the other.
+2. Swap `GRAVV_API_KEY` for your live key. The base URL does not change.
+3. Reads and non-financial writes work immediately.
+4. Money movement stays blocked until you also set `GRAVV_ALLOW_LIVE_WRITES=true`. This
+   is deliberate: swapping the key alone should not silently arm real payments.
+
+```json
+{
+  "mcpServers": {
+    "gravv": {
+      "command": "npx",
+      "args": ["-y", "@gravv/mcp"],
+      "env": {
+        "GRAVV_API_KEY": "grvSec_live_...",
+        "GRAVV_ALLOW_LIVE_WRITES": "true"
+      }
+    }
+  }
+}
+```
+
+Consider a second, separate entry running `--read-only` against your live key for
+reporting, and keep writes on sandbox.
+
+---
+
+## Troubleshooting
+
+**The server doesn't start**
+Check `node --version` is 20 or later. Without `GRAVV_API_KEY` the server still starts,
+but only the two documentation tools load — that's expected, not a failure.
+
+**`401` on every call**
+The key was rejected. Confirm it is current and that you copied the whole value.
+
+**`404` on an id you know exists**
+You're probably in the other environment. Sandbox and live hold separate data. The
+`environment` field in every response tells you which one you're in.
+
+**"tool exists but its toolset is not loaded"**
+Restart with `--toolsets=all`, or name the group the error mentions.
+
+**"Not available over MCP" on card PAN, CVV, or PIN**
+Intentional and not configurable. Use the
+[client-side decryption flow](https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview).
+
+**A transfer returned `confirmation_required` instead of running**
+Working as designed. Call again with `confirm: true` after reviewing the preview.
+
+**`422` mentioning an idempotency key**
+The same key was reused with a different payload. A genuinely new operation needs a new
+key; the server generates one per call, so this usually means a retry changed the body.
+
+**Repeated `429`**
+Lower `GRAVV_RATE_PER_MINUTE`.
+
+**Documentation search returns nothing**
+It's keyword-based, not semantic. Rephrase using the vocabulary the docs use — "transfer"
+rather than an unusual synonym — or drop the section filter.
 
 ---
 
