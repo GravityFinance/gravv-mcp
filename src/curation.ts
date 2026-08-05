@@ -1,12 +1,11 @@
 /**
  * Hand-maintained curation over the generated tool surface.
  *
- * The OpenAPI specs in apps/client-docs describe 86 operations but carry
- * operationIds on only 10 of them, and five of those are auto-generated
- * (`get_v1-fx-orders-order_id`). Rather than requiring an edit to the docs repo,
- * the MCP owns its own tool naming here, keyed by `METHOD /path`. That keeps the
- * two repos independently releasable — client-docs stays the source of truth for
- * *shapes*, this file is the source of truth for *how the tools present*.
+ * Most operations in the source specifications carry no `operationId`, and MCP tool
+ * names have to be stable and human-legible. So this server owns its own naming, keyed
+ * by `METHOD /path`, rather than depending on the specifications for it. The
+ * specifications remain the source of truth for request and response *shapes*; this
+ * file is the source of truth for how the tools *present*.
  *
  * Four things live here, none of which can be derived from a spec:
  *   1. NAMES        — stable tool names
@@ -40,17 +39,12 @@ export type Toolset =
  * Loaded when the operator passes no --toolsets flag: everything except
  * `account-applications`.
  *
- * The obvious design — gate most domains behind opt-in flags — turned out to cost
- * context rather than save it. Measured on the generated surface:
+ * Gating most domains behind opt-in flags turned out to cost context rather than save
+ * it: a handful of account-application tools carry very large onboarding schemas and
+ * dominate the total, while every other domain is cheap. Excluding just those buys more
+ * than gating half the API did.
  *
- *   68 tools, everything except account-applications   ~20k tokens
- *   39 tools, the previous "core Recipes" default      ~30k tokens
- *
- * Three account-application tools carry ~24 KB of schema each — the Unified*Data
- * onboarding payloads, with 31- and 40-field variants — and alone account for 18k of
- * that. Excluding those three buys more than gating half the API does, so everything
- * else ships by default and nobody hits a restart to create a wallet.
- *
+ * So everything else loads by default and nobody restarts the server to create a wallet.
  * Account onboarding is a deliberate, infrequent flow; `--toolsets=all` or
  * `--toolsets=account-applications` turns it on when it is actually needed.
  */
