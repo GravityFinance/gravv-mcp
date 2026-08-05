@@ -1,0 +1,366 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: wallet_create_001
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  responses:
+    BadRequest:
+      description: Bad request — invalid input or missing required fields
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: 'null'
+                example: null
+              error:
+                type: string
+                example: invalid request body
+  schemas:
+    WalletAsset:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Asset symbol
+          example: XLM
+        balance:
+          type: string
+          description: Current balance as a string
+          example: '1500.0000000'
+        decimals:
+          type: integer
+          description: Number of decimal places for this asset
+          example: 7
+    Wallet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the wallet
+          example: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who owns this wallet
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        address:
+          type: string
+          description: Blockchain wallet address
+          example: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
+        network:
+          type: string
+          description: Blockchain network
+          enum:
+            - stellar
+            - polygon
+            - ethereum
+            - base
+            - solana
+            - avalanche
+            - sui
+            - tron
+          example: stellar
+        name:
+          type:
+            - string
+            - 'null'
+          description: Wallet name or identifier
+          example: my wallet
+        date_created:
+          type: string
+          format: date-time
+          description: Timestamp when the wallet was created
+          example: '2025-10-30T12:18:34.484+00:00'
+    CreateWalletRequest:
+      type: object
+      required:
+        - customer_id
+        - network
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer to create a wallet for
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        name:
+          type: string
+          description: Optional custom name for the wallet
+          example: my wallet
+        network:
+          type: string
+          description: Blockchain network for the wallet
+          enum:
+            - stellar
+            - polygon
+            - ethereum
+            - base
+            - solana
+            - avalanche
+            - sui
+            - tron
+          example: stellar
+    CreateWalletResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Wallet'
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    GetWalletResponse:
+      type: object
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/Wallet'
+            - type: object
+              properties:
+                assets:
+                  type: array
+                  description: Assets held in this wallet
+                  items:
+                    $ref: '#/components/schemas/WalletAsset'
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    WalletListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Wallet'
+            page:
+              type: integer
+              example: 1
+            items_per_page:
+              type: integer
+              example: 10
+            total_items:
+              type: integer
+              example: 24
+            total_pages:
+              type: integer
+              example: 3
+            has_next_page:
+              type: boolean
+              example: true
+            has_previous_page:
+              type: boolean
+              example: false
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Wallets
+    description: Manage blockchain wallets for customers
+paths:
+  /v1/wallets:
+    post:
+      tags:
+        - Wallets
+      summary: Create a wallet
+      description: Create a new blockchain wallet for a customer on the specified network.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWalletRequest'
+            examples:
+              Stellar wallet example:
+                summary: Create Stellar wallet
+                value:
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  name: my wallet
+                  network: stellar
+              Polygon wallet example:
+                summary: Create Polygon wallet
+                value:
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  name: my wallet
+                  network: polygon
+              Ethereum wallet example:
+                summary: Create Ethereum wallet
+                value:
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  name: my wallet
+                  network: ethereum
+      responses:
+        '200':
+          description: Wallet created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWalletResponse'
+              example:
+                data:
+                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  date_created: '2025-10-30T12:18:34.484+00:00'
+                  id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+                  name: my wallet
+                  network: stellar
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+        - Wallets
+      summary: Get wallets
+      description: >-
+        Retrieve a paginated list of wallets, with optional filtering by
+        customer and blockchain network.
+      parameters:
+        - in: query
+          name: customer_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter wallets by customer ID
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of wallets per page
+          example: 10
+        - in: query
+          name: network
+          schema:
+            type: string
+            enum:
+              - stellar
+              - polygon
+              - ethereum
+              - base
+              - solana
+              - avalanche
+              - sui
+              - tron
+          description: Filter wallets by blockchain network
+          example: stellar
+      responses:
+        '200':
+          description: List of wallets retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletListResponse'
+              example:
+                data:
+                  items:
+                    - address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
+                      customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                      date_created: '2025-10-30T12:18:34.484+00:00'
+                      id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+                      name: my wallet
+                      network: stellar
+                    - address: '0xf95b56b0eba262df5461f4ec21e1db88d0a86c6f'
+                      customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                      date_created: '2025-10-14T21:07:30.836+00:00'
+                      id: f3c8e5c0-cdb4-4b27-91cb-078943316c8e
+                      name: my wallet2
+                      network: ethereum
+                  page: 1
+                  items_per_page: 10
+                  total_items: 24
+                  total_pages: 3
+                  has_next_page: true
+                  has_previous_page: false
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/wallets/{wallet_id}:
+    get:
+      tags:
+        - Wallets
+      summary: Get a single wallet
+      description: Retrieve details of a specific wallet by wallet ID.
+      parameters:
+        - in: path
+          name: wallet_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Wallet ID to retrieve
+          example: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+      responses:
+        '200':
+          description: Wallet details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetWalletResponse'
+              example:
+                data:
+                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  date_created: '2025-10-30T12:18:34.484+00:00'
+                  id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+                  name: my wallet
+                  network: stellar
+                  assets:
+                    - symbol: XLM
+                      balance: '1500.0000000'
+                      decimals: 7
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'

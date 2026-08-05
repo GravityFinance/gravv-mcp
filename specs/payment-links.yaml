@@ -1,0 +1,841 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Page number for paginated results.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      example: 1
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      description: Number of items to return per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 10
+  responses:
+    BadRequest:
+      description: Invalid request parameters.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - data
+              - error
+            properties:
+              data:
+                type: 'null'
+              error:
+                type: string
+                description: Human-readable error message.
+          example:
+            data: null
+            error: Invalid request parameters
+  schemas:
+    WalletAddresses:
+      type: object
+      description: >-
+        A map of blockchain network names to their corresponding wallet
+        addresses for receiving crypto payments.
+      additionalProperties:
+        type: string
+      example:
+        ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+        stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+    PaymentLink:
+      type: object
+      required:
+        - id
+        - created_at
+        - updated_at
+        - customer_id
+        - tenant_id
+        - payer_name
+        - payee_name
+        - settlement_account_id
+        - supported_networks
+        - wallet_addresses
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the payment link.
+          example: b905cc64-0f90-4de0-a77c-b183de86b248
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the payment link was created (UTC).
+          example: '2026-05-07T15:39:02.639185Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the payment link was last updated (UTC).
+          example: '2026-05-07T15:39:02.639186Z'
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer associated with this payment link.
+          example: 5e713759-3416-44f5-b797-efd0299aefc1
+        tenant_id:
+          type: string
+          format: uuid
+          description: ID of the tenant that owns this payment link.
+          example: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+        payer_name:
+          type: string
+          description: Name of the person making the payment.
+          example: payer2
+        payer_email:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Email address of the person making the payment.
+          example: payer@example.com
+        payee_name:
+          type: string
+          description: Name of the person or business receiving the payment.
+          example: Rose
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: >-
+            ID of the account where settled funds will be deposited after a
+            successful payment.
+          example: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+        supported_networks:
+          type: array
+          description: >-
+            List of blockchain networks the payer can use to complete the
+            payment.
+          items:
+            type: string
+            enum:
+              - stellar
+              - ethereum
+              - polygon
+              - avalanche
+              - solana
+          example:
+            - stellar
+            - ethereum
+        wallet_addresses:
+          $ref: '#/components/schemas/WalletAddresses'
+        link_url:
+          type:
+            - string
+            - 'null'
+          format: uri
+          description: Shareable URL the payer visits to complete the payment.
+          example: https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+        status:
+          type: string
+          description: Current status of the payment link.
+          enum:
+            - active
+            - paused
+          example: active
+    CreatePaymentLinkRequest:
+      type: object
+      required:
+        - payer_name
+        - settlement_account_id
+        - supported_networks
+        - customer_id
+      properties:
+        payer_name:
+          type: string
+          description: Name of the person who will make the payment.
+          example: payer2
+        payer_email:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Email address of the person who will make the payment.
+          example: payer@example.com
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: >-
+            ID of the account where settled funds will be deposited after a
+            successful payment.
+          example: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+        supported_networks:
+          type: array
+          description: >-
+            List of blockchain networks to accept payments on. Wallet addresses
+            for each specified network are automatically provisioned and
+            included in the response.
+          items:
+            type: string
+            enum:
+              - stellar
+              - ethereum
+              - polygon
+              - avalanche
+              - solana
+          minItems: 1
+          example:
+            - stellar
+            - ethereum
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer this payment link is created for.
+          example: 5e713759-3416-44f5-b797-efd0299aefc1
+    UpdatePaymentLinkRequest:
+      type: object
+      properties:
+        payee_name:
+          type: string
+          description: Updated name of the person or business receiving the payment.
+          example: Rose
+        payer_name:
+          type: string
+          description: Updated name of the person making the payment.
+          example: payer2
+        payer_email:
+          type:
+            - string
+            - 'null'
+          format: email
+          description: Updated email address of the person making the payment.
+          example: payer@example.com
+        settlement_account_id:
+          type: string
+          format: uuid
+          description: Updated ID of the account where settled funds will be deposited.
+          example: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+        supported_networks:
+          type: array
+          description: Updated list of blockchain networks to accept payments on.
+          items:
+            type: string
+            enum:
+              - stellar
+              - ethereum
+              - polygon
+              - avalanche
+              - solana
+          minItems: 1
+          example:
+            - stellar
+            - ethereum
+    TogglePaymentLinkStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: The desired status to set on the payment link.
+          enum:
+            - active
+            - paused
+          example: paused
+    PaymentLinkResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentLink'
+        error:
+          nullable: true
+          description: Error information if the request failed.
+          example: null
+    DeletePaymentLinkResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Confirmation message for the deletion.
+          example: Payment link deleted successfully
+    ListPaymentLinksResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - items
+            - page
+            - items_per_page
+            - total_items
+            - total_pages
+          properties:
+            items:
+              type: array
+              description: List of payment links for the current page.
+              items:
+                $ref: '#/components/schemas/PaymentLink'
+            page:
+              type: integer
+              description: Current page number.
+              example: 1
+            items_per_page:
+              type: integer
+              description: Maximum number of items returned per page.
+              example: 20
+            total_items:
+              type: integer
+              description: Total number of payment links across all pages.
+              example: 2
+            total_pages:
+              type: integer
+              description: Total number of pages available.
+              example: 1
+            has_next_page:
+              type: boolean
+              description: Whether a subsequent page of results exists.
+              example: false
+            has_previous_page:
+              type: boolean
+              description: Whether a preceding page of results exists.
+              example: false
+        error:
+          nullable: true
+          description: Error information if the request failed.
+          example: null
+    InvalidArgumentError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: INVALID_ARGUMENT
+                message:
+                  example: >-
+                    invalid request format: missing required field
+                    'settlement_account_id'
+    NotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: NOT_FOUND
+                message:
+                  example: Resource not found
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          nullable: true
+          description: Always null for error responses.
+          example: null
+        error:
+          type: string
+          description: Human-readable error message.
+          example: Invalid request parameters
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Payment Links
+    description: Create and manage shareable crypto payment links.
+paths:
+  /v1/payment-links:
+    post:
+      tags:
+        - Payment Links
+      summary: Create a payment link
+      description: >
+        Creates a new payment link that can be shared with a payer to collect a
+        crypto payment.
+
+
+        On success, the API returns a shareable `link_url` along with wallet
+        addresses for each network specified in `supported_networks`. The payer
+        visits the link and completes the payment on their preferred network.
+
+
+        ## Supported networks
+
+
+        Pass one or more of the following values in `supported_networks`:
+
+
+        - stellar
+
+        - ethereum
+
+        - polygon
+
+        - avalanche
+
+        - solana
+
+
+        A wallet address is automatically provisioned for each requested network
+        and returned in the `wallet_addresses` field of the response.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentLinkRequest'
+            examples:
+              MultiNetworkLink:
+                summary: Payment link with multiple supported networks
+                value:
+                  payer_name: payer2
+                  payer_email: payer@example.com
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+              SingleNetworkLink:
+                summary: Payment link for a single network
+                value:
+                  payer_name: John
+                  payer_email: john@mail.com
+                  settlement_account_id: 872a53c4-9640-4b7a-800d-6875c9af9791
+                  supported_networks:
+                    - polygon
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+      responses:
+        '200':
+          description: Payment link created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLinkResponse'
+              example:
+                data:
+                  id: b905cc64-0f90-4de0-a77c-b183de86b248
+                  created_at: '2026-05-07T15:39:02.639185821Z'
+                  updated_at: '2026-05-07T15:39:02.639186702Z'
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  payer_name: payer2
+                  payer_email: payer@example.com
+                  payee_name: Rose
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  wallet_addresses:
+                    ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                    stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                  link_url: >-
+                    https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                  status: active
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Customer or settlement account not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Customer not found
+                  details: {}
+    get:
+      tags:
+        - Payment Links
+      summary: List payment links
+      description: >
+        Returns a paginated list of all payment links created under your tenant.
+
+
+        Use the `page` and `per_page` query parameters to navigate through
+        results. Optionally filter by `status`.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: status
+          in: query
+          required: false
+          description: Filter payment links by status.
+          schema:
+            type: string
+            enum:
+              - active
+              - paused
+          example: active
+      responses:
+        '200':
+          description: Payment links retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPaymentLinksResponse'
+              example:
+                data:
+                  items:
+                    - id: b905cc64-0f90-4de0-a77c-b183de86b248
+                      created_at: '2026-05-07T15:39:02.639185Z'
+                      updated_at: '2026-05-07T15:39:02.639186Z'
+                      customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                      tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                      payer_name: payer2
+                      payer_email: payer@example.com
+                      payee_name: Rose
+                      settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                      supported_networks:
+                        - stellar
+                        - ethereum
+                      wallet_addresses:
+                        ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                        stellar: >-
+                          GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                      link_url: >-
+                        https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                      status: active
+                    - id: b442d0e8-addf-406b-a488-a46e2d10be7c
+                      created_at: '2026-05-07T14:53:38.674714Z'
+                      updated_at: '2026-05-07T14:53:38.674715Z'
+                      customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                      tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                      payer_name: John
+                      payer_email: john@mail.com
+                      payee_name: Rose
+                      settlement_account_id: 872a53c4-9640-4b7a-800d-6875c9af9791
+                      supported_networks:
+                        - polygon
+                      wallet_addresses:
+                        polygon: '0x8d42fcb7087b627766dc02895da85207313923e8'
+                      link_url: >-
+                        https://stables.gravv.xyz/b442d0e8-addf-406b-a488-a46e2d10be7c
+                      status: active
+                  items_per_page: 20
+                  page: 1
+                  total_items: 2
+                  total_pages: 1
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/payment-links/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique identifier of the payment link.
+        schema:
+          type: string
+          format: uuid
+        example: b905cc64-0f90-4de0-a77c-b183de86b248
+    get:
+      tags:
+        - Payment Links
+      summary: Get a payment link
+      description: Retrieves a single payment link by its ID.
+      responses:
+        '200':
+          description: Payment link retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLinkResponse'
+              example:
+                data:
+                  id: b905cc64-0f90-4de0-a77c-b183de86b248
+                  created_at: '2026-05-07T15:39:02.639185Z'
+                  updated_at: '2026-05-07T15:39:02.639186Z'
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  payer_name: payer2
+                  payer_email: payer@example.com
+                  payee_name: Rose
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  wallet_addresses:
+                    ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                    stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                  link_url: >-
+                    https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                  status: active
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Payment link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Payment link not found
+                  details: {}
+    put:
+      tags:
+        - Payment Links
+      summary: Update a payment link
+      description: >
+        Updates an existing payment link. All fields are optional — only
+        supplied fields are updated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePaymentLinkRequest'
+            example:
+              payer_name: Jane
+              payer_email: jane@example.com
+      responses:
+        '200':
+          description: Payment link updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLinkResponse'
+              example:
+                data:
+                  id: b905cc64-0f90-4de0-a77c-b183de86b248
+                  created_at: '2026-05-07T15:39:02.639185Z'
+                  updated_at: '2026-05-07T16:00:00.000000Z'
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  payer_name: Jane
+                  payer_email: jane@example.com
+                  payee_name: Rose
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  wallet_addresses:
+                    ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                    stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                  link_url: >-
+                    https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                  status: active
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Payment link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Payment link not found
+                  details: {}
+    delete:
+      tags:
+        - Payment Links
+      summary: Delete a payment link
+      description: Permanently deletes a payment link.
+      responses:
+        '200':
+          description: Payment link deleted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletePaymentLinkResponse'
+              example:
+                message: Payment link deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Payment link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Payment link not found
+                  details: {}
+  /v1/payment-links/{id}/status:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique identifier of the payment link.
+        schema:
+          type: string
+          format: uuid
+        example: b905cc64-0f90-4de0-a77c-b183de86b248
+    patch:
+      tags:
+        - Payment Links
+      summary: Toggle payment link status
+      description: >
+        Sets the status of a payment link to `active` or `paused`. A paused
+        link cannot be used by payers to complete payments.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TogglePaymentLinkStatusRequest'
+            example:
+              status: paused
+      responses:
+        '200':
+          description: Payment link status updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentLinkResponse'
+              example:
+                data:
+                  id: b905cc64-0f90-4de0-a77c-b183de86b248
+                  created_at: '2026-05-07T15:39:02.639185Z'
+                  updated_at: '2026-05-07T16:05:00.000000Z'
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  payer_name: payer2
+                  payer_email: payer@example.com
+                  payee_name: Rose
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  wallet_addresses:
+                    ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                    stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                  link_url: >-
+                    https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                  status: paused
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Payment link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Payment link not found
+                  details: {}
+  /v1/payment-links/public/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique identifier of the payment link.
+        schema:
+          type: string
+          format: uuid
+        example: b905cc64-0f90-4de0-a77c-b183de86b248
+    get:
+      tags:
+        - Payment Links
+      summary: Get a payment link (public)
+      description: >
+        Retrieves a payment link by its ID without requiring authentication.
+        This endpoint is intended for the payer-facing checkout experience.
+        Only active payment links are returned.
+      security: []
+      responses:
+        '200':
+          description: Payment link retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - payment_link
+                  - wallet_addresses
+                properties:
+                  payment_link:
+                    $ref: '#/components/schemas/PaymentLink'
+                  wallet_addresses:
+                    $ref: '#/components/schemas/WalletAddresses'
+              example:
+                payment_link:
+                  id: b905cc64-0f90-4de0-a77c-b183de86b248
+                  created_at: '2026-05-07T15:39:02.639185Z'
+                  updated_at: '2026-05-07T15:39:02.639186Z'
+                  customer_id: 5e713759-3416-44f5-b797-efd0299aefc1
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  payer_name: payer2
+                  payer_email: payer@example.com
+                  payee_name: Rose
+                  settlement_account_id: b3e3c9fd-77ed-4d14-9c45-68db60d17d3a
+                  supported_networks:
+                    - stellar
+                    - ethereum
+                  wallet_addresses:
+                    ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                    stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+                  link_url: >-
+                    https://stables.gravv.xyz/b905cc64-0f90-4de0-a77c-b183de86b248
+                  status: active
+                wallet_addresses:
+                  ethereum: '0x119827bef8a3030cd401478fa7b33ac94d3c2572'
+                  stellar: GD2WTFAKQJA4BRQRNY3RWGWOFMK52WXZWV3CPCHZV2SJP2QGNBIL6TXQ
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Payment link not found or not active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Payment link not found or inactive
+                  details: {}

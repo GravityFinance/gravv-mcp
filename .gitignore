@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+
+# Never commit a key. The server reads GRAVV_API_KEY from the environment.
+.env
+.env.*
+!.env.example

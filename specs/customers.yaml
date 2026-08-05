@@ -1,0 +1,793 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    CreateCustomerRequest:
+      oneOf:
+        - title: Individual Customer
+          type: object
+          required:
+            - first_name
+            - last_name
+            - email
+            - type
+            - gender
+            - date_of_birth
+            - address
+            - phone
+          properties:
+            first_name:
+              type: string
+              example: john
+            middle_name:
+              type: string
+            last_name:
+              type: string
+              example: doe
+            email:
+              type: string
+              format: email
+              example: john.doe@example.com
+            phone:
+              type: string
+              example: '+15555550101'
+            date_of_birth:
+              type: string
+              format: date
+              example: '1990-04-16'
+            gender:
+              type: string
+              enum:
+                - male
+                - female
+                - other
+              example: male
+            type:
+              type: string
+              enum:
+                - individual
+              example: individual
+            external_id:
+              type: string
+              description: >-
+                Optional custom identifier for the customer provided by the
+                business
+              example: individual_12345
+            address:
+              $ref: '#/components/schemas/Address'
+        - title: Business Customer
+          type: object
+          required:
+            - email
+            - type
+            - business_name
+            - business_description
+            - business_type
+            - business_industry
+            - registration_number
+            - address
+            - phone
+            - associated_persons
+          properties:
+            email:
+              type: string
+              format: email
+              description: Business contact email
+              example: contact@acmecorp.com
+            type:
+              type: string
+              enum:
+                - business
+              example: business
+            business_name:
+              type: string
+              description: Registered business name
+              example: Acme Corporation
+            phone:
+              type: string
+              example: '+15555550101'
+            business_description:
+              type: string
+              description: Short description of the business operations
+              example: Technology and software development
+            business_type:
+              type: string
+              description: Type of business entity
+              example: private_limited
+            business_industry:
+              type: string
+              description: The industry category that best describes your business
+              example: Technology
+            registration_number:
+              type: string
+              description: Business registration number
+              example: RC-987654
+            external_id:
+              type: string
+              description: >-
+                Optional custom identifier for the customer provided by the
+                business
+              example: business_12345
+            address:
+              $ref: '#/components/schemas/Address'
+            associated_persons:
+              type: array
+              description: >-
+                List of persons associated with the business (e.g. directors,
+                owners)
+              items:
+                $ref: '#/components/schemas/AssociatedPerson'
+    Address:
+      type: object
+      required:
+        - address_line1
+        - city
+        - postal_code
+        - state
+        - country
+      properties:
+        address_line1:
+          type: string
+          example: 1800 N Pole St
+        address_line2:
+          type: string
+          example: Suite 202
+        city:
+          type: string
+          example: Orlando
+        postal_code:
+          type: string
+          example: '32801'
+        state:
+          type: string
+          example: US-FL
+        country:
+          type: string
+          example: US
+    AssociatedPerson:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - email
+        - date_of_birth
+        - gender
+        - phone
+        - address
+      properties:
+        first_name:
+          type: string
+          example: Jane
+        middle_name:
+          type: string
+          example: A.
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jane.doe@example.com
+        date_of_birth:
+          type: string
+          format: date
+          example: '1990-06-15'
+        gender:
+          type: string
+          enum:
+            - male
+            - female
+            - other
+          example: female
+        phone:
+          type: string
+          example: '+15555550102'
+        address:
+          $ref: '#/components/schemas/Address'
+    UpdateCustomerRequest:
+      type: object
+      description: >-
+        Request body for updating a customer. `customer_id` is read from the
+        body (the path parameter is cosmetic and ignored by the service).
+        All fields other than `customer_id` are optional — only provided fields
+        are updated.
+      required:
+        - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            UUID of the customer to update. Required in the request body —
+            the path `customer_id` parameter is cosmetic only.
+          example: e59daa17-20ed-4727-833c-e1c633782cc8
+        first_name:
+          type: string
+          example: Jane
+        middle_name:
+          type: string
+          example: A.
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jane@example.com
+        phone:
+          type: string
+          example: '+15555550101'
+        date_of_birth:
+          type: string
+          format: date
+          example: '1990-04-16'
+        gender:
+          type: string
+          enum:
+            - male
+            - female
+            - other
+          example: female
+        address:
+          $ref: '#/components/schemas/Address'
+        business_name:
+          type: string
+          example: Acme Corporation
+        business_description:
+          type: string
+          example: Technology and software development
+        business_type:
+          type: string
+          example: private_limited
+        business_industry:
+          type: string
+          example: Technology
+        registration_number:
+          type: string
+          example: RC-987654
+        external_id:
+          type: string
+          example: business_12345
+        associated_persons:
+          type: array
+          description: >-
+            List of associated persons to update or add. If `id` is provided
+            the existing record is updated; if omitted a new person is created
+            (all required fields must then be present).
+          items:
+            $ref: '#/components/schemas/UpdateAssociatedPerson'
+    UpdateAssociatedPerson:
+      type: object
+      description: >-
+        An associated person entry for an update request. Provide `id` to
+        update an existing person; omit it to add a new one (in which case
+        `first_name`, `last_name`, `email`, `gender`, `date_of_birth`,
+        `phone`, and `address` are all required).
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: >-
+            UUID of an existing associated person. Omit to add a new person.
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        first_name:
+          type: string
+          example: Jane
+        middle_name:
+          type: string
+          example: A.
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jane.doe@example.com
+        date_of_birth:
+          type: string
+          format: date
+          example: '1990-06-15'
+        gender:
+          type: string
+          enum:
+            - male
+            - female
+            - other
+          example: female
+        phone:
+          type: string
+          example: '+15555550102'
+        address:
+          $ref: '#/components/schemas/Address'
+    CustomerResponse:
+      type: object
+      description: Full customer object returned by create and get endpoints.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: e59daa17-20ed-4727-833c-e1c633782cc8
+        first_name:
+          type: string
+          example: Jane
+        last_name:
+          type: string
+          example: Doe
+        middle_name:
+          type: string
+          example: A.
+        type:
+          type: string
+          enum:
+            - individual
+            - business
+          example: individual
+        email:
+          type: string
+          format: email
+          example: jane@example.com
+        phone:
+          type: string
+          example: '+15555550101'
+        address:
+          $ref: '#/components/schemas/Address'
+        status:
+          type: string
+          example: active
+        kyc:
+          type: array
+          items:
+            $ref: '#/components/schemas/KYCInfo'
+        associated_persons:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssociatedPersonResponse'
+        business_name:
+          type: string
+          example: Acme Corporation
+        business_description:
+          type: string
+          example: Technology and software development
+        business_type:
+          type: string
+          example: private_limited
+        business_industry:
+          type: string
+          example: Technology
+        registration_number:
+          type: string
+          example: RC-987654
+        date_added:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        external_id:
+          type: string
+          example: individual_12345
+        industry_code:
+          type: string
+          example: '620'
+    AssociatedPersonResponse:
+      type: object
+      description: An associated person as returned in customer responses.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        first_name:
+          type: string
+          example: Jane
+        middle_name:
+          type: string
+          example: A.
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jane.doe@example.com
+        date_of_birth:
+          type: string
+          format: date
+          example: '1990-06-15'
+        gender:
+          type: string
+          enum:
+            - male
+            - female
+            - other
+          example: female
+        phone:
+          type: string
+          example: '+15555550102'
+        status:
+          type: string
+          example: active
+        type:
+          type: string
+          example: ubo
+        address:
+          $ref: '#/components/schemas/Address'
+        date_added:
+          type: string
+          format: date-time
+          example: '2024-01-15T10:30:00Z'
+        kyc:
+          type: array
+          items:
+            $ref: '#/components/schemas/KYCInfo'
+    KYCInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        type:
+          type: string
+          example: basic
+        status:
+          type: string
+          example: not_started
+        kyc_url:
+          type: string
+          example: 'https://kyc.example.com/session/abc123'
+        remark:
+          type: string
+          example: ''
+        verified_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          example: null
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+        error:
+          type: string
+          example: invalid request body
+  responses:
+    BadRequest:
+      description: Bad request — invalid or missing parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: invalid request body
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Customers
+    description: Manage customer records
+paths:
+  /v1/customers:
+    post:
+      tags:
+        - Customers
+      summary: Add a customer
+      description: Create a new customer record.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerRequest'
+            examples:
+              IndividualCustomer:
+                summary: Individual Customer Example
+                value:
+                  first_name: john
+                  middle_name: william
+                  last_name: doe
+                  email: john.doe@example.com
+                  phone: '+15555550101'
+                  type: individual
+                  gender: male
+                  date_of_birth: '1990-04-16'
+                  external_id: individual_12345
+                  address:
+                    address_line1: 1800 N Pole St
+                    address_line2: Suite 202
+                    city: Orlando
+                    postal_code: '32801'
+                    state: US-FL
+                    country: US
+              BusinessCustomer:
+                summary: Business Customer Example
+                value:
+                  type: business
+                  email: contact@acmecorp.com
+                  phone: '+12025550173'
+                  business_name: Acme Corporation
+                  business_description: Technology and software development
+                  business_type: private_limited
+                  business_industry: Technology
+                  registration_number: RC-987654
+                  external_id: BUS-67890
+                  address:
+                    address_line1: 1800 N Pole St
+                    address_line2: Suite 202
+                    city: Orlando
+                    postal_code: '32801'
+                    state: US-FL
+                    country: US
+                  associated_persons:
+                    - first_name: Jane
+                      last_name: Doe
+                      email: jane.doe@acmecorp.com
+                      date_of_birth: '1990-06-15'
+                      gender: female
+                      phone: '+15555550102'
+                      address:
+                        address_line1: 1800 N Pole St
+                        address_line2: Suite 202
+                        city: Orlando
+                        postal_code: '32801'
+                        state: US-FL
+                        country: US
+      responses:
+        '200':
+          description: Customer created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CustomerResponse'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  id: e59daa17-20ed-4727-833c-e1c633782cc8
+                  first_name: Jane
+                  last_name: Doe
+                  middle_name: A.
+                  type: individual
+                  email: jane@example.com
+                  phone: '+15555550101'
+                  address:
+                    address_line1: 1800 N Pole St
+                    address_line2: Suite 202
+                    city: Orlando
+                    postal_code: '32801'
+                    state: US-FL
+                    country: US
+                  status: active
+                  kyc: []
+                  associated_persons: []
+                  date_added: '2024-01-15T10:30:00Z'
+                  external_id: individual_12345
+                  industry_code: ''
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+        - Customers
+      summary: Get customers
+      description: Retrieve a paginated list of customers with optional filters.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number (1-based)
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+          description: Number of items per page
+          example: 20
+        - in: query
+          name: email
+          schema:
+            type: string
+          description: Filter by exact email address
+        - in: query
+          name: sort
+          schema:
+            type: string
+          description: Sort order (e.g. `created_at ASC` or `created_at DESC`)
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by customer status (e.g. `active`)
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum:
+              - individual
+              - business
+          description: Filter by customer type
+        - in: query
+          name: keyword
+          schema:
+            type: string
+          description: >-
+            Full-text search across first name, last name, email, and customer
+            ID
+        - in: query
+          name: kyc_status
+          schema:
+            type: string
+          description: Filter by KYC status of the customer's basic KYC record
+        - in: query
+          name: from
+          schema:
+            type: integer
+          description: Offset — number of records to skip before the current page
+        - in: query
+          name: to
+          schema:
+            type: integer
+          description: Upper record offset bound
+      responses:
+        '200':
+          description: Paginated list of customers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CustomerResponse'
+                      page:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      total_items:
+                        type: integer
+                        format: int64
+                  error:
+                    type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/customers/{customer_id}:
+    get:
+      tags:
+        - Customers
+      summary: Get a single customer
+      description: Retrieve details of a specific customer by `customer_id`.
+      parameters:
+        - in: path
+          name: customer_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: e59daa17-20ed-4727-833c-e1c633782cc8
+      responses:
+        '200':
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CustomerResponse'
+                  error:
+                    type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    put:
+      tags:
+        - Customers
+      summary: Update a customer
+      description: >-
+        Update details of a specific customer. The path `customer_id` parameter
+        is cosmetic — the service reads `customer_id` from the request body
+        (marked required there). Only provided fields are updated.
+      parameters:
+        - in: path
+          name: customer_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Cosmetic path parameter — the service resolves the customer from
+            `customer_id` in the request body, not this value.
+          example: e59daa17-20ed-4727-833c-e1c633782cc8
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerRequest'
+            examples:
+              UpdateIndividual:
+                summary: Update individual customer name and phone
+                value:
+                  customer_id: e59daa17-20ed-4727-833c-e1c633782cc8
+                  first_name: Jane
+                  last_name: Smith
+                  phone: '+15555550199'
+              UpdateBusiness:
+                summary: Update business fields
+                value:
+                  customer_id: e59daa17-20ed-4727-833c-e1c633782cc8
+                  business_name: Acme Corp Ltd
+                  business_description: Enterprise software solutions
+                  business_type: private_limited
+                  business_industry: Technology
+                  registration_number: RC-111222
+                  associated_persons:
+                    - id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                      first_name: Jane
+                      last_name: Doe
+                      phone: '+15555550102'
+      responses:
+        '200':
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      status:
+                        type: boolean
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  message: customer updated successfully
+                  status: true
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'

@@ -1,0 +1,410 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: A unique key to prevent duplicate requests.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    WebhookHistoryResponse:
+      type: object
+      description: Response payload containing paginated webhook event history
+      properties:
+        items:
+          type: array
+          description: List of webhook event summaries
+          items:
+            $ref: '#/components/schemas/WebhookHistorySummary'
+        items_per_page:
+          type: integer
+          format: int32
+          description: Number of items per page
+          example: 20
+        page:
+          type: integer
+          format: int32
+          description: Current page number (1-based)
+          example: 1
+        total_items:
+          type: integer
+          format: int64
+          description: Total number of matching events
+          example: 150
+        total_pages:
+          type: integer
+          format: int32
+          description: Total number of pages
+          example: 8
+    WebhookHistorySummary:
+      type: object
+      description: Summary of a webhook event for list display
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the webhook event
+          example: 550e8400-e29b-41d4-a716-446655440000
+        transaction_id:
+          type: string
+          nullable: true
+          description: Identifier of the underlying transaction, when present
+          example: 47ef7fbd-3c4d-479a-932a-7c75c6e2842f
+        event_type:
+          type: string
+          description: Full event type string (e.g. transfer.status.completed)
+          example: transfer.status.completed
+        path:
+          type: string
+          description: Delivery URL for this event
+          example: https://example.com/webhooks/callback
+        http_method:
+          type: string
+          description: HTTP method used for delivery
+          example: POST
+        status:
+          type: string
+          description: Status of the webhook event delivery
+          enum:
+            - pending
+            - processing
+            - sent
+            - failed
+            - retrying
+          example: sent
+        response_status_code:
+          type: integer
+          format: int32
+          nullable: true
+          description: HTTP response status code from the last delivery attempt
+          example: 200
+        created_at:
+          type: string
+          format: date-time
+          description: When the event was created
+          example: '2024-01-15T10:30:00Z'
+        last_attempt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the last delivery attempt was made
+          example: '2024-01-15T10:31:00Z'
+    WebhookEventDetail:
+      type: object
+      description: Detailed information about a specific webhook event
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the webhook event
+          example: 550e8400-e29b-41d4-a716-446655440000
+        event_id:
+          type: string
+          description: External event identifier
+          example: evt-abc-123
+        event_type:
+          type: string
+          description: Full event type string (e.g. transfer.status.completed)
+          example: transfer.status.completed
+        status:
+          type: string
+          description: Status of the webhook event delivery
+          enum:
+            - pending
+            - processing
+            - sent
+            - failed
+            - retrying
+          example: sent
+        path:
+          type: string
+          description: URL path for webhook delivery
+          example: https://example.com/webhooks/callback
+        http_method:
+          type: string
+          description: HTTP method used for delivery
+          enum:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+          example: POST
+        request_headers:
+          type: object
+          nullable: true
+          description: HTTP headers sent with the webhook request
+          additionalProperties: true
+          example:
+            Content-Type: application/json
+            X-Event-ID: 53373f52-2b15-469a-822f-69625a2632b9
+            X-Signature: 3f9b2c7a1d8e4f60b5c9a2d7e3f1086c4b9a7d2e5f8c1a0b3d6e9f2c4a7b8d1e0
+        payload:
+          type: object
+          description: The webhook payload data
+          additionalProperties: true
+        response_headers:
+          type: object
+          nullable: true
+          description: HTTP headers received in the response
+          additionalProperties: true
+        response_status_code:
+          type: integer
+          format: int32
+          nullable: true
+          description: HTTP response status code
+          example: 200
+        response_body:
+          type: object
+          nullable: true
+          description: Response body from the webhook endpoint
+          additionalProperties: true
+        attempts:
+          type: integer
+          format: int32
+          description: Number of delivery attempts made
+          minimum: 0
+          example: 1
+        max_retries:
+          type: integer
+          format: int32
+          description: Maximum number of retry attempts allowed
+          default: 3
+          example: 3
+        last_attempt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last delivery attempt
+          example: '2024-01-15T10:31:00Z'
+        next_attempt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Scheduled time for the next delivery attempt
+          example: '2024-01-15T10:35:00Z'
+        created_at:
+          type: string
+          format: date-time
+          description: When the event was created
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: When the event was last updated
+          example: '2024-01-15T10:31:00Z'
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Webhooks
+    description: View webhook event history and delivery details
+paths:
+  /v1/webhooks/history:
+    get:
+      operationId: getWebhookHistory
+      summary: Get paginated webhook event history
+      description: |
+        Get a paginated list of webhook events for a specific business.
+        Supports filtering by event type, status, and date range.
+      tags:
+        - Webhooks
+      parameters:
+        - name: transaction_id
+          in: query
+          required: false
+          description: Filter by the transaction identifier associated with the event
+          schema:
+            type: string
+          example: 47ef7fbd-3c4d-479a-932a-7c75c6e2842f
+        - name: event_type
+          in: query
+          required: false
+          description: Filter by event type (full string, e.g. transfer.status.completed)
+          schema:
+            type: string
+          example: transfer.status.completed
+        - name: status
+          in: query
+          required: false
+          description: Filter by webhook status
+          schema:
+            type: string
+            enum:
+              - pending
+              - processing
+              - sent
+              - failed
+              - retrying
+          example: sent
+        - name: start_date
+          in: query
+          required: false
+          description: >
+            Filter events created on or after this date (inclusive).
+
+            Must be in RFC3339 format. If both start_date and end_date are
+            provided,
+
+            start_date must not be after end_date.
+          schema:
+            type: string
+            format: date-time
+          example: '2024-01-01T00:00:00Z'
+        - name: end_date
+          in: query
+          required: false
+          description: >
+            Filter events created on or before this date (inclusive).
+
+            Must be in RFC3339 format. If both start_date and end_date are
+            provided,
+
+            start_date must not be after end_date.
+          schema:
+            type: string
+            format: date-time
+          example: '2024-12-31T23:59:59Z'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results per page (max 100, default 50)
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+          example: 20
+        - name: page
+          in: query
+          required: false
+          description: Page number for pagination (1-based)
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+          example: 1
+      responses:
+        '200':
+          description: Successfully retrieved webhook history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookHistoryResponse'
+  /v1/webhooks/event/{id}:
+    get:
+      operationId: getWebhookEventDetail
+      summary: Get webhook event details
+      description: |
+        Get detailed information about a specific webhook event including
+        request/response headers, payload, and delivery attempts.
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      responses:
+        '200':
+          description: Successfully retrieved webhook event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEventDetail'
+  /v1/webhooks/calls/{id}:
+    get:
+      operationId: getWebhookCallHistory
+      summary: Get call history for a webhook event
+      description: |
+        Get the per-attempt delivery call history for a specific webhook event,
+        including request/response details for each attempt.
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      responses:
+        '200':
+          description: Successfully retrieved call history
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /v1/webhooks/event/send/{id}:
+    post:
+      operationId: retryWebhookEvent
+      summary: Manually retry a webhook event
+      description: |
+        Trigger an immediate manual delivery attempt for a specific webhook event.
+        Requires the `webhook:create` permission.
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventIdPath'
+      responses:
+        '200':
+          description: Retry triggered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Delivery result for the manual retry attempt
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: Webhook event identifier
+                    example: 550e8400-e29b-41d4-a716-446655440000
+                  tenant_id:
+                    type: string
+                    format: uuid
+                    description: Tenant identifier
+                    example: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  event_category:
+                    type: string
+                    description: Category of the event
+                    example: transfer
+                  target_url:
+                    type: string
+                    description: URL the event was delivered to
+                    example: https://example.com/webhooks/callback
+                  status_code:
+                    type: integer
+                    description: HTTP status code returned by your endpoint
+                    example: 200
+                  duration_ms:
+                    type: integer
+                    format: int64
+                    description: Delivery duration in milliseconds
+                    example: 142
+                  response_body:
+                    type: object
+                    nullable: true
+                    description: Response body returned by your endpoint
+                    additionalProperties: true

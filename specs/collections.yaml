@@ -1,0 +1,1096 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  responses:
+    BadRequest:
+      description: Bad request — invalid or missing parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: 'null'
+              error:
+                type: string
+            example:
+              data: null
+              error: invalid request body
+  schemas:
+    CollectionRequest:
+      type: object
+      required:
+        - amount
+        - currency
+        - country
+        - customer_id
+        - client_customer_id
+        - client_reference
+        - source
+        - destination
+      properties:
+        amount:
+          type: string
+          description: Amount to collect
+          example: '50'
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          pattern: '^[A-Z]{3}$'
+          description: Three-letter uppercase ISO 4217 currency code
+          example: USD
+        country:
+          type: string
+          description: Alpha-2 country code
+          example: ET
+        customer_id:
+          type: string
+          description: Unique customer identifier
+          format: uuid
+          example: 04dfb2e5-1274-4214-b5fd-3415fde7dc17
+        client_customer_id:
+          type: string
+          description: >-
+            A unique identifier assigned by the client to reference the customer
+            when storing payment details
+          example: checkers_user
+        client_reference:
+          type: string
+          description: Client unique reference
+          example: 9d8184a1-4a19-b74d-4797-9896aed01332
+        metadata:
+          type: object
+          description: >-
+            Custom JSON data that will be returned in webhook notifications for
+            this transaction
+          additionalProperties: true
+          example:
+            order_id: '12345'
+            customer_notes: Express delivery requested
+        source:
+          oneOf:
+            - $ref: '#/components/schemas/CardCollectionSource'
+        destination:
+          oneOf:
+            - $ref: '#/components/schemas/InternalDestination'
+            - $ref: '#/components/schemas/ExternalCryptoDestination'
+    CardCollectionSource:
+      title: Card
+      type: object
+      required:
+        - source_type
+        - methods
+      properties:
+        source_type:
+          type: string
+          enum:
+            - external
+          example: external
+        methods:
+          type: array
+          items:
+            type: string
+            enum:
+              - card
+              - apple_pay
+              - google_pay
+              - pix
+              - mobile_money
+              - bank_transfer
+          example:
+            - card
+            - apple_pay
+            - google_pay
+            - pix
+    InternalDestination:
+      title: Internal destination
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          description: Type of internal destination
+          enum:
+            - internal_account
+            - internal_crypto_wallet
+          example: internal_account
+        id:
+          type: string
+          format: uuid
+          description: >-
+            Provide an account ID if destination_type is internal_account, or a
+            wallet ID if destination_type is internal_crypto_wallet
+          example: 88d645b6-6d27-4d20-ae1b-9469343156fa
+    ExternalCryptoDestination:
+      title: External crypto wallet
+      type: object
+      required:
+        - destination_type
+        - wallet_address
+        - network
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - external_crypto_wallet
+          example: external_crypto_wallet
+        wallet_address:
+          type: string
+          description: Wallet address for the external crypto wallet
+          example: 3.901967180566737e+47
+        network:
+          type: string
+          description: Blockchain network for the crypto wallet
+          enum:
+            - polygon
+            - stellar
+            - ethereum
+            - solana
+            - avalanche
+          example: polygon
+    CollectionResponse:
+      oneOf:
+        - title: Card Collection Response
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                amount:
+                  type: string
+                  example: '50'
+                client_reference:
+                  type: string
+                  example: trasdfausdaa
+                country:
+                  type: string
+                  example: KE
+                currency:
+                  type: string
+                  example: USD
+                onramp_status:
+                  type: string
+                  example: initialized
+                payment_link:
+                  type: string
+                  format: uri
+                  description: Hosted payment link for card checkout
+                  example: >-
+                    https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
+                raw_payment_link:
+                  type: string
+                  format: uri
+                  example: >-
+                    https://provider.example/checkout/solana/purchase-v2/session?sessionKey=...
+                transaction_id:
+                  type: string
+                  format: uuid
+                  example: e07aa829-cda4-4c51-bd43-09a2f1e6604d
+                status:
+                  type: string
+                  enum:
+                    - created
+                    - initialized
+                    - pending
+                    - provider_initiated
+                    - provider_success
+                    - provider_failed
+                    - transfer_queued
+                    - transfer_initiated
+                    - transfer_success
+                    - transfer_failed
+                    - abandoned
+                    - completed
+                    - expired
+                    - refunded
+                    - cancelled
+                  example: created
+            error:
+              type: 'null'
+              example: null
+        - title: Mobile Money / Bank Transfer Response
+          type: object
+          properties:
+            instruction:
+              type: string
+              description: HTML instructions for completing the payment
+              example: <p>Dial *133# and follow the steps...</p>
+            client_reference:
+              type: string
+              example: 04dfb2e5-1274-4214-b5fd-3415fde7dc17
+            transaction_id:
+              type: string
+              format: uuid
+              example: e07aa829-cda4-4c51-bd43-09a2f1e6604d
+            status:
+              type: string
+              enum:
+                - created
+                - initialized
+                - pending
+                - provider_initiated
+                - provider_success
+                - provider_failed
+                - transfer_queued
+                - transfer_initiated
+                - transfer_success
+                - transfer_failed
+                - abandoned
+                - completed
+                - expired
+                - refunded
+                - cancelled
+              example: created
+            onramp_status:
+              type: string
+              example: initialized
+            amount:
+              type: string
+              example: '50'
+            currency:
+              type: string
+              example: ETB
+            country:
+              type: string
+              example: ET
+    PaymentIntentDestination:
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - internal_crypto_wallet
+            - internal_account
+            - external_crypto_wallet
+          example: internal_crypto_wallet
+        id:
+          type: string
+          format: uuid
+          description: Account ID or wallet ID, depending on destination_type
+          example: b628ff35-429b-48f7-bcf0-6a49df106fc6
+        wallet_address:
+          type: string
+          description: Required when destination_type is external_crypto_wallet
+          example: '0x445906a6766927c5da8b2fca0e0db5d7b5565ef8'
+        network:
+          type: string
+          description: Required when destination_type is external_crypto_wallet
+          enum:
+            - polygon
+            - stellar
+            - ethereum
+            - solana
+            - avalanche
+          example: polygon
+    PaymentIntentSource:
+      type: object
+      required:
+        - source_type
+        - id
+        - methods
+      properties:
+        source_type:
+          type: string
+          enum:
+            - external
+          example: external
+        id:
+          type: string
+          description: Source identifier required by the provider
+          example: src_80aebb6ea2594a74bc215a64
+        methods:
+          type: array
+          items:
+            type: string
+            enum:
+              - card
+          example:
+            - card
+    CreatePaymentIntentRequest:
+      type: object
+      required:
+        - customer_id
+        - client_customer_id
+        - amount
+        - currency
+        - client_reference
+        - destination
+        - source
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          example: f827e428-c497-4b21-8855-99d978909c28
+        client_customer_id:
+          type: string
+          example: merchant-user-123
+        amount:
+          type: string
+          example: '3.50'
+        currency:
+          type: string
+          example: USD
+        client_reference:
+          type: string
+          example: order-abc-123
+        destination:
+          $ref: '#/components/schemas/PaymentIntentDestination'
+        source:
+          $ref: '#/components/schemas/PaymentIntentSource'
+        card_token:
+          type: string
+          description: >-
+            To auto-charge a customer, use the token you got from the webhook
+            response in your first call of this endpoint.
+          example: tokn_80aebb6ea2594a74bc215a64
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            order_id: ord_123
+    CreatePaymentIntentResponse:
+      oneOf:
+        - title: Intent created (no card token)
+          type: object
+          properties:
+            intent_id:
+              type: string
+              example: pi_429f578b-675a-4b68-abe3-856cd976257f
+            client_secret:
+              type: string
+              description: AES-256-GCM key material for client-side card encryption
+              example: pis_a1b2c3d4...
+            client_reference:
+              type: string
+              example: order-abc-123
+            amount:
+              type: string
+              example: '100.50'
+            currency:
+              type: string
+              example: USD
+            requires_action:
+              type: boolean
+              example: false
+            payment_key:
+              type: string
+              description: Signed JWT for hosted UI operations
+              example: eyJhbGciOiJIUzI1NiIs...
+            payment_link:
+              type: string
+              format: uri
+              description: >-
+                Ready-to-use URL with an embedded session parameter for the
+                hosted UI
+              example: https://your-hosted-ui.com/pi_429f578b-...?session=eyJqd3Q...
+            metadata:
+              type: object
+              additionalProperties: true
+            created_at:
+              type: string
+              format: date-time
+              example: '2026-04-08T10:00:00Z'
+            expires_at:
+              type: string
+              format: date-time
+              example: '2026-04-09T10:00:00Z'
+        - title: Payment intent for auto-charge using token
+          type: object
+          properties:
+            intent_id:
+              type: string
+              example: pi_429f578b-675a-4b68-abe3-856cd976257f
+            client_secret:
+              type: string
+              example: pis_a1b2c3d4...
+            status:
+              type: string
+              enum:
+                - succeeded
+              example: succeeded
+            transaction_id:
+              type: string
+              format: uuid
+              example: txn_a1b2c3d4-...
+            amount:
+              type: string
+              example: '100.50'
+            currency:
+              type: string
+              example: USD
+            requires_action:
+              type: boolean
+              example: false
+            created_at:
+              type: string
+              format: date-time
+              example: '2026-04-08T10:00:00Z'
+            expires_at:
+              type: string
+              format: date-time
+              example: '2026-04-09T10:00:00Z'
+    BillingFields:
+      type: object
+      description: >-
+        Optional billing details. Any field omitted falls back to the customer
+        record on file.
+      properties:
+        first_name:
+          type: string
+          example: Jane
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jane@example.com
+        phone_number:
+          type: string
+          description: E.164 format
+          example: '+14155551234'
+        date_of_birth:
+          type: string
+          description: Accepts YYYY-MM-DD
+          example: '1990-05-12'
+        billing_address1:
+          type: string
+          example: 123 Market St
+        billing_city:
+          type: string
+          example: San Francisco
+        billing_state:
+          type: string
+          example: CA
+        billing_zip:
+          type: string
+          example: '94105'
+        billing_country:
+          type: string
+          description: ISO 3166-1 alpha-2
+          example: US
+    ChargeCardRequest:
+      allOf:
+        - $ref: '#/components/schemas/BillingFields'
+        - type: object
+          required:
+            - payment_intent_id
+            - card_token
+          properties:
+            payment_intent_id:
+              type: string
+              example: pi_429f578b-...
+            card_token:
+              type: string
+              example: tokn_80aebb6ea2594a74bc215a64
+    ChargeCardResponse:
+      oneOf:
+        - title: Charge succeeded
+          type: object
+          properties:
+            payment_intent_id:
+              type: string
+              example: pi_429f578b-...
+            transaction_id:
+              type: string
+              format: uuid
+              example: txn_a1b2c3d4-...
+            status:
+              type: string
+              enum:
+                - succeeded
+              example: succeeded
+            requires_action:
+              type: boolean
+              example: false
+        - title: Charge failed
+          type: object
+          properties:
+            payment_intent_id:
+              type: string
+              example: pi_429f578b-...
+            status:
+              type: string
+              enum:
+                - failed
+              example: failed
+            requires_action:
+              type: boolean
+              example: false
+            failure_code:
+              type: string
+              example: card_declined
+            failure_message:
+              type: string
+              example: Your card was declined
+    SavedCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        card_token:
+          type: string
+          example: tokn_80aebb6ea2594a74bc215a64
+        card_last4:
+          type: string
+          example: '1111'
+        card_brand:
+          type: string
+          enum:
+            - visa
+            - mastercard
+            - amex
+            - discover
+            - diners
+            - jcb
+            - unknown
+          example: visa
+        card_exp_month:
+          type: string
+          example: '12'
+        card_exp_year:
+          type: string
+          example: '2028'
+        is_default:
+          type: boolean
+          example: true
+        is_expiring_soon:
+          type: boolean
+          description: True when the card expires within 30 days
+          example: false
+        billing_info:
+          type: object
+          description: Billing details associated with the saved card, if available
+          properties:
+            first_name:
+              type: string
+              example: Jane
+            last_name:
+              type: string
+              example: Doe
+            email:
+              type: string
+              format: email
+              example: jane@example.com
+            phone:
+              type: string
+              example: '+14155551234'
+            address1:
+              type: string
+              example: 123 Market St
+            city:
+              type: string
+              example: San Francisco
+            state:
+              type: string
+              example: CA
+            zip:
+              type: string
+              example: '94105'
+            country:
+              type: string
+              example: US
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-04-08T10:00:00Z'
+    DeleteCardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: card deleted successfully
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Collections
+    description: Initiate a collection
+paths:
+  /v1/collections:
+    post:
+      tags:
+        - Collections
+      summary: Initiate a collection
+      description: >
+        Initiates a collection request using a specified collection method
+        (card, bank transfer, and mobile money).
+
+
+        If the collection method is card, a payment link will be generated for
+        the customer to complete the payment. For mobile money and bank transfer
+        methods, payment instructions will be provided.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionRequest'
+            examples:
+              CardCollection:
+                summary: Collections from Card Payment Example
+                value:
+                  amount: '50'
+                  currency: USD
+                  country: NG
+                  customer_id: 04dfb2e5-1274-4214-b5fd-3415fde7dc17
+                  client_customer_id: checkers_user
+                  client_reference: 9d8184a1-4a19-b74d-4797-9896aed01332
+                  source:
+                    source_type: external
+                    methods:
+                      - card
+                  destination:
+                    id: bccb74d8-9715-478d-bcac-9d8184a19530
+                    destination_type: internal_crypto_wallet
+                  metadata:
+                    something: i can share
+              ExternalCryptoWallet:
+                summary: Collection to external crypto wallet
+                value:
+                  source:
+                    source_type: external
+                    methods:
+                      - card
+                  destination:
+                    destination_type: external_crypto_wallet
+                    wallet_address: '0x445906a6766927c5da8b2fca0e0db5d7b5565ef8'
+                    network: polygon
+                  amount: '2'
+                  currency: USD
+                  country: NG
+                  customer_id: 3eb41f1e-0b09-41d0-a1cc-3a60f57a3c5f
+                  client_customer_id: 3eb41f1e-0b09-41d0-a1cc-3a60f57a3c59
+                  client_reference: 657678888S
+                  metadata:
+                    order_id: '12345'
+                    source_platform: mobile_app
+      responses:
+        '200':
+          description: Collection initialized successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponse'
+              examples:
+                CardResponse:
+                  summary: Card Payment Response
+                  value:
+                    data:
+                      amount: '50'
+                      client_reference: trasdfausdaa
+                      country: KE
+                      currency: USD
+                      onramp_status: initialized
+                      payment_link: >-
+                        https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
+                      raw_payment_link: https://provider.example/checkout/polygon/purchase...
+                      transaction_id: 07b655cc-3dbd-4f6c-a16c-4657946d2e08
+                      status: created
+                    error: null
+                MobileMoneyResponse:
+                  summary: Mobile Money Payment Response
+                  value:
+                    instruction: >-
+                      <p>Dear Sam Katana,</p> ... <p>Customer
+                      Service</p>
+                    client_reference: 04dfb2e5-1274-4214-b5fd-3415fde7dc17
+                    transaction_id: e07aa829-cda4-4c51-bd43-09a2f1e6604d
+                    status: created
+                    onramp_status: initialized
+                    amount: '50'
+                    currency: ETB
+                    country: ET
+                BankTransferResponse:
+                  summary: Bank Transfer Response
+                  value:
+                    instruction: <p>You have a Pending Payment...</p>
+                    client_reference: 04dfb2e5-1274-4214-b5fd-3415fde7dc17
+                    transaction_id: e07aa829-cda4-4c51-bd43-09a2f1e6604d
+                    status: created
+                    onramp_status: initialized
+                    amount: '50'
+                    currency: ETB
+                    country: ET
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/collections/{id}:
+    get:
+      tags:
+        - Collections
+      summary: Get transaction by ID
+      description: >
+        Returns the status and details of an onramp transaction.
+        This endpoint is public — no API key is required.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Onramp transaction ID
+          example: 07b655cc-3dbd-4f6c-a16c-4657946d2e08
+      responses:
+        '200':
+          description: Transaction details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payment_link:
+                    type: string
+                    format: uri
+                    example: >-
+                      https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
+                  raw_payment_link:
+                    type: string
+                    format: uri
+                    example: >-
+                      https://provider.example/checkout/session?sessionKey=...
+                  instruction:
+                    type: string
+                    description: HTML payment instruction, present for mobile-money or bank-transfer transactions
+                  transaction_status:
+                    type: string
+                    description: >-
+                      Current status of the transaction. Note: this field is
+                      named `transaction_status` (not `status`) on this endpoint.
+                    enum:
+                      - created
+                      - initialized
+                      - pending
+                      - provider_initiated
+                      - provider_success
+                      - provider_failed
+                      - transfer_queued
+                      - transfer_initiated
+                      - transfer_success
+                      - transfer_failed
+                      - abandoned
+                      - completed
+                      - expired
+                      - refunded
+                      - cancelled
+                    example: pending
+                  amount:
+                    type: string
+                    example: '50'
+                  asset:
+                    type: string
+                    example: USDC
+                  network:
+                    type: string
+                    example: polygon
+                  onramp_status:
+                    type: string
+                    example: initialized
+              example:
+                transaction_status: pending
+                amount: '50'
+                asset: USDC
+                network: polygon
+                onramp_status: initialized
+                payment_link: >-
+                  https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
+  /v1/collections/cards/payment-intents:
+    post:
+      tags:
+        - Collections
+      summary: Create payment intent
+      description: >
+        Creates a card payment intent and returns a payment link for the hosted
+        checkout UI.
+
+
+        _**If you provide a `card_token`, the service automatically initiates a
+        charge after creating the intent.**_
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentIntentRequest'
+            examples:
+              CreateIntentOnly:
+                summary: Create intent (no auto-charge)
+                value:
+                  customer_id: f827e428-c497-4b21-8855-99d978909c28
+                  client_customer_id: merchant-user-123
+                  amount: '3.50'
+                  currency: USD
+                  client_reference: order-abc-123
+                  destination:
+                    destination_type: internal_crypto_wallet
+                    id: b628ff35-429b-48f7-bcf0-6a49df106fc6
+                  source:
+                    source_type: external
+                    id: src_80aebb6ea2594a74bc215a64
+                    methods:
+                      - card
+                  metadata:
+                    order_id: ord_123
+              CreateIntentAndCharge:
+                summary: Create intent and auto-charge
+                value:
+                  customer_id: f827e428-c497-4b21-8855-99d978909c28
+                  amount: '3.50'
+                  currency: USD
+                  destination:
+                    destination_type: internal_crypto_wallet
+                    id: b628ff35-429b-48f7-bcf0-6a49df106fc6
+                  source:
+                    source_type: external
+                    id: src_80aebb6ea2594a74bc215a64
+                    methods:
+                      - card
+                  card_token: tokn_80aebb6ea2594a74bc215a64
+      responses:
+        '200':
+          description: Payment intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePaymentIntentResponse'
+              examples:
+                IntentCreated:
+                  summary: Intent created (no card token)
+                  value:
+                    intent_id: pi_429f578b-675a-4b68-abe3-856cd976257f
+                    client_secret: pis_a1b2c3d4...
+                    client_reference: order-abc-123
+                    status: created
+                    amount: '100.50'
+                    currency: USD
+                    requires_action: false
+                    payment_key: eyJhbGciOiJIUzI1NiIs...
+                    payment_link: >-
+                      https://your-hosted-ui.com/pi_429f578b-...?session=eyJqd3Q...
+                    metadata:
+                      order_id: ord_123
+                    created_at: '2026-04-08T10:00:00Z'
+                    expires_at: '2026-04-09T10:00:00Z'
+                AutoChargeSucceeded:
+                  summary: Auto-charge succeeded
+                  value:
+                    intent_id: pi_429f578b-675a-4b68-abe3-856cd976257f
+                    client_secret: pis_a1b2c3d4...
+                    status: succeeded
+                    transaction_id: txn_a1b2c3d4-...
+                    amount: '100.50'
+                    currency: USD
+                    requires_action: false
+                    created_at: '2026-04-08T10:00:00Z'
+                    expires_at: '2026-04-09T10:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/collections/cards/payment-intents/charge:
+    post:
+      tags:
+        - Collections
+      summary: Charge card
+      description: >
+        Charges a saved card token. Use this for server-to-server charges when
+        you already hold a card token — for example, for recurring or
+        merchant-initiated transactions.
+
+
+        Billing fields are optional. Any field you omit falls back to the
+        customer record on file. Fields you provide take precedence and are
+        saved to the resulting charge record.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeCardRequest'
+            example:
+              payment_intent_id: pi_429f578b-...
+              card_token: tokn_80aebb6ea2594a74bc215a64
+              first_name: Jane
+              last_name: Doe
+              email: jane@example.com
+              billing_address1: 123 Market St
+              billing_city: San Francisco
+              billing_state: CA
+              billing_zip: '94105'
+              billing_country: US
+      responses:
+        '200':
+          description: Charge result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeCardResponse'
+              examples:
+                Succeeded:
+                  summary: Charge succeeded
+                  value:
+                    payment_intent_id: pi_429f578b-...
+                    transaction_id: txn_a1b2c3d4-...
+                    status: succeeded
+                    requires_action: false
+                Failed:
+                  summary: Charge failed
+                  value:
+                    payment_intent_id: pi_429f578b-...
+                    status: failed
+                    requires_action: false
+                    failure_code: card_declined
+                    failure_message: Your card was declined
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/collections/cards:
+    get:
+      tags:
+        - Collections
+      summary: Get saved cards
+      description: Returns all active saved cards for the customer.
+      parameters:
+        - in: query
+          name: customer_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter saved cards by customer ID.
+          example: f827e428-c497-4b21-8855-99d978909c28
+      responses:
+        '200':
+          description: List of saved cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedCard'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  - id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                    card_token: tokn_80aebb6ea2594a74bc215a64
+                    card_last4: '1111'
+                    card_brand: visa
+                    card_exp_month: '12'
+                    card_exp_year: '2028'
+                    is_default: true
+                    is_expiring_soon: false
+                    created_at: '2026-04-08T10:00:00Z'
+                error: null
+  /v1/collections/cards/{card_id}:
+    get:
+      tags:
+        - Collections
+      summary: Get saved card
+      description: >
+        Returns a single saved card by ID. Returns 404 if the card does not
+        exist or is inactive, and 403 if the card belongs to a different tenant.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Saved card ID
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      responses:
+        '200':
+          description: Saved card details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/SavedCard'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                  card_token: tokn_80aebb6ea2594a74bc215a64
+                  card_last4: '1111'
+                  card_brand: visa
+                  card_exp_month: '12'
+                  card_exp_year: '2028'
+                  is_default: true
+                  is_expiring_soon: false
+                  created_at: '2026-04-08T10:00:00Z'
+                error: null
+    delete:
+      tags:
+        - Collections
+      summary: Delete saved card
+      description: >
+        This operation is idempotent. It returns success even if the card
+        doesn't exist.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Saved card ID
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      responses:
+        '200':
+          description: Card deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteCardResponse'
+              example:
+                success: true
+                message: card deleted successfully

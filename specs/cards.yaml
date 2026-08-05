@@ -1,0 +1,1455 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Required for POST requests. Reuse the key only when retrying the same
+        operation with an identical payload.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    CardAddress:
+      type: object
+      required:
+        - address_line1
+        - city
+        - postal_code
+        - country_code
+        - phone_number
+        - method
+      properties:
+        address_line1:
+          type: string
+          example: 1800 N Pole St
+        address_line2:
+          type: string
+          example: Suite 202
+        city:
+          type: string
+          example: New York
+        state:
+          type: string
+          example: US-NY
+        postal_code:
+          type: string
+          example: '100983'
+        country_code:
+          type: string
+          example: US
+        phone_number:
+          type: string
+          example: '12125550123'
+        method:
+          type: string
+          description: Shipping method
+          enum:
+            - standard
+            - express
+            - international
+            - apc
+            - uspsInternational
+            - overnight
+          example: standard
+    CreateCardRequest:
+      type: object
+      required:
+        - customer_id
+        - card_limit
+        - name_on_card
+        - card_type
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer to create a card for
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        card_limit:
+          type: number
+          description: Maximum spending limit on the card
+          example: 50
+        name_on_card:
+          type: string
+          description: Name to be printed on the card
+          example: Jane Doe
+        card_type:
+          type: string
+          description: Type of card to create
+          enum:
+            - virtual
+            - physical
+          example: virtual
+        shipping_address:
+          $ref: '#/components/schemas/CardAddress'
+          description: |
+            The shipping address for delivering a physical card.
+            Provide this field only when the card type is physical.
+    CreateApplicationRequest:
+      type: object
+      required:
+        - customer_id
+        - annual_remuneration
+        - estimated_monthly_limit
+        - ip_address
+        - account_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer creating the card application
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        account_id:
+          type: string
+          format: uuid
+          description: ID of the account to link the card application to
+          example: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+        annual_remuneration:
+          type: number
+          description: Customer's annual income or renumeration
+          example: 120000
+        estimated_monthly_limit:
+          type: number
+          description: Estimated monthly limit the customer expects to use
+          example: 200
+        ip_address:
+          type: string
+          format: ipv4
+          description: IP address of the request origin
+          example: 12.23.31.23
+    CreateApplicationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Status message returned after application request
+              example: Card application request successful
+            id:
+              type: string
+              format: uuid
+              description: ID of the card application
+              example: a14ec356-f33d-4384-ba68-4d9bfa19765b
+            status:
+              type: string
+              description: Current status of the card (card lifecycle status)
+              enum:
+                - active
+                - freeze
+                - blocked
+                - inactive
+              example: active
+        error:
+          type: 'null'
+          example: null
+    GetApplicationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: ID of the card application
+              format: uuid
+              example: a14ec356-f33d-4384-ba68-4d9bfa19765b
+            currency:
+              type: string
+              description: Currency of the funds the card will use
+              example: USD
+            network:
+              type: string
+              description: Card network
+              example: visa
+            status:
+              type: string
+              description: Current status of the card (card lifecycle status)
+              enum:
+                - active
+                - freeze
+                - blocked
+                - inactive
+              example: active
+            application_link:
+              type:
+                - string
+                - 'null'
+              format: uri
+              description: >-
+                Link for selfie verification. This is only present when
+                `status` is associated with a pending verification step.
+              example: https://verify.gravv.xyz/kyc?token=example
+            date_created:
+              type: string
+              description: Timestamp when the application was created
+              format: date-time
+              example: '2025-11-14T12:46:43.511Z'
+            date_updated:
+              type: string
+              description: Timestamp when the application was last updated
+              format: date-time
+              example: '2025-11-14T12:46:43.511Z'
+            address:
+              type: object
+              properties:
+                street:
+                  type: string
+                  example: Palo Alto Line 1
+                city:
+                  type: string
+                  example: Palo Alto City
+                state:
+                  type: string
+                  example: California
+                postal_code:
+                  type: string
+                  example: '01023'
+                country_code:
+                  type: string
+                  example: US
+        error:
+          type: 'null'
+          example: null
+    CardApplicationListItem:
+      type: object
+      properties:
+        application_link:
+          type: string
+          format: uri
+          description: Link for verification or application portal
+          example: https://verify.gravv.xyz/kyc?token=example
+        application_status:
+          type: string
+          description: Current status of the card application
+          enum:
+            - approved
+            - pending
+            - needs_verification
+            - needs_information
+            - manual_review
+            - denied
+            - locked
+            - canceled
+          example: approved
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who submitted the application
+          example: 1805c3be-abca-4698-9cbd-789fc1d619eb
+        date_created:
+          type: string
+          format: date-time
+          description: Timestamp when the application was created
+          example: '2025-12-05T10:48:18.170061Z'
+        date_updated:
+          type: string
+          format: date-time
+          description: Timestamp when the application was last updated
+          example: '2025-12-06T15:31:40.273281Z'
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the application
+          example: ac21ddfc-f6ba-432c-abb3-c5e2243e8ef7
+    CardApplicationListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CardApplicationListItem'
+            items_per_page:
+              type: integer
+              description: Number of applications returned per page
+              example: 2
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            total_items:
+              type: integer
+              description: Total number of applications
+              example: 5
+            total_pages:
+              type: integer
+              description: Total number of pages
+              example: 3
+        error:
+          type: 'null'
+          example: null
+    CardCreationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Status message for the card creation request
+              example: Card creation request is processing
+            status:
+              type: boolean
+              description: Indicates whether the operation was accepted
+              example: true
+            id:
+              type: string
+              format: uuid
+              description: ID of the newly created card
+              example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+            fee_charged:
+              type: boolean
+              description: Whether the issuance fee was successfully charged
+              example: true
+            fee_pending:
+              type: boolean
+              description: >-
+                True when the fee charge was attempted but failed (for example,
+                insufficient balance) and is queued for retry. The card is still
+                issued.
+              example: false
+            fee_id:
+              type: string
+              description: ID of the fee record, present when a fee was charged
+              example: fee_abc123
+        error:
+          type: 'null'
+          example: null
+    GetCardResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Card'
+        error:
+          type: 'null'
+          example: null
+    ViewCardSensitiveDetailsRequest:
+      type: object
+      description: Request body for viewing card sensitive details (empty object)
+      properties: {}
+    ViewCardSensitiveDetailsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            ciphertext:
+              type: string
+              description: >-
+                Base64 value that holds the AES-GCM encrypted card details and
+                includes integrity protection
+              example: Yk1KRTlON0lEWXRQa2RuVzRBb2J4QT09
+            encrypted_key:
+              type: string
+              description: >-
+                Base64 value of the AES key encrypted with the client's public
+                key
+              example: >-
+                IkUxdXhGa2c3ekpVaUJmWFlhcnVhM0dZRyt1amZJczBpMDJsak85QnIvVjkzSGxvWWxDNk1xaVlyYkNGQnJtTHFkVkwybmlFbkxDemliOUoweWI3RTg5YUFvTEZncmFkNFV0Z2cvV1ZUK29HbGZPZWRJVnREU1ZvSmNWaDMrSExnSUMybnBaTWJkelpualB6b21PcThCcGpNN09yWG1FeHUvd3pHblhpYXIyRT0i
+            nonce:
+              type: string
+              description: Base64 value of the nonce required for AES GCM decryption
+              example: Img2M29JSVVESTZ2aS90S2si
+        error:
+          type: 'null'
+          example: null
+    GetCardPinResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            ciphertext:
+              type: string
+              description: >-
+                Base64 value that holds the AES-GCM encrypted card PIN and
+                includes integrity protection
+              example: /et5daK4NHI4ur84fFo+pIwJZXYXOBvNJgp3tF+eOgv0kKPi4w6dYhLY
+            encrypted_key:
+              type: string
+              description: >-
+                Base64 value of the AES key encrypted with the client's public
+                key
+              example: >-
+                LukDQ79S1Sq+6cH0pKYbBMrW2XTaGOieDWYQ1c2d/t24waKSEMx6vPYYqjQh2wfoDNc5wderJQI5x2m9rGH6GBTQk0TVHq9RLmZFj+mqJXQev89FuDu6VAPoehtEZGVia7dVuMv1fnQxHCvkNRnyWF6f1HjSDD+XUTNaHoLbwi8M/TZwwTOqc/gLJgZoKFtNxVCYf0HnSgVC4iNuRHeb9A1YODxlQBf8nfhzAm0kXSIOI7OfAZTX/tFPlDO8ksYVJM99U1RVCuLlLTiDJPctGmUzhBoUbBzozYHl+VhYeOQHv9JRIqensLkjVjfD1XZAV7THdSW9JopIL524uA5Xxw==
+            nonce:
+              type: string
+              description: Base64 value of the nonce required for AES GCM decryption
+              example: pcepprdxvUnEnPkz
+        error:
+          type: 'null'
+          example: null
+    UpdateCardPinRequest:
+      type: object
+      required:
+        - card_pin
+      properties:
+        card_pin:
+          type: string
+          description: New PIN for the card
+          example: '934829'
+    UpdateCardPinResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Confirmation message
+              example: Card PIN updated successfully
+        error:
+          type: 'null'
+          example: null
+    GetCardBalanceResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            balance:
+              type: number
+              format: double
+              description: Current card balance
+              example: 22
+            currency:
+              type: string
+              description: Currency of the balance
+              example: USD
+        error:
+          type: 'null'
+          example: null
+    CardWithdrawRequest:
+      type: object
+      required:
+        - card_id
+        - amount
+      properties:
+        card_id:
+          type: string
+          format: uuid
+          description: ID of the card to withdraw from
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        amount:
+          type: number
+          description: Amount to withdraw from the card
+          example: 1
+    CardWithdrawResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            tx_hash:
+              type: string
+              description: Blockchain transaction hash for the withdrawal
+              example: >-
+                0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192
+        error:
+          type: 'null'
+          example: null
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the card
+          format: uuid
+        date_created:
+          type: string
+          description: Timestamp when the card was created
+          format: date-time
+        date_updated:
+          type: string
+          description: Timestamp when the card was last updated
+          format: date-time
+        spending_controls:
+          type: object
+          description: Spending controls for the card
+          properties:
+            activated:
+              type: boolean
+              description: Indicates if spending controls are activated
+            single_transaction_limit:
+              type: number
+              description: Maximum amount allowed per single transaction
+            daily_transaction_limit:
+              type: number
+              description: Maximum amount allowed per day
+            type:
+              type: string
+              enum:
+                - virtual
+                - physical
+        blockchain_network:
+          type: string
+          description: Blockchain network associated with the card
+          example: ethereum
+        name_on_card:
+          type: string
+          description: Name printed on the card
+          example: Test User Name
+        masked_pan:
+          type: string
+          description: Last 4 digits of the card number
+          example: '9351'
+        expiry:
+          type: string
+          description: Card expiration date
+          example: 7/2029
+        status:
+          type: string
+          description: Current status of the card
+          enum:
+            - active
+            - freeze
+            - blocked
+            - inactive
+          example: active
+        billing_address:
+          type: object
+          properties:
+            street:
+              type: string
+            city:
+              type: string
+            state:
+              type: string
+            postal_code:
+              type: string
+            country_iso_code:
+              type: string
+        customer_id:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          example: USD
+        network:
+          type: string
+          example: visa
+    CardListItem:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: ID of the account associated with this card
+          example: 9b40be8d-9d74-4d2a-8897-dea3ef80ad23
+        address:
+          type: object
+          properties:
+            city:
+              type: string
+              example: New York
+            country_iso_code:
+              type: string
+              example: US
+            postal_code:
+              type: string
+              example: '10002'
+            state:
+              type: string
+              example: New York
+            street:
+              type: string
+              example: 201 Allen St
+        asset:
+          type: string
+          description: Blockchain asset associated with the card
+          example: USDC
+        blockchain_network:
+          type: string
+          description: Blockchain network for the card
+          example: polygon
+        currency:
+          type: string
+          description: Currency of the card
+          example: USD
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who owns this card
+          example: 1805c3be-abca-4698-9cbd-789fc1d619eb
+        date_created:
+          type: string
+          format: date-time
+          description: Timestamp when the card was created
+          example: '2025-12-05T10:48:18.170061Z'
+        date_updated:
+          type: string
+          format: date-time
+          description: Timestamp when the card was last updated
+          example: '2025-12-06T15:31:40.273281Z'
+        expiry:
+          type: string
+          description: Card expiration date
+          example: 8/2029
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the card
+          example: ac21ddfc-f6ba-432c-abb3-c5e2243e8ef7
+        masked_pan:
+          type: string
+          description: Last 4 digits of the card number
+          example: '9032'
+        name_on_card:
+          type: string
+          description: Name printed on the card
+          example: Jane Doe
+        network:
+          type: string
+          description: Card network, for example, visa or mastercard
+          example: visa
+        proxy_address:
+          type: string
+          description: Proxy address associated with the card
+          example: '0x68603Ce66b3FEdC7834E697C19bb405c582B9278'
+        status:
+          type: string
+          enum:
+            - active
+            - freeze
+            - blocked
+          description: Current status of the card
+          example: active
+        wallet_address:
+          type: string
+          description: Wallet address associated with the card
+          example: '0xa10a5f695dfe578a13b2d618a8ea8679d8d2036d'
+    CardListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CardListItem'
+            items_per_page:
+              type: integer
+              description: Number of cards returned per page
+              example: 1
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            total_items:
+              type: integer
+              description: Total number of cards
+              example: 5
+            total_pages:
+              type: integer
+              description: Total number of pages
+              example: 5
+        error:
+          type: 'null'
+          example: null
+    UpdateCardStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: New status for the card
+          enum:
+            - active
+            - freeze
+            - blocked
+          example: freeze
+        limit:
+          type: integer
+          description: Optional spending limit for the card
+          example: 1000
+    UpdateCardStatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            asset:
+              type: string
+              description: Blockchain asset associated with the card
+              example: USDC
+            billing_address:
+              type: object
+              properties:
+                street:
+                  type: string
+                  example: Palo Alto Line 1
+                city:
+                  type: string
+                  example: Palo Alto City
+                state:
+                  type: string
+                  example: California
+                postal_code:
+                  type: string
+                  example: '01023'
+                country_iso_code:
+                  type: string
+                  example: US
+            blockchain_network:
+              type: string
+              description: Blockchain network of the card
+              example: polygon
+            currency:
+              type: string
+              description: Currency of the card
+              example: USD
+            id:
+              type: string
+              format: uuid
+              description: Card ID
+              example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+            status:
+              type: string
+              description: Updated card status
+              enum:
+                - active
+                - freeze
+                - blocked
+              example: active
+            date_created:
+              type: string
+              format: date-time
+              description: Timestamp when the card was created
+              example: '2025-11-14T13:46:43.511134+01:00'
+            date_updated:
+              type: string
+              format: date-time
+              description: Timestamp when the card status was updated
+              example: '2025-11-24T14:30:00.000000+00:00'
+            expiry:
+              type: string
+              description: Card expiry date
+              example: 7/2029
+            masked_pan:
+              type: string
+              description: Masked Primary Account Number of the card
+              example: '*******2000'
+            name_on_card:
+              type: string
+              description: Name printed on the card
+              example: Test User Name
+            network:
+              type: string
+              description: Card network
+              example: visa
+            proxy_address:
+              type: string
+              description: Proxy address associated with the card
+              example: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+            spending_controls:
+              type: object
+              properties:
+                activated:
+                  type: boolean
+                daily_transaction_limit:
+                  type: integer
+                  example: 200
+                type:
+                  type: string
+                  example: virtual
+        error:
+          type: 'null'
+          example: null
+    InvalidArgumentError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: INVALID_ARGUMENT
+                message:
+                  example: >-
+                    invalid request format: missing required field
+                    'from_currency'
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: 'null'
+          description: Always null for error responses
+          example: null
+        error:
+          type: string
+          description: Human-readable error message
+          example: Invalid request parameters
+    NotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: NOT_FOUND
+                message:
+                  example: Resource not found
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Cards
+    description: Issue and manage virtual and physical cards
+paths:
+  /v1/cards/applications/new:
+    post:
+      tags:
+        - Cards
+      summary: Create card application
+      description: Initiate a new card application request for a customer.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+            example:
+              customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+              account_id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+              annual_remuneration: 120000
+              estimated_monthly_limit: 200
+              ip_address: 12.23.31.23
+      responses:
+        '200':
+          description: Card application request successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateApplicationResponse'
+              example:
+                data:
+                  message: Card application request successful
+                  id: a14ec356-f33d-4384-ba68-4d9bfa19765b
+                  status: active
+                error: null
+  /v1/cards/applications:
+    get:
+      tags:
+        - Cards
+      summary: Get card applications
+      description: Retrieve a paginated list of card applications with optional filtering.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of applications per page
+          example: 2
+      responses:
+        '200':
+          description: List of card applications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardApplicationListResponse'
+              example:
+                data:
+                  items:
+                    - application_link: https://verify.gravv.xyz/kyc?token=example
+                      application_status: approved
+                      customer_id: 1805c3be-abca-4698-9cbd-789fc1d619eb
+                      date_created: '2025-12-05T10:48:18.170061Z'
+                      date_updated: '2025-12-06T15:31:40.273281Z'
+                      id: ac21ddfc-f6ba-432c-abb3-c5e2243e8ef7
+                    - application_link: https://verify.gravv.xyz/kyc?token=example
+                      application_status: needs_verification
+                      customer_id: ddf10e10-0ea9-4c79-b39a-ddb270ea0cff
+                      date_created: '2025-11-25T17:03:19.984008Z'
+                      date_updated: '2025-11-25T17:03:19.984008Z'
+                      id: b261c1df-b88a-4b6c-8989-d6c0ac177716
+                  items_per_page: 2
+                  page: 1
+                  total_items: 5
+                  total_pages: 3
+                error: null
+  /v1/cards/applications/{application_id}:
+    get:
+      tags:
+        - Cards
+      summary: Get card application
+      description: Retrieve the card application associated with a customer.
+      parameters:
+        - name: application_id
+          example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+          in: path
+          required: true
+          description: The ID of the card application (UUID).
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Card application retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetApplicationResponse'
+              examples:
+                PendingApplication:
+                  summary: Pending Application
+                  value:
+                    data:
+                      address:
+                        city: Palo Alto City
+                        country_code: US
+                        postal_code: '01023'
+                        state: California
+                        street: Palo Alto Line 1
+                      currency: USD
+                      date_created: '2025-11-14T12:46:43.511Z'
+                      date_updated: '2025-11-14T12:46:43.511Z'
+                      id: a14ec356-f33d-4384-ba68-4d9bfa19765b
+                      network: visa
+                      status: active
+                    error: null
+                NeedsVerification:
+                  summary: Needs Verification
+                  value:
+                    data:
+                      address:
+                        city: Palo Alto City
+                        country_code: US
+                        postal_code: '01023'
+                        state: California
+                        street: Palo Alto Line 1
+                      currency: USD
+                      date_created: '2025-11-14T12:46:43.511Z'
+                      date_updated: '2025-11-14T12:46:43.511Z'
+                      id: a14ec356-f33d-4384-ba68-4d9bfa19765b
+                      network: visa
+                      status: active
+                      application_link: https://verify.gravv.xyz/kyc?token=example
+                    error: null
+                ApprovedApplication:
+                  summary: Approved Application
+                  value:
+                    data:
+                      address:
+                        city: Palo Alto City
+                        country_code: US
+                        postal_code: '01023'
+                        state: California
+                        street: Palo Alto Line 1
+                      currency: USD
+                      date_created: '2025-11-14T12:46:43.511Z'
+                      date_updated: '2025-11-14T12:46:43.511Z'
+                      id: a14ec356-f33d-4384-ba68-4d9bfa19765b
+                      network: visa
+                      status: active
+                    error: null
+  /v1/cards:
+    post:
+      tags:
+        - Cards
+      summary: Create card
+      description: Create a new card for a customer.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCardRequest'
+            examples:
+              CreateVirtualCard:
+                summary: Create Virtual Card
+                value:
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  card_type: virtual
+                  card_limit: 50
+                  name_on_card: Jane Doe
+              CreatePhysicalCard:
+                summary: Create Physical Card
+                value:
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  card_type: physical
+                  card_limit: 50
+                  name_on_card: Jane Doe
+                  shipping_address:
+                    address_line1: 201 Allen St
+                    city: New York
+                    state: New York
+                    postal_code: 10002
+                    country_code: US
+                    phone_number: '12125550123'
+                    method: standard
+      responses:
+        '200':
+          description: Card creation request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardCreationResponse'
+              example:
+                data:
+                  message: Card creation request is processing
+                  status: true
+                  id: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+                  fee_charged: true
+                  fee_pending: false
+                  fee_id: fee_abc123
+                error: null
+    get:
+      tags:
+        - Cards
+      summary: Get cards
+      description: Retrieve a paginated list of cards with optional filtering.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of cards per page
+          example: 1
+      responses:
+        '200':
+          description: List of cards retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardListResponse'
+              example:
+                data:
+                  items:
+                    - account_id: 9b40be8d-9d74-4d2a-8897-dea3ef80ad23
+                      address:
+                        city: New York
+                        country_iso_code: US
+                        postal_code: '10002'
+                        state: New York
+                        street: 201 Allen St
+                      asset: USDC
+                      blockchain_network: polygon
+                      currency: USD
+                      customer_id: 1805c3be-abca-4698-9cbd-789fc1d619eb
+                      date_created: '2025-12-05T10:48:18.170061Z'
+                      date_updated: '2025-12-06T15:31:40.273281Z'
+                      expiry: 8/2029
+                      id: ac21ddfc-f6ba-432c-abb3-c5e2243e8ef7
+                      masked_pan: '9032'
+                      name_on_card: Jane Doe
+                      network: visa
+                      proxy_address: '0x68603Ce66b3FEdC7834E697C19bb405c582B9278'
+                      status: active
+                      wallet_address: '0xa10a5f695dfe578a13b2d618a8ea8679d8d2036d'
+                  items_per_page: 1
+                  page: 1
+                  total_items: 5
+                  total_pages: 5
+                error: null
+  /v1/cards/{card_id}:
+    get:
+      tags:
+        - Cards
+      summary: Get card
+      description: >-
+        Retrieve card details for a customer. To retrieve sensitive card
+        details, such as `cvv` and `card_number` use the View card sensitive
+        details endpoint.
+      parameters:
+        - in: path
+          name: card_id
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+          description: The ID of the card to retrieve.
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Card details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCardResponse'
+              example:
+                data:
+                  billing_address:
+                    city: Palo Alto
+                    country_iso_code: US
+                    postal_code: '01023'
+                    state: California
+                    street: Palo Alto
+                  blockchain_network: ethereum
+                  currency: USD
+                  date_created: '2025-10-10T13:04:36.544962+01:00'
+                  date_updated: '2025-10-13T17:57:26.56108+01:00'
+                  expiry: 7/2029
+                  id: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+                  masked_pan: '9351'
+                  name_on_card: Test User Name
+                  network: visa
+                  spending_controls:
+                    activated: true
+                    daily_transaction_limit: 50
+                    single_transaction_limit: 50
+                    type: virtual
+                  status: active
+                error: null
+  /v1/cards/{card_id}/balance:
+    get:
+      tags:
+        - Cards
+      summary: Get card balance
+      description: >
+        Retrieve the current balance available on a card.
+
+
+        The balance represents the total funds available for card transactions
+        in USD.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          description: The ID of the card to retrieve balance for
+          schema:
+            type: string
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+      responses:
+        '200':
+          description: Card balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCardBalanceResponse'
+              example:
+                data:
+                  balance: 22
+                  currency: USD
+                error: null
+  /v1/cards/{card_id}/sensitive-details:
+    get:
+      tags:
+        - Cards
+      summary: View card sensitive details
+      description: >
+        Retrieve encrypted sensitive card details, such as `cvv` and
+        `card_number`.
+
+
+        **Security Requirements:**
+
+
+        1. Generate RSA key pair (2048-bit minimum).
+
+        2. Base64-encode the PEM-formatted public key, including the
+           `-----BEGIN PUBLIC KEY-----` and `-----END PUBLIC KEY-----`
+           markers and the newlines between them.
+
+        3. Send encoded public key in `X-Client-Public-Key` header.
+
+        4. Server returns `cvv` and `card_number` encrypted with your
+           public key.
+
+        5. Decrypt response using your private key.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          description: The ID of the card to retrieve sensitive details for
+          schema:
+            type: string
+            format: uuid
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+        - in: header
+          name: X-Client-Public-Key
+          required: true
+          description: >-
+            Base64-encoded PEM-formatted RSA public key used to encrypt the
+            response. Encode the entire `public.pem` file contents, including
+            the `-----BEGIN PUBLIC KEY-----` and `-----END PUBLIC KEY-----`
+            markers and the newlines between them.
+          schema:
+            type: string
+          example: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUEuLi4tLS0tLUVORCBQVUJMSUMgS0VZLS0tLS0=
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewCardSensitiveDetailsRequest'
+            example: {}
+      responses:
+        '200':
+          description: Encrypted card sensitive details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewCardSensitiveDetailsResponse'
+              example:
+                data:
+                  ciphertext: >-
+                    IjBkZlJMWUVXMzJ5MjdySzhWQlp1WHM5N1hzZ0szNGFSb1VScTJrbDhyazkzSmUrM0lTTXNiOCs4bmo2MW9LdDYxdkN0d0w1NSI=
+                  encrypted_key: >-
+                    IkUxdXhGa2c3ekpVaUJmWFlhcnVhM0dZRyt1amZJczBpMDJsak85QnIvVjkzSGxvWWxDNk1xaVlyYkNGQnJtTHFkVkwybmlFbkxDemliOUoweWI3RTg5YUFvTEZncmFkNFV0Z2cvV1ZUK29HbGZPZWRJVnREU1ZvSmNWaDMrSExnSUMybnBaTWJkelpualB6b21PcThCcGpNN09yWG1FeHUvd3pHblhpYXIyRT0i
+                  nonce: Img2M29JSVVESTZ2aS90S2si
+                error: null
+  /v1/cards/{card_id}/pin:
+    get:
+      tags:
+        - Cards
+      summary: Get card PIN
+      description: |
+        Retrieve the encrypted card PIN.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          description: The ID of the card to retrieve the PIN for
+          schema:
+            type: string
+            format: uuid
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+        - in: header
+          name: X-Client-Public-Key
+          required: true
+          description: >-
+            Base64-encoded PEM-formatted RSA public key used to encrypt the
+            response. Encode the entire `public.pem` file contents, including
+            the `-----BEGIN PUBLIC KEY-----` and `-----END PUBLIC KEY-----`
+            markers and the newlines between them.
+          schema:
+            type: string
+          example: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUEuLi4tLS0tLUVORCBQVUJMSUMgS0VZLS0tLS0=
+      responses:
+        '200':
+          description: Encrypted card PIN retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetCardPinResponse'
+              example:
+                data:
+                  ciphertext: /et5daK4NHI4ur84fFo+pIwJZXYXOBvNJgp3tF+eOgv0kKPi4w6dYhLY
+                  encrypted_key: >-
+                    LukDQ79S1Sq+6cH0pKYbBMrW2XTaGOieDWYQ1c2d/t24waKSEMx6vPYYqjQh2wfoDNc5wderJQI5x2m9rGH6GBTQk0TVHq9RLmZFj+mqJXQev89FuDu6VAPoehtEZGVia7dVuMv1fnQxHCvkNRnyWF6f1HjSDD+XUTNaHoLbwi8M/TZwwTOqc/gLJgZoKFtNxVCYf0HnSgVC4iNuRHeb9A1YODxlQBf8nfhzAm0kXSIOI7OfAZTX/tFPlDO8ksYVJM99U1RVCuLlLTiDJPctGmUzhBoUbBzozYHl+VhYeOQHv9JRIqensLkjVjfD1XZAV7THdSW9JopIL524uA5Xxw==
+                  nonce: pcepprdxvUnEnPkz
+                error: null
+    put:
+      tags:
+        - Cards
+      summary: Update card PIN
+      description: Update the PIN for a card.
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          description: The ID of the card to update the PIN for
+          schema:
+            type: string
+            format: uuid
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCardPinRequest'
+            example:
+              card_pin: '934829'
+      responses:
+        '200':
+          description: Card PIN updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCardPinResponse'
+              example:
+                data:
+                  message: Card PIN updated successfully
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_ARGUMENT
+                  message: Invalid PIN format
+                  details: {}
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Card not found
+                  details: {}
+  /v1/cards/{card_id}/update:
+    patch:
+      tags:
+        - Cards
+      summary: Update card status
+      description: >
+        Update the status of a card. You can freeze a card temporarily or block
+        it permanently.
+
+
+        **Status Options:**
+
+        - `active`: Card is active, and you can use it for transactions
+
+        - `freeze`: Card is temporarily frozen, and you can't use it until you
+        reactivate it by updating the status to active
+
+        - `blocked`: Card is permanently blocked, and you can't reactivate it
+      parameters:
+        - in: path
+          name: card_id
+          required: true
+          description: The ID of the card to update
+          schema:
+            type: string
+            format: uuid
+          example: dce0192a-9b3d-440b-9500-33dc9ac8dc20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCardStatusRequest'
+            examples:
+              FreezeCard:
+                summary: Freeze a card
+                value:
+                  status: freeze
+              ActivateCard:
+                summary: Activate a card
+                value:
+                  status: active
+              BlockCard:
+                summary: Block a card
+                value:
+                  status: blocked
+      responses:
+        '200':
+          description: Card status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCardStatusResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_ARGUMENT
+                  message: >-
+                    Invalid status value. Must be one of: active, freeze,
+                    blocked
+                  details: {}
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Card not found
+                  details: {}
+  /v1/cards/withdraw:
+    post:
+      tags:
+        - Cards
+      summary: Withdraw from card
+      description: Withdraw funds from a customer's card balance.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardWithdrawRequest'
+            example:
+              card_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+              amount: 1
+      responses:
+        '200':
+          description: Withdrawal successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardWithdrawResponse'
+              example:
+                data:
+                  tx_hash: >-
+                    0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192
+                error: null

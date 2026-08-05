@@ -1,0 +1,684 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    FeatureListResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - customer_id
+            - features
+          properties:
+            customer_id:
+              type: string
+              format: uuid
+              description: Unique identifier for the customer
+            features:
+              type: array
+              required:
+                - feature_id
+                - name
+                - description
+                - activated
+              description: List of available features with their requirements
+              items:
+                type: object
+                properties:
+                  feature_id:
+                    type: string
+                    description: Unique identifier for the feature
+                  name:
+                    type: string
+                    description: Human-readable name of the feature
+                  description:
+                    type: string
+                    description: Detailed explanation of the feature
+                  activated:
+                    type: boolean
+                    description: >-
+                      Whether the feature is currently activated for the
+                      customer
+        error:
+          type: string
+          nullable: true
+    ActivateFeatureRequest:
+      type: object
+      required:
+        - customer_id
+        - feature_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer activating the feature
+          example: 302dabcb-d4fd-4a00-a80b-afad70982614
+        feature_id:
+          type: string
+          description: ID of the feature to activate
+          enum:
+            - crypto_wallet
+            - virtual_cards
+            - eur_account
+            - usd_account
+            - gbp_account
+            - international_transfers
+          example: virtual_cards
+        provider_data:
+          type: object
+          description: Additional data required by the feature provider
+          additionalProperties: true
+    ActivateFeatureResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - customer_id
+            - feature_id
+            - status
+          properties:
+            activated_at:
+              type: string
+              format: date-time
+              description: Timestamp when the feature was activated
+              example: '2026-01-09T10:29:16.000Z'
+            customer_id:
+              type: string
+              format: uuid
+              description: ID of the customer for whom the feature was activated
+              example: 70235ccd-468b-42e1-80d8-950c998299be
+            feature_id:
+              type: string
+              description: ID of the activated feature
+              enum:
+                - crypto_wallet
+                - virtual_cards
+                - eur_account
+                - usd_account
+                - gbp_account
+                - international_transfers
+              example: virtual_cards
+            status:
+              type: string
+              description: Current status of the feature
+              example: active
+        error:
+          type: string
+          nullable: true
+          description: Error message, if any
+          example: null
+    FeatureEligibilityResponse:
+      type: object
+      required:
+        - customer_id
+        - eligible
+        - feature_id
+        - requirements_fulfilled
+        - requirements_pending
+      properties:
+        customer_id:
+          type: string
+          description: The unique identifier of the customer
+          example: 5793f1ea-91f0-4892-9705-d37e0592dd3a
+        eligible:
+          type: boolean
+          description: Whether the customer is eligible for the feature
+          example: false
+        feature_id:
+          type: string
+          description: The unique identifier of the feature
+          example: virtual_cards
+        requirements_fulfilled:
+          type: array
+          description: Date and time the requirements are met
+          items:
+            $ref: '#/components/schemas/RequirementFulfilled'
+        requirements_pending:
+          type: array
+          description: List of requirements that haven’t been met
+          items:
+            $ref: '#/components/schemas/PendingRequirement'
+    RequirementFulfilled:
+      type: object
+      properties:
+        fulfilled_at:
+          type: string
+          format: date-time
+          example: '2025-12-16T10:52:29Z'
+        type:
+          type: string
+          example: kyc_status
+          enum:
+            - kyc_status
+            - provider_data
+            - document
+        value:
+          type: string
+          example: completed
+    PendingRequirement:
+      type: object
+      properties:
+        action:
+          description: >-
+            Describes how to fulfill the requirement. The shape depends on `type`:
+
+            - **provider_data** — `{ type: "provider_data", data_key: string, field_type: string, description: string }`.
+              `field_type` is the expected value type (e.g. `"string"`, `"number"`).
+
+            - **kyc_status** — `{ type: "kyc_verification", url: string, method: "POST", description: string }`.
+              `url` is the endpoint to call to initiate KYC (e.g. `/v1/risk/start-kyc`).
+
+            - **document** — `{ type: "document", url: string, method: "POST", doc_type: string, description: string }`.
+              `url` is the document upload endpoint.
+          oneOf:
+            - title: provider_data action
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - provider_data
+                  example: provider_data
+                data_key:
+                  type: string
+                  description: Key name of the field to supply in `provider_data`
+                  example: annual_remuneration
+                field_type:
+                  type: string
+                  description: Expected value type for the field
+                  example: number
+                description:
+                  type: string
+                  example: Provide annual_remuneration
+            - title: kyc_verification action
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - kyc_verification
+                  example: kyc_verification
+                url:
+                  type: string
+                  description: Endpoint to call to initiate KYC verification
+                  example: /v1/risk/start-kyc
+                method:
+                  type: string
+                  example: POST
+                description:
+                  type: string
+                  example: Initiate KYC verification process
+            - title: document action
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - document
+                  example: document
+                url:
+                  type: string
+                  description: Document upload endpoint
+                  example: /v1/risk/upload-document
+                method:
+                  type: string
+                  example: POST
+                doc_type:
+                  type: string
+                  example: passport
+                description:
+                  type: string
+                  example: Upload passport document
+        required:
+          type: string
+          example: annual_remuneration
+        type:
+          type: string
+          example: provider_data
+          enum:
+            - kyc_status
+            - provider_data
+            - document
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          nullable: true
+          description: Always null for error responses
+          example: null
+        error:
+          type: string
+          description: Human-readable error message
+          example: Invalid request parameters
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Features
+    description: >-
+      Manage customer account features including listing available features,
+      checking feature status, and activating features for customers
+paths:
+  /v1/risk/features:
+    get:
+      tags:
+        - Features
+      summary: List available features
+      description: >-
+        Retrieve features based on the provided parameters. If you omit
+        customer_id from the request, the endpoint returns all available
+        features and their requirements. If you include customer_id, the
+        endpoint returns the customer’s features and their activation status.
+      parameters:
+        - in: query
+          name: customer_id
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Optional customer ID. When provided, the response includes features
+            specific to that customer along with their activation status. When
+            omitted, or if the customer ID isn’t found, the response returns the
+            global list of available features.
+          example: 302dabcb-d4fd-4a00-a80b-afad70982614
+        - name: country
+          in: query
+          required: false
+          description: >-
+            ISO 3166-1 alpha-2 country code. When provided, the response is
+            filtered to features available in that country. Can be combined with
+            `customer_id` to get country-specific features for a customer.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          example: NG
+        - name: status
+          in: query
+          required: false
+          description: Filter features by activation status
+          schema:
+            type: string
+            enum:
+              - active
+              - inactive
+              - all
+            default: all
+      responses:
+        '200':
+          description: Features retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureListResponse'
+              examples:
+                AllFeatures:
+                  summary: All features
+                  value:
+                    data:
+                      customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                      features:
+                        - feature_id: crypto_wallet
+                          name: Wallet
+                          description: Create and manage wallets
+                          activated: false
+                        - feature_id: eur_account
+                          name: EUR Account
+                          description: Create and manage EUR currency accounts
+                          activated: false
+                        - feature_id: international_transfers
+                          name: Payout
+                          description: Send and receive international wire transfers
+                          activated: false
+                        - feature_id: usd_account
+                          name: USD Account
+                          description: Create and manage USD currency accounts
+                          activated: false
+                        - feature_id: virtual_cards
+                          name: Cards
+                          description: Issue and manage debit/credit cards
+                          activated: false
+                    error: null
+                SpecificCustomer:
+                  summary: Specific customer's features
+                  value:
+                    data:
+                      customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                      features:
+                        - feature_id: crypto_wallet
+                          name: Wallet
+                          description: Create and manage wallets
+                          activated: true
+                        - feature_id: eur_account
+                          name: EUR Account
+                          description: Create and manage EUR currency accounts
+                          activated: true
+                        - feature_id: international_transfers
+                          name: Payout
+                          description: Send and receive international wire transfers
+                          activated: false
+                        - feature_id: usd_account
+                          name: USD Account
+                          description: Create and manage USD currency accounts
+                          activated: true
+                        - feature_id: virtual_cards
+                          name: Cards
+                          description: Issue and manage debit/credit cards
+                          activated: true
+                    error: null
+        '400':
+          description: Bad request - Invalid or missing required data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_data:
+                  summary: Missing required provider data
+                  value:
+                    data: null
+                    error: annual_remuneration is required and must be a number
+                invalid_data:
+                  summary: Invalid data type
+                  value:
+                    data: null
+                    error: estimated_monthly_limit must be a positive number
+        '401':
+          description: Unauthorized - Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: >-
+                  Invalid or missing Api-Key header. Api-Key is
+                  required!
+        '403':
+          description: Forbidden - Customer not eligible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Customer does not meet eligibility requirements
+        '404':
+          description: Feature or customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Feature not found
+  /v1/risk/features/eligibility:
+    post:
+      tags:
+        - Features
+      summary: Check feature eligibility
+      description: >-
+        Check if a customer is eligible for a specific feature and get the list
+        of requirements
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - feature_id
+                - customer_id
+              properties:
+                feature_id:
+                  type: string
+                  description: >-
+                    The unique identifier of the feature to check eligibility
+                    for
+                  example: virtual_cards
+                  enum:
+                    - crypto_wallet
+                    - virtual_cards
+                    - eur_account
+                    - usd_account
+                    - gbp_account
+                    - international_transfers
+                customer_id:
+                  type: string
+                  description: The customer ID to check eligibility for
+                  example: 5793f1ea-91f0-4892-9705-d37e0592dd3a
+      responses:
+        '200':
+          description: Feature eligibility check successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FeatureEligibilityResponse'
+                  error:
+                    type: string
+                    nullable: true
+              examples:
+                eligible:
+                  summary: Customer is eligible
+                  value:
+                    data:
+                      customer_id: 5793f1ea-91f0-4892-9705-d37e0592dd3a
+                      eligible: true
+                      feature_id: virtual_cards
+                      requirements_fulfilled:
+                        - type: kyc_status
+                          value: completed
+                          fulfilled_at: '2025-12-16T10:52:29Z'
+                        - type: provider_data
+                          value: annual_remuneration
+                          fulfilled_at: '2025-12-16T10:52:29Z'
+                        - type: provider_data
+                          value: estimated_monthly_limit
+                          fulfilled_at: '2025-12-16T10:52:29Z'
+                        - type: provider_data
+                          value: ip_address
+                          fulfilled_at: '2025-12-16T10:52:29Z'
+                      requirements_pending: []
+                    error: null
+                not_eligible:
+                  summary: Customer is not eligible
+                  value:
+                    data:
+                      customer_id: 5793f1ea-91f0-4892-9705-d37e0592dd3a
+                      eligible: false
+                      feature_id: virtual_cards
+                      requirements_fulfilled:
+                        - type: kyc_status
+                          value: completed
+                          fulfilled_at: '2025-12-16T10:52:29Z'
+                      requirements_pending:
+                        - type: provider_data
+                          required: annual_remuneration
+                          action:
+                            type: provider_data
+                            data_key: annual_remuneration
+                        - type: provider_data
+                          required: estimated_monthly_limit
+                          action:
+                            type: provider_data
+                            data_key: estimated_monthly_limit
+                        - type: provider_data
+                          required: ip_address
+                          action:
+                            type: provider_data
+                            data_key: ip_address
+                    error: null
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: feature_id is required
+        '401':
+          description: Unauthorized - Missing Authorization Token or API Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: >-
+                  Invalid or missing Api-Key header. Api-Key is
+                  required!
+        '404':
+          description: Feature not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Feature not found
+  /v1/risk/features/activate:
+    post:
+      tags:
+        - Features
+      summary: Activate a feature
+      description: >-
+        Activate a specific feature for a customer. You must provide the
+        feature_id and any required provider_data as specified in the feature's
+        requirements.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivateFeatureRequest'
+            examples:
+              ActivateVirtualCards:
+                summary: Activate virtual cards feature
+                value:
+                  customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                  feature_id: virtual_cards
+                  provider_data:
+                    annual_remuneration: 12000
+                    estimated_monthly_limit: 200
+                    ip_address: 12.23.31.23
+                    account_id: 5d9e677f-f071-4881-a861-7cdcebacd9d5
+              ActivateCryptoWallet:
+                summary: Activate crypto wallet feature
+                value:
+                  customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                  feature_id: crypto_wallet
+              ActivateInternationalTransfers:
+                summary: Activate international transfers
+                value:
+                  feature_id: international_transfers
+                  customer_id: cust_123456
+                  provider_data:
+                    compliance_check: approved
+                    country_whitelist:
+                      - US
+                      - GB
+                      - CA
+      responses:
+        '200':
+          description: Feature activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivateFeatureResponse'
+              examples:
+                SuccessfulActivation:
+                  summary: Feature activated successfully
+                  value:
+                    data:
+                      activated_at: '2026-01-09T10:29:16.000Z'
+                      customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                      feature_id: virtual_cards
+                      status: active
+                    error: null
+                LivenessCheckRequired:
+                  summary: Liveness check required
+                  value:
+                    data:
+                      customer_id: 302dabcb-d4fd-4a00-a80b-afad70982614
+                      feature_id: virtual_cards
+                      status: active
+                      websdk_url: https://verify.gravv.xyz/liveness/abc123xyz
+                    error: null
+        '401':
+          description: Unauthorized - Invalid or missing API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: >-
+                  Invalid or missing Api-Key header. Api-Key is
+                  required!
+        '403':
+          description: Forbidden - Customer not eligible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Customer does not meet eligibility requirements
+        '404':
+          description: Feature or customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Feature not found

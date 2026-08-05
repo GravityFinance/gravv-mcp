@@ -1,0 +1,825 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: 'null'
+              error:
+                type: string
+          example:
+            data: null
+            error: invalid request payload
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Required for POST requests. Reuse the key only when retrying the same
+        operation with an identical payload.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    TransferRequest:
+      type: object
+      required:
+        - source
+        - destination
+        - amount
+        - customer_id
+        - description
+        - client_reference
+      properties:
+        source:
+          type: object
+          description: Source of the transfer
+          required:
+            - source_type
+            - id
+          properties:
+            source_type:
+              type: string
+              enum:
+                - internal_account
+                - internal_crypto_wallet
+              description: source can be `internal_account` or `internal_crypto_wallet`
+            crypto_asset:
+              type: string
+              description: Optional crypto asset type
+              example: USDC
+            id:
+              type: string
+              format: uuid
+              description: Use internal account ID or wallet ID
+        destination:
+          oneOf:
+            - $ref: '#/components/schemas/ExternalAccountDestination'
+            - $ref: '#/components/schemas/InternalAccountDestination'
+            - $ref: '#/components/schemas/CryptoWalletDestination'
+            - $ref: '#/components/schemas/CardDestination'
+        amount:
+          type: number
+          description: Transfer amount
+          example: 100.5
+        additional_information:
+          type: object
+          description: >-
+            Additional remitter information required for external bank account
+            and mobile money beneficiaries
+          properties:
+            remitter_full_name:
+              type: string
+              description: Full name of the person sending the transfer
+              example: John Doe
+            remitter_country:
+              type: string
+              description: Country code of the remitter (ISO 3166-1 alpha-2)
+              example: US
+            remitter_document_number:
+              type: string
+              description: Document/ID number of the remitter
+              example: A123456789
+            remitter_document_issue_date:
+              type: string
+              format: date
+              description: Date when the remitter's document was issued
+              example: '2020-01-15'
+            remitter_document_expiry_date:
+              type: string
+              format: date
+              description: Date when the remitter's document expires
+              example: '2030-01-15'
+            remitter_date_of_birth:
+              type: string
+              format: date
+              description: Date of birth of the remitter
+              example: '1990-06-25'
+            remitter_address:
+              type: object
+              description: Physical address of the remitter
+              properties:
+                address_line1:
+                  type: string
+                  description: Primary address line
+                  example: 123 Main Street
+                city:
+                  type: string
+                  description: City name
+                  example: New York
+                state:
+                  type: string
+                  description: State or province code
+                  example: NY
+                postal_code:
+                  type: string
+                  description: Postal or ZIP code
+                  example: '10001'
+                country:
+                  type: string
+                  description: Country code (ISO 3166-1 alpha-2)
+                  example: US
+            remitter_nationality:
+              type: string
+              description: Nationality of the remitter (ISO 3166-1 alpha-2 country code)
+              example: US
+        description:
+          type: string
+          description: Transfer description
+          example: Transfer Testing
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer initiating the transfer
+        client_reference:
+          type: string
+          description: Optional client reference for reconciliation
+    ExternalAccountDestination:
+      title: External Account Destination
+      type: object
+      required:
+        - id
+        - destination_type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: External account ID
+        destination_type:
+          type: string
+          description: The transfer destination type
+          enum:
+            - external_account
+          example: external_account
+        rail:
+          type: string
+          description: The transfer rail type
+          enum:
+            - ach
+            - wire
+            - sepa
+            - swift
+            - fps
+            - globalbank
+          example: ach
+    InternalAccountDestination:
+      title: Internal Account Destination
+      type: object
+      required:
+        - id
+        - destination_type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal account ID
+        destination_type:
+          type: string
+          enum:
+            - internal_account
+          example: internal_account
+    CryptoWalletDestination:
+      title: Crypto Wallet Destination
+      type: object
+      required:
+        - blockchain_network
+        - wallet_address
+        - destination_type
+      properties:
+        blockchain_network:
+          type: string
+          description: Blockchain network (e.g., polygon, ethereum)
+          enum:
+            - polygon
+            - ethereum
+            - avalanche
+            - stellar
+            - solana
+            - sui
+            - tron
+          example: polygon
+        wallet_address:
+          type: string
+          description: Crypto wallet address
+          example: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+        destination_type:
+          type: string
+          enum:
+            - crypto_wallet
+          example: crypto_wallet
+        blockchain_memo:
+          type: string
+          description: Required for only stellar network
+          example: x1we2e2348r3r34r3
+    CardDestination:
+      title: Card Destination
+      type: object
+      required:
+        - id
+        - destination_type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Recipient card ID
+        destination_type:
+          type: string
+          description: The transfer destination type
+          enum:
+            - card
+          example: card
+    TransferResult:
+      type: object
+      description: Response body for a successful transfer initiation.
+      properties:
+        data:
+          type: object
+          properties:
+            amount:
+              type: string
+              format: decimal
+              description: Transfer amount as a decimal string.
+              example: '100.5'
+            reference:
+              type: string
+              format: uuid
+              description: Unique transfer reference.
+              example: 550e8400-e29b-41d4-a716-446655440000
+            date_created:
+              type: string
+              format: date-time
+              description: ISO 8601 timestamp when the transfer was created.
+              example: '2024-01-15T10:30:00Z'
+            transfer_status:
+              type: string
+              enum:
+                - pending
+                - failed
+                - completed
+              description: Current status of the transfer.
+              example: pending
+            transaction_id:
+              type: string
+              format: uuid
+              description: ID of the associated transaction record.
+              example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+            local_amount:
+              type:
+                - string
+                - 'null'
+              format: decimal
+              description: Equivalent amount in the recipient's local currency, if applicable.
+              example: '150000.00'
+            local_currency:
+              type:
+                - string
+                - 'null'
+              description: Three-letter ISO 4217 code for the recipient's local currency, if applicable.
+              example: NGN
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    TransferCurrency:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Three-letter ISO 4217 currency code.
+          example: NGN
+        name:
+          type: string
+          description: Full name of the currency.
+          example: Nigerian Naira
+    TransferSupportedCurrenciesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            currencies:
+              type: array
+              description: Array of supported transfer currencies.
+              items:
+                $ref: '#/components/schemas/TransferCurrency'
+        error:
+          type: string
+          nullable: true
+          example: null
+    TransferCountryState:
+      type: object
+      properties:
+        code:
+          type: string
+          description: State or region code.
+          example: NG-LA
+        name:
+          type: string
+          description: State or region name.
+          example: Lagos
+    TransferCountry:
+      type: object
+      properties:
+        iso_code:
+          type: string
+          description: Two-letter ISO 3166-1 alpha-2 country code.
+          example: NG
+        name:
+          type: string
+          description: Full country name.
+          example: Nigeria
+        states:
+          type: array
+          description: >-
+            Administrative divisions of the country. Returns an empty array for
+            countries without divisions.
+          items:
+            $ref: '#/components/schemas/TransferCountryState'
+    TransferSupportedCountriesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            countries:
+              type: array
+              description: Array of supported countries.
+              items:
+                $ref: '#/components/schemas/TransferCountry'
+        error:
+          type: string
+          nullable: true
+          example: null
+    TransferCountryItem:
+      type: object
+      properties:
+        currency_code:
+          type: string
+          nullable: true
+          description: >-
+            Three-letter ISO 4217 currency code for the country's local
+            currency. Returns `null` for countries where a local currency code
+            is not available.
+          example: NGN
+        iso3_code:
+          type: string
+          description: Three-letter ISO 3166-1 alpha-3 country code.
+          example: NGA
+        iso_code:
+          type: string
+          description: Two-letter ISO 3166-1 alpha-2 country code.
+          example: NG
+        name:
+          type: string
+          description: Full country name.
+          example: Nigeria
+    TransferCountriesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            countries:
+              type: array
+              description: Array of supported countries.
+              items:
+                $ref: '#/components/schemas/TransferCountryItem'
+        error:
+          type: string
+          nullable: true
+          example: null
+    TransferRate:
+      type: object
+      description: Exchange rate for a single country and currency pair.
+      properties:
+        country_iso_code:
+          type: string
+          description: Two-letter ISO 3166-1 alpha-2 country code.
+          example: NG
+        currency:
+          type: string
+          description: Three-letter ISO 4217 currency code.
+          example: NGN
+        eur_rate:
+          type: number
+          description: Exchange rate against EUR.
+          example: 1411.641026432
+        usd_rate:
+          type: number
+          description: Exchange rate against USD.
+          example: 1260.3937736
+    TransferRateListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TransferRate'
+            items_per_page:
+              type: integer
+              description: Number of items returned per page.
+              example: 1
+            page:
+              type: integer
+              description: Current page number.
+              example: 1
+            total_pages:
+              type:
+                - integer
+                - 'null'
+              description: Total number of pages. Null when the total count is unavailable.
+              example: 1
+        error:
+          type: string
+          nullable: true
+          example: null
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Transfer
+    description: Transfer funds between accounts
+paths:
+  /v1/transfer:
+    post:
+      tags:
+        - Transfer
+      summary: Transfer
+      description: >-
+        Initiate a transfer between internal accounts, external accounts, or
+        crypto wallets.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+            examples:
+              GlobalRemittance:
+                summary: Global Remittance / US Bank Transfer
+                value:
+                  source:
+                    source_type: internal_account
+                    id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
+                  destination:
+                    id: 70c337ad-e3e8-4a90-9de7-7f3e6bc2aac8
+                    destination_type: external_account
+                  amount: 1.5
+                  additional_information:
+                    remitter_full_name: John Doe
+                    remitter_country: US
+                    remitter_document_number: A123456789
+                    remitter_document_issue_date: '2020-01-15'
+                    remitter_document_expiry_date: '2030-01-15'
+                    remitter_date_of_birth: '1990-06-25'
+                    remitter_address:
+                      address_line1: 123 Main Street
+                      city: New York
+                      state: NY
+                      postal_code: '10001'
+                      country: US
+                    remitter_nationality: US
+                  client_reference: 099283849s
+                  description: Transfer Testing
+                  customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+              InternalTransfer:
+                summary: Internal Transfer
+                value:
+                  source:
+                    source_type: internal_account
+                    id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
+                  destination:
+                    id: 915a6953-49a1-4a78-b29d-56d401d9f22a
+                    destination_type: internal_account
+                  amount: 1
+                  additional_information:
+                    remitter_full_name: John Doe
+                    remitter_country: US
+                    remitter_document_number: A123456789
+                    remitter_document_issue_date: '2020-01-15'
+                    remitter_document_expiry_date: '2030-01-15'
+                    remitter_date_of_birth: '1990-06-25'
+                    remitter_address:
+                      address_line1: 123 Main Street
+                      city: New York
+                      state: NY
+                      postal_code: '10001'
+                      country: US
+                    remitter_nationality: US
+                  description: Transfer Testing
+                  customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+                  client_reference: hellowe2
+              CryptoTransfer:
+                summary: Crypto Wallet Transfer
+                value:
+                  source:
+                    source_type: internal_account
+                    id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
+                  destination:
+                    blockchain_network: polygon
+                    destination_type: crypto_wallet
+                    wallet_address: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+                  amount: 2
+                  description: Transfer Testing
+                  customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+                  client_reference: '2893843'
+              CryptoToCardTransfer:
+                summary: Crypto to Card Transfer
+                value:
+                  source:
+                    source_type: crypto_wallet
+                    id: 67e169c0-547f-410d-8e18-f616b6822d70
+                  destination:
+                    destination_type: card
+                    id: 3397bab8-0f2b-4721-b15b-8c71860f01f9
+                  amount: 3
+                  description: card funding
+                  customer_id: 04dfb2e5-1274-4214-b5fd-3415fde7dc18
+                  client_reference: cardtransfer1234
+      responses:
+        '200':
+          description: Transfer successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferResult'
+              example:
+                data:
+                  amount: '1.5'
+                  reference: 550e8400-e29b-41d4-a716-446655440000
+                  date_created: '2024-01-15T10:30:00Z'
+                  transfer_status: pending
+                  transaction_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                  local_amount: null
+                  local_currency: null
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transfer/rates:
+    get:
+      tags:
+        - Transfer
+      summary: Get rates
+      description: >-
+        Retrieve current exchange rates for transfers between different
+        currencies.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of transactions per page
+          example: 10
+        - in: query
+          name: country_iso_code
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: Use two-letter ISO country code to filter transfer rates
+          example: NG
+        - in: query
+          name: currency
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 3
+          description: Use three-letter ISO currency code to filter transfer rates
+          example: NGN
+      responses:
+        '200':
+          description: Exchange rates retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRateListResponse'
+              example:
+                data:
+                  items:
+                    - country_iso_code: NG
+                      currency: NGN
+                      eur_rate: 1411.641026432
+                      usd_rate: 1260.3937736
+                  items_per_page: 1
+                  page: 1
+                  total_pages: 1
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transfer/supported-currencies:
+    get:
+      tags:
+        - Transfer
+      summary: Get supported currencies
+      description: Retrieve the list of fiat currencies supported for transfers.
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+          description: Filter by three-letter ISO 4217 currency code (case-insensitive).
+          example: NGN
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by currency name (case-insensitive partial match).
+          example: Nigerian
+      responses:
+        '200':
+          description: List of supported transfer currencies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferSupportedCurrenciesResponse'
+              example:
+                data:
+                  currencies:
+                    - code: NGN
+                      name: Nigerian Naira
+                    - code: EUR
+                      name: Euro
+                    - code: GHS
+                      name: Ghanaian Cedi
+                    - code: KES
+                      name: Kenyan Shilling
+                    - code: UGX
+                      name: Ugandan Shilling
+                    - code: ZMW
+                      name: Zambian Kwacha
+                    - code: XOF
+                      name: West African CFA Franc
+                    - code: BWP
+                      name: Botswana Pula
+                    - code: CDF
+                      name: Congolese Franc
+                    - code: XAF
+                      name: Central African CFA Franc
+                    - code: MWK
+                      name: Malawian Kwacha
+                    - code: RWF
+                      name: Rwandan Franc
+                    - code: ZAR
+                      name: South African Rand
+                    - code: TZS
+                      name: Tanzanian Shilling
+                    - code: USD
+                      name: US Dollar
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transfer/supported-countries:
+    get:
+      tags:
+        - Transfer
+      summary: Get supported countries
+      description: >-
+        Retrieve the list of countries supported for transfers. Each country
+        includes its two-letter and three-letter ISO codes and its local
+        currency code where available.
+      parameters:
+        - in: query
+          name: iso_code
+          schema:
+            type: string
+          description: Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive).
+          example: NG
+      responses:
+        '200':
+          description: List of supported transfer countries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferCountriesResponse'
+              example:
+                data:
+                  countries:
+                    - currency_code: NGN
+                      iso3_code: NGA
+                      iso_code: NG
+                      name: Nigeria
+                    - currency_code: GHS
+                      iso3_code: GHA
+                      iso_code: GH
+                      name: Ghana
+                    - currency_code: KES
+                      iso3_code: KEN
+                      iso_code: KE
+                      name: Kenya
+                    - currency_code: USD
+                      iso3_code: USA
+                      iso_code: US
+                      name: United States
+                    - currency_code: null
+                      iso3_code: JPN
+                      iso_code: JP
+                      name: Japan
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transfer/supported-countries-for-address:
+    get:
+      tags:
+        - Transfer
+      summary: Get supported countries for address
+      description: >-
+        Retrieve the list of countries supported for recipient addresses in
+        international transfers. Countries with administrative divisions include
+        a `states` array; countries without return an empty array.
+      parameters:
+        - in: query
+          name: iso_code
+          schema:
+            type: string
+          description: Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive).
+          example: NG
+        - in: query
+          name: name
+          schema:
+            type: string
+          description: Filter by country name (case-insensitive partial match).
+          example: Nigeria
+      responses:
+        '200':
+          description: List of supported countries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferSupportedCountriesResponse'
+              example:
+                data:
+                  countries:
+                    - iso_code: NG
+                      name: Nigeria
+                      states:
+                        - code: NG-LA
+                          name: Lagos
+                        - code: NG-FC
+                          name: Federal Capital Territory
+                    - iso_code: GH
+                      name: Ghana
+                      states:
+                        - code: GH-AA
+                          name: Greater Accra
+                        - code: GH-AH
+                          name: Ashanti
+                    - iso_code: US
+                      name: United States
+                      states:
+                        - code: US-NY
+                          name: New York
+                        - code: US-CA
+                          name: California
+                    - iso_code: CI
+                      name: Côte d'Ivoire
+                      states: []
+                    - iso_code: JP
+                      name: Japan
+                      states: []
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'

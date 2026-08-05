@@ -1,0 +1,2420 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Required for POST requests. Reuse the key only when retrying the same
+        operation with an identical payload.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  responses:
+    BadRequest:
+      description: >-
+        Request failed. All gateway errors are returned as HTTP 400 with this
+        envelope.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - data
+              - error
+            properties:
+              data:
+                type: 'null'
+                example: null
+              error:
+                type: string
+                description: Human-readable error message.
+                example: invalid request payload
+  schemas:
+    ValidationError:
+      type: object
+      properties:
+        field:
+          type: string
+          description: The field that failed validation.
+          example: data.individual.ssn
+        message:
+          type: string
+          description: Human-readable explanation of the validation error.
+          example: SSN is required for this provider.
+        code:
+          type: string
+          description: Machine-readable error code for the validation failure.
+          example: field_required
+        suggestion:
+          type: string
+          description: Suggested fix for the validation error.
+          example: Provide a valid 9-digit SSN.
+    ProcessingError:
+      type: object
+      properties:
+        stage:
+          type: string
+          description: Processing stage where the error occurred.
+          example: provider_account_creation
+        message:
+          type: string
+          description: Human-readable explanation of the processing error.
+          example: provider rejected the application
+        code:
+          type: string
+          description: Machine-readable error code.
+          example: provider_error
+        suggestion:
+          type: string
+          description: Suggested fix.
+          example: Verify the submitted business details.
+    ApplicationHistory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          description: >-
+            The action recorded (for example, created, submitted, approved,
+            failed, tos_accepted, or updated).
+          example: submitted
+        actor:
+          type: string
+          description: Who performed the action.
+          example: system
+        changes:
+          type: object
+          additionalProperties: true
+          description: Fields that changed during this action.
+        created_at:
+          type: string
+          format: date-time
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a4d83e55-435e-41c9-9a0b-dcb99f690c95
+        label:
+          type: string
+          example: ops
+        date_created:
+          type: string
+          format: date-time
+          example: '2025-10-07T09:49:23Z'
+        wallet_address:
+          type: string
+          example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+        blockchain_network:
+          type: string
+          example: polygon
+        type:
+          type: string
+          description: Account kind.
+          example: regular
+        customer_id:
+          type: string
+          format: uuid
+          example: d12ded01-9081-4a3c-a76c-70654f0a0175
+        capabilities:
+          type: array
+          items:
+            type: string
+          example:
+            - transfer
+            - receive
+            - remittance
+        currency:
+          type: string
+          example: USD
+        virtual_account_id:
+          type: string
+          format: uuid
+          example: 73cea894-bca7-43e2-b278-02bd6d991e2e
+        tenant_name:
+          type: string
+          example: Dahmoh
+        tenant_id:
+          type: string
+          example: cd90c45c-fa78-4624-a80a-642be301c812
+        tier:
+          type: string
+          example: ''
+        status:
+          type: string
+          enum:
+            - active
+            - frozen
+            - deleted
+            - pending
+          example: active
+        category:
+          type: string
+          example: main
+        balance:
+          type: string
+          example: '0.00'
+        is_tokenized:
+          type: boolean
+          example: false
+        inflow_behavior:
+          type: string
+        virtual_account_bank_name:
+          type: string
+          example: Bank of Nowhere
+        virtual_account_bank_address:
+          type: string
+          example: 1800 North Pole St., Orlando, FL 32801
+        virtual_account_bank_beneficiary_address:
+          type: string
+        virtual_account_bank_beneficiary_name:
+          type: string
+        virtual_account_bank_account_number:
+          type: string
+          example: '900300758080'
+        virtual_account_bank_routing_number:
+          type: string
+          example: '101019644'
+        assets:
+          type: array
+          items:
+            type: object
+            properties:
+              balance:
+                type: string
+                example: '0'
+              decimals:
+                type: integer
+                example: 0
+              symbol:
+                type: string
+                example: USDC
+        metadata:
+          type: object
+          additionalProperties: true
+    ApplicationEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          $ref: '#/components/schemas/Application'
+        error:
+          type: 'null'
+          example: null
+    ApplicationListEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Application'
+            page:
+              type: integer
+            items_per_page:
+              type: integer
+            total_items:
+              type: integer
+            total_pages:
+              type: integer
+        error:
+          type: 'null'
+          example: null
+    PendingApplicationsEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            applications:
+              type: array
+              items:
+                $ref: '#/components/schemas/Application'
+            count:
+              type: integer
+        error:
+          type: 'null'
+          example: null
+    ProcessApplicationEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            application_id:
+              type: string
+              format: uuid
+            status:
+              type: string
+            account:
+              oneOf:
+                - $ref: '#/components/schemas/Account'
+                - type: 'null'
+            errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProcessingError'
+            metadata:
+              type: object
+              additionalProperties: true
+        error:
+          type: 'null'
+          example: null
+    SubmitAndProcessEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            application:
+              $ref: '#/components/schemas/Application'
+            processing_result:
+              type: object
+              properties:
+                application_id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                account:
+                  oneOf:
+                    - $ref: '#/components/schemas/Account'
+                    - type: 'null'
+                errors:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProcessingError'
+                metadata:
+                  type: object
+                  additionalProperties: true
+            is_fully_processed:
+              type: boolean
+        error:
+          type: 'null'
+          example: null
+    ApplicationHistoryEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            application_id:
+              type: string
+              format: uuid
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/ApplicationHistory'
+        error:
+          type: 'null'
+          example: null
+    DeleteApplicationEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+        error:
+          type: 'null'
+          example: null
+    ValidateApplicationEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            valid:
+              type: boolean
+            validation_errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/ValidationError'
+        error:
+          type: 'null'
+          example: null
+    AccountEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          $ref: '#/components/schemas/Account'
+        error:
+          type: 'null'
+          example: null
+    AccountListEnvelope:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Account'
+            page:
+              type: integer
+            items_per_page:
+              type: integer
+            total_pages:
+              type: integer
+            total_items:
+              type: integer
+        error:
+          type: 'null'
+          example: null
+    UnifiedAddress:
+      type: object
+      properties:
+        street_line_1:
+          type: string
+          description: Street address, PO box, company name, c/o
+          example: 123 Main St
+        street_line_2:
+          type: string
+          description: Apartment, suite, unit, building, floor, etc.
+          example: Apt 4B
+        city:
+          type: string
+          description: City
+          example: San Francisco
+        state:
+          type: string
+          description: State, province, county
+          example: CA
+        postal_code:
+          type: string
+          description: ZIP or postal code
+          example: '94105'
+        country:
+          type: string
+          description: Country (ISO 3166-1 alpha-2)
+          example: US
+      required:
+        - street_line_1
+        - city
+        - state
+        - postal_code
+        - country
+    UnifiedAssociatedPerson:
+      type: object
+      description: Standardized associated person (UBO, control person, etc.)
+      properties:
+        first_name:
+          type: string
+          description: First name of the associated person.
+          example: Jane
+        last_name:
+          type: string
+          description: Last name of the associated person.
+          example: Smith
+        middle_name:
+          type: string
+          description: Middle name of the associated person.
+          example: Anne
+        email:
+          type: string
+          format: email
+          description: Email address of the associated person.
+          example: jane@acme.corp
+        phone:
+          type: string
+          description: Phone number of the associated person, in E.164 format.
+          example: '+14155552672'
+        date_of_birth:
+          type: string
+          format: date
+          description: Date of birth of the associated person, in YYYY-MM-DD format.
+          example: '1985-06-15'
+        citizenship:
+          type: string
+          description: Country of citizenship, in ISO 3166-1 alpha-2 format.
+          example: US
+        ssn:
+          type: string
+          description: Social Security Number of the associated person.
+          example: '000000000'
+        title:
+          type: string
+          description: Job title of the associated person (for example, CEO or CFO).
+          example: CEO
+        role:
+          type: string
+          description: >-
+            Role of the associated person in the business (for example, director
+            or officer).
+          example: director
+        has_ownership:
+          type: boolean
+          description: >-
+            Indicates whether the person holds an ownership stake in the
+            business.
+          example: true
+        has_control:
+          type: boolean
+          description: Indicates whether the person has control over the business.
+          example: true
+        is_signer:
+          type: boolean
+          description: Indicates whether the person is an authorized signer on the account.
+          example: true
+        is_director:
+          type: boolean
+          description: Indicates whether the person is a director of the business.
+          example: true
+        ownership_percentage:
+          type: integer
+          description: Percentage of the business owned by this person.
+          example: 100
+        address:
+          $ref: '#/components/schemas/UnifiedAddress'
+        identification_type:
+          type: string
+          description: >-
+            Type of government-issued ID (for example, passport or
+            drivers_license).
+          example: passport
+        identification_number:
+          type: string
+          description: Document number of the government-issued ID.
+          example: P7654321
+        identification_country:
+          type: string
+          description: >-
+            Country that issued the identification document, in ISO 3166-1
+            alpha-2 format.
+          example: US
+        identification_expiry:
+          type: string
+          description: Expiry date of the identification document, in YYYY-MM-DD format.
+          example: '2030-01-01'
+        id_document_front:
+          type: string
+          description: Front of the government-issued ID, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        id_document_back:
+          type: string
+          description: Back of the government-issued ID, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        proof_of_address_document:
+          type: string
+          description: Proof of address document, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+    UnifiedIndividualData:
+      type: object
+      properties:
+        first_name:
+          type: string
+          description: First name of the individual. Required.
+          example: John
+        last_name:
+          type: string
+          description: Last name of the individual. Required.
+          example: Doe
+        middle_name:
+          type: string
+          description: Middle name of the individual.
+          example: Robert
+        email:
+          type: string
+          format: email
+          description: Email address of the individual. Required.
+          example: john.doe@example.com
+        role:
+          type: string
+          description: Role of the individual in the application (for example, owner).
+          example: owner
+        phone:
+          type: string
+          description: >-
+            Phone number of the individual, in E.164 format. May be required
+            depending on your account configuration.
+          example: '+14155552671'
+        date_of_birth:
+          type: string
+          format: date
+          description: >-
+            Date of birth of the individual, in YYYY-MM-DD format. Required.
+          example: '1980-01-01'
+        gender:
+          type: string
+          description: Gender of the individual.
+          example: male
+        nationality:
+          type: string
+          description: Nationality of the individual, in ISO 3166-1 alpha-2 format.
+          example: US
+        ssn:
+          type: string
+          description: >-
+            Social Security Number of the individual. May be required depending
+            on your account configuration.
+          example: '000000000'
+        tin:
+          type: string
+          description: >-
+            Tax Identification Number of the individual. May be required
+            depending on your account configuration.
+          example: '000000000'
+        income_source:
+          type: string
+          description: >-
+            Primary source of income. May be required. One of employment,
+            self_employment, investments, retirement, or other.
+          example: employment
+        employment_status:
+          type: string
+          description: >-
+            Current employment status of the individual (for example, employed
+            or self_employed).
+          example: employed
+        citizenship:
+          type: string
+          description: >-
+            Country of citizenship, in ISO 3166-1 alpha-2 format. May be
+            required depending on your account configuration.
+          example: US
+        identification_type:
+          type: string
+          description: >-
+            Type of government-issued ID. May be required. One of
+            drivers_license, passport, or state_id.
+          example: passport
+        identification_number:
+          type: string
+          description: >-
+            Document number of the government-issued ID. May be required
+            depending on your account configuration.
+          example: P1234567
+        identification_country:
+          type: string
+          description: >-
+            Country that issued the identification document, in ISO 3166-1
+            alpha-2 format.
+          example: US
+        identification_expiry:
+          type: string
+          description: Expiry date of the identification document, in YYYY-MM-DD format.
+          example: '2030-01-01'
+        address:
+          $ref: '#/components/schemas/UnifiedAddress'
+        id_document_front:
+          type: string
+          description: >-
+            Front of the government-issued ID, as a Base64 data URI. May be
+            required depending on your account configuration.
+          example: data:application/pdf;base64,...
+        id_document_back:
+          type: string
+          description: Back of the government-issued ID, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        proof_of_address_document:
+          type: string
+          description: Proof of address document, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        source_of_wealth:
+          type: array
+          items:
+            type: string
+          description: >-
+            Sources of the individual's wealth. May be required depending on
+            your account configuration.
+          example:
+            - SALARY
+        source_of_wealth_other_description:
+          type: string
+          description: >-
+            Free-text description of the source of wealth when not covered by
+            the standard options.
+          example: Salary from tech job
+        account_purposes:
+          type: array
+          items:
+            type: string
+          description: >-
+            Purposes for opening the account. May be required depending on your
+            account configuration.
+          example:
+            - PERSONAL_BANKING
+        account_purposes_other_description:
+          type: string
+          description: >-
+            Free-text description of account purposes when not covered by the
+            standard options.
+          example: Personal savings
+        source_of_funds_list:
+          type: array
+          items:
+            type: string
+          description: >-
+            Sources of funds for the account. May be required depending on your
+            account configuration.
+          example:
+            - INCOME
+        source_of_funds_other_description:
+          type: string
+          description: >-
+            Free-text description of the source of funds when not covered by the
+            standard options.
+          example: Income
+        expected_counterparty_countries:
+          type: array
+          items:
+            type: string
+          description: >-
+            Countries where the individual expects to transact, in ISO 3166-1
+            alpha-2 format. May be required depending on your account
+            configuration.
+          example:
+            - US
+            - GB
+        expected_fiat_monthly_volume:
+          type: string
+          description: >-
+            Expected monthly volume of fiat transactions. May be required
+            depending on your account configuration.
+          example: 10000_TO_50000
+        expected_crypto_monthly_volume:
+          type: string
+          description: Expected monthly volume of crypto transactions.
+          example: 10000_TO_50000
+    UnifiedBusinessData:
+      type: object
+      properties:
+        legal_name:
+          type: string
+          description: Registered legal name of the business. Required.
+          example: Acme Corp
+        trade_name:
+          type: string
+          description: Trading name or DBA (doing business as) name of the business.
+          example: Acme
+        description:
+          type: string
+          description: >-
+            Description of the business operations. May be required (minimum
+            100 characters).
+          example: >-
+            A software development company specializing in enterprise tools and
+            developer infrastructure.
+        type:
+          type: string
+          description: >-
+            Legal entity type of the business (for example, llc or corporation).
+            Required.
+          example: llc
+        industry:
+          type: string
+          description: >-
+            Industry category of the business. May be required depending on your
+            account configuration.
+          example: software
+        website:
+          type: string
+          description: Public-facing website URL of the business.
+          example: https://acme.corp
+        registration_number:
+          type: string
+          description: Official registration or incorporation number of the business.
+          example: '12345678'
+        tax_id_number:
+          type: string
+          description: >-
+            Tax Identification Number (TIN) of the business. May be required
+            depending on your account configuration.
+          example: '000000000'
+        date_of_incorporation:
+          type: string
+          description: Date the business was incorporated, in YYYY-MM-DD format.
+          example: '2010-01-01'
+        country_of_incorporation:
+          type: string
+          description: >-
+            Country where the business is incorporated, in ISO 3166-1 alpha-2
+            format. Some account configurations require this to be US.
+          example: US
+        state_of_incorporation:
+          type: string
+          description: >-
+            US state where the business is incorporated. May be required
+            depending on your account configuration.
+          example: DE
+        business_status:
+          type: string
+          description: >-
+            Current operating status of the business (for example, active or
+            inactive).
+          example: active
+        registered_address:
+          $ref: '#/components/schemas/UnifiedAddress'
+        physical_address:
+          $ref: '#/components/schemas/UnifiedAddress'
+        mailing_address:
+          $ref: '#/components/schemas/UnifiedAddress'
+        primary_contact:
+          $ref: '#/components/schemas/UnifiedIndividualData'
+        associated_persons:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnifiedAssociatedPerson'
+          description: Provide at least one associated person.
+        has_material_intermediary_ownership:
+          type: boolean
+          description: >-
+            Indicates whether the business has ownership held through a material
+            intermediary.
+          example: false
+        formation_document:
+          type: string
+          description: Business formation document, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        ownership_document:
+          type: string
+          description: >-
+            Document showing the ownership structure of the business, as a
+            Base64 data URI.
+          example: data:application/pdf;base64,...
+        proof_of_address_document:
+          type: string
+          description: Proof of business address, as a Base64 data URI.
+          example: data:application/pdf;base64,...
+        proof_of_nature_of_business:
+          type: string
+          description: >-
+            Document that verifies the nature of the business, as a Base64 data
+            URI.
+          example: data:application/pdf;base64,...
+        is_dao:
+          type: boolean
+          description: >-
+            Indicates whether the business is a decentralized autonomous
+            organization (DAO).
+          example: false
+        account_purpose:
+          type: string
+          description: >-
+            Primary purpose for opening the account (for example, operations or
+            payroll).
+          example: operations
+        source_of_funds:
+          type: string
+          description: >-
+            Primary source of business funds (for example, revenue or
+            investment).
+          example: revenue
+        industry_financial_services_subtype:
+          type: string
+          description: Subtype of financial services industry, if applicable.
+          example: none
+        industry_crypto_subtype:
+          type: string
+          description: Subtype of crypto industry, if applicable.
+          example: none
+        industry_other_description:
+          type: string
+          description: >-
+            Description of the industry when it does not fit a standard
+            category.
+          example: Software dev
+        expected_counterparty_countries:
+          type: array
+          items:
+            type: string
+          description: >-
+            Countries where the business expects to transact, in ISO 3166-1
+            alpha-2 format.
+          example:
+            - US
+            - GB
+        source_of_funds_list:
+          type: array
+          items:
+            type: string
+          description: >-
+            Sources of funds for the account. May be required depending on your
+            account configuration.
+          example:
+            - REVENUE
+        source_of_funds_other_description:
+          type: string
+          description: >-
+            Free-text description of the source of funds when not covered by the
+            standard options.
+          example: Sales revenue
+        tin_verification_document:
+          type: string
+          description: >-
+            Document verifying the business TIN, as a Base64 data URI. May be
+            required depending on your account configuration.
+          example: data:application/pdf;base64,...
+        authorization_document:
+          type: string
+          description: >-
+            Authorization document for the account, as a Base64 data URI. May be
+            used depending on your account configuration.
+          example: data:application/pdf;base64,...
+        is_msb:
+          type: boolean
+          description: Indicates whether the business is a money services business (MSB).
+          example: false
+        account_purposes:
+          type: array
+          items:
+            type: string
+          description: >-
+            Purposes for opening the account. May be required depending on your
+            account configuration.
+          example:
+            - BUSINESS_OPERATIONS
+        account_purposes_other_description:
+          type: string
+          description: >-
+            Free-text description of account purposes when not covered by the
+            standard options.
+          example: Operations
+        primary_target_market:
+          type: string
+          description: Primary geographic market the business targets.
+          example: US
+        primary_target_market_other_description:
+          type: string
+          description: >-
+            Free-text description of the primary target market when not covered
+            by the standard options.
+          example: US market
+        expected_fiat_monthly_volume:
+          type: string
+          description: Expected monthly volume of fiat transactions.
+          example: 10000_TO_50000
+        expected_crypto_monthly_volume:
+          type: string
+          description: Expected monthly volume of crypto transactions.
+          example: 10000_TO_50000
+    UnifiedApplicationData:
+      type: object
+      required:
+        - account_type
+        - currency
+        - blockchain_network
+      properties:
+        individual:
+          $ref: '#/components/schemas/UnifiedIndividualData'
+        business:
+          $ref: '#/components/schemas/UnifiedBusinessData'
+        account_type:
+          type: string
+          enum:
+            - regular
+            - savings
+          description: >-
+            Kind of account to open (for example, regular or savings). This is
+            the account type, not the customer type. Use the top-level
+            application_type field for individual vs business.
+          example: regular
+        currency:
+          type: string
+          description: Currency for the account, in ISO 4217 format.
+          example: USD
+        blockchain_network:
+          type: string
+          description: >-
+            Blockchain network to back the account (for example, polygon or
+            stellar).
+          example: polygon
+        wallet_address:
+          type: string
+          description: Blockchain wallet address to associate with the account.
+          example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+        wallet_id:
+          type: string
+          format: uuid
+          description: UUID of an existing Gravv wallet to link to the account.
+          example: 123e4567-e89b-12d3-a456-426614174000
+        label:
+          type: string
+          description: Human-readable label for the account.
+          example: ops
+        agreement_id:
+          type: string
+          description: ID of the provider agreement associated with this application.
+          example: agr_123
+        tos_link:
+          type: string
+          description: URL to the terms of service the applicant must accept.
+          example: https://example.com/tos
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Arbitrary key-value pairs for storing additional information about
+            the application.
+          example:
+            source: web
+    CreateAccountApplicationRequest:
+      type: object
+      required:
+        - customer_id
+        - application_type
+        - data
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: UUID of the customer submitting the application.
+          example: 123e4567-e89b-12d3-a456-426614174000
+        application_type:
+          type: string
+          enum:
+            - individual
+            - business
+          description: Type of application. One of individual or business.
+          example: individual
+        data:
+          $ref: '#/components/schemas/UnifiedApplicationData'
+          description: >-
+            Application data including KYC information and account
+            configuration.
+    ValidateApplicationRequest:
+      type: object
+      required:
+        - application_type
+        - data
+      properties:
+        application_type:
+          type: string
+          enum:
+            - individual
+            - business
+          description: Type of application. One of individual or business.
+          example: individual
+        data:
+          $ref: '#/components/schemas/UnifiedApplicationData'
+          description: Application data to validate. Not persisted.
+    UpdateApplicationRequest:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          $ref: '#/components/schemas/UnifiedApplicationData'
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the application.
+          example: 550e8400-e29b-41d4-a716-446655440001
+        tenant_id:
+          type: string
+          description: ID of the tenant that owns this application.
+          example: cd90c45c-fa78-4624-a80a-642be301c812
+        customer_id:
+          type: string
+          format: uuid
+          description: UUID of the customer this application belongs to.
+          example: 123e4567-e89b-12d3-a456-426614174000
+        application_type:
+          type: string
+          description: Type of application. One of individual or business.
+          example: individual
+        status:
+          type: string
+          enum:
+            - draft
+            - submitted
+            - processing
+            - creating_account
+            - manual_review
+            - approved
+            - rejected
+            - expired
+          description: >-
+            Current status of the application. `creating_account` is a
+            deprecated transitional value and should not be treated as a
+            required lifecycle step. `manual_review` means a human decision is
+            required.
+          example: draft
+        data:
+          $ref: '#/components/schemas/UnifiedApplicationData'
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary key-value pairs attached to the application.
+          example:
+            source: web
+        validation_errors:
+          type: array
+          description: >-
+            List of validation errors returned when the application data does
+            not meet provider requirements.
+          items:
+            $ref: '#/components/schemas/ValidationError'
+        submitted_at:
+          type: string
+          format: date-time
+          description: Timestamp when the application was submitted, in ISO 8601 format.
+          example: '2025-12-08T12:53:43.845956Z'
+        processed_at:
+          type: string
+          format: date-time
+          description: >-
+            Timestamp when the application was processed by the provider, in ISO
+            8601 format.
+          example: '2025-12-08T13:01:22.123456Z'
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the application was created, in ISO 8601 format.
+          example: '2025-12-08T12:00:00.000000Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the application was last updated, in ISO 8601 format.
+          example: '2025-12-08T12:53:43.845956Z'
+        deleted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Timestamp when the application was soft-deleted, if applicable.
+          example: null
+    CreateAccountRequest:
+      type: object
+      required:
+        - currency
+        - type
+        - label
+        - customer_id
+        - blockchain_network
+      properties:
+        currency:
+          type: string
+          description: Currency code for the account
+          example: USD
+          enum:
+            - USD
+            - EUR
+            - MXN
+            - NGN
+        type:
+          type: string
+          description: Type of account
+          example: regular
+          enum:
+            - regular
+            - savings
+        label:
+          type: string
+          description: Label for the account
+          example: ops
+          maxLength: 50
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who owns this account
+          example: 550e8400-e29b-41d4-a716-446655440178
+        blockchain_network:
+          type: string
+          description: Blockchain network for the account
+          example: polygon
+          enum:
+            - polygon
+            - stellar
+            - ethereum
+            - solana
+            - avalanche
+        wallet_address:
+          type: string
+          description: Blockchain wallet address to associate with the account.
+          example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+    AddRecipientRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseExternalAccountRecipient'
+        - oneOf:
+            - $ref: '#/components/schemas/USBanksRecipient'
+            - $ref: '#/components/schemas/SepaRecipient'
+            - $ref: '#/components/schemas/SwiftRecipient'
+            - $ref: '#/components/schemas/GlobalBankRecipient'
+            - $ref: '#/components/schemas/GlobalMobileMoneyRecipient'
+    BaseExternalAccountRecipient:
+      type: object
+      required:
+        - account_name
+        - customer_id
+      properties:
+        account_name:
+          type: string
+          description: Name of the account holder.
+          maxLength: 100
+          example: Amina Bello
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who owns the external account.
+          example: 373556ec-74e5-4cde-909c-b94d864915db
+    USBanksRecipient:
+      type: object
+      title: US Bank Account Recipient
+      required:
+        - payee_type
+        - account_number
+        - routing_number
+        - account_owner_type
+        - account_type
+        - currency
+        - address
+      properties:
+        payee_type:
+          type: string
+          description: Type of payee
+          enum:
+            - ach_wire
+          example: ach_wire
+        account_number:
+          type: string
+          description: Bank account number
+          example: '4401682860'
+          maxLength: 50
+        bank_name:
+          type: string
+          description: Name of the bank
+          example: First National Bank
+          maxLength: 100
+        routing_number:
+          type: string
+          description: 9-digit ABA routing number
+          example: '101019644'
+          maxLength: 20
+        account_owner_type:
+          type: string
+          description: Type of account owner
+          enum:
+            - individual
+            - business
+          example: individual
+        account_type:
+          type: string
+          description: Type of bank account
+          enum:
+            - savings
+            - checking
+          example: savings
+        currency:
+          type: string
+          description: Currency code
+          enum:
+            - USD
+          example: USD
+        address:
+          $ref: '#/components/schemas/ExtRecipientAddress'
+    SepaRecipient:
+      type: object
+      title: Sepa Recipient
+      description: Sepa recipient
+      required:
+        - payee_type
+        - account_owner_type
+        - iban
+        - account_name
+        - currency
+        - customer_id
+        - address
+      properties:
+        payee_type:
+          type: string
+          description: Type of payee
+          enum:
+            - sepa
+          example: sepa
+        account_owner_type:
+          type: string
+          description: Type of account owner
+          enum:
+            - individual
+            - business
+          example: individual
+        iban:
+          type: string
+          description: International Bank Account Number
+          example: '1776218486'
+          maxLength: 50
+        account_name:
+          type: string
+          description: Name of the account holder
+          example: Amina Bello
+          maxLength: 100
+        bank_name:
+          type: string
+          description: Bank name
+          example: Deutsche Bank
+        currency:
+          type: string
+          description: Currency code for the account
+          example: EUR
+          enum:
+            - EUR
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer who owns this recipient
+          example: 373556ec-74e5-4cde-909c-b94d864915db
+        address:
+          $ref: '#/components/schemas/ExtRecipientAddress'
+    ExtRecipientAddress:
+      type: object
+      required:
+        - address_line1
+        - city
+        - postal_code
+        - country
+      properties:
+        address_line1:
+          type: string
+          example: 1800 N Pole St
+        address_line2:
+          type: string
+          example: Suite 202
+        city:
+          type: string
+          example: Orlando
+        postal_code:
+          type: string
+          example: '32801'
+        state:
+          type: string
+          example: US-FL
+        country:
+          type: string
+          example: US
+    SwiftRecipient:
+      type: object
+      title: Swift Recipient
+      allOf:
+        - required:
+            - payee_type
+            - account_owner_type
+            - bic
+            - currency
+            - address
+          properties:
+            payee_type:
+              type: string
+              description: Type of payee
+              enum:
+                - swift
+              example: swift
+            account_owner_type:
+              type: string
+              enum:
+                - individual
+                - business
+            bank_name:
+              type: string
+              example: Guaranty Trust Bank (GTBank)
+            account_number:
+              type: string
+              description: Bank account number
+              example: '1245909283'
+            iban:
+              type: string
+              description: International Bank Account Number
+              example: GB33BUKB20201555555555
+              maxLength: 34
+            bic:
+              type: string
+              example: NG2893A
+            currency:
+              type: string
+              enum:
+                - USD
+            address:
+              $ref: '#/components/schemas/SwiftRecipientAddress'
+        - oneOf:
+            - title: With account number
+              required:
+                - account_number
+            - title: With IBAN
+              required:
+                - iban
+    SwiftRecipientAddress:
+      type: object
+      required:
+        - address_line1
+        - city
+        - postal_code
+        - country
+      properties:
+        address_line1:
+          type: string
+          example: 1800 N Pole St
+        house_building_number:
+          type: string
+          example: 1B
+        address_line2:
+          type: string
+          example: Suite 202
+        city:
+          type: string
+          example: Orlando
+        postal_code:
+          type: string
+          example: '32801'
+        state:
+          type: string
+          example: US-FL
+        country:
+          type: string
+          example: US
+    GlobalBankRecipient:
+      type: object
+      title: Global Bank Recipient
+      required:
+        - payee_type
+        - currency
+        - institution_id
+      properties:
+        payee_type:
+          type: string
+          description: Type of payee
+          enum:
+            - bank_account
+          example: bank_account
+        account_number:
+          type: string
+          description: Account number or phone number
+          example: '4401682860'
+          maxLength: 50
+        bank_name:
+          type: string
+          description: Name of the bank
+          example: Access Bank
+          maxLength: 100
+        iban:
+          type: string
+          description: International Bank Account Number
+          example: GB33BUKB20201555555555
+        institution_id:
+          type: string
+          format: uuid
+          description: Institution ID
+          example: 4b595668-98dc-4cbc-9ac6-1343b6127a58
+        currency:
+          type: string
+          description: Currency code for the account
+          example: NGN
+          enum:
+            - NGN
+            - GHS
+            - KES
+            - UGX
+            - ZMW
+            - XOF
+            - BWP
+            - CDF
+            - XAF
+            - MWK
+            - RWF
+            - ZAR
+            - TZS
+            - BDT
+            - BIF
+            - CNY
+            - COP
+            - DOP
+            - EGP
+            - ETB
+            - GMD
+            - GTQ
+            - GNF
+            - INR
+            - ILS
+            - JOD
+            - LRD
+            - MRU
+            - MXN
+            - MAD
+            - MZN
+            - PKR
+            - PHP
+            - PLN
+            - AED
+            - SOS
+            - SLL
+            - TND
+            - TRY
+            - USD
+            - ZWL
+    GlobalMobileMoneyRecipient:
+      type: object
+      title: Global Mobile Money Recipient
+      required:
+        - payee_type
+        - phone_number
+        - currency
+        - institution_id
+      properties:
+        payee_type:
+          type: string
+          description: Type of payee
+          enum:
+            - mobile_money
+          example: mobile_money
+        phone_number:
+          type: string
+          description: Mobile money account number or phone number
+          example: '+233241234567'
+        institution_id:
+          type: string
+          format: uuid
+          description: Institution ID
+          example: 4b595668-98dc-4cbc-9ac6-1343b6127a58
+        currency:
+          type: string
+          description: Currency code for the account
+          example: NGN
+          enum:
+            - NGN
+            - GHS
+            - KES
+            - UGX
+            - ZMW
+            - XOF
+            - BWP
+            - CDF
+            - XAF
+            - MWK
+            - RWF
+            - ZAR
+            - TZS
+            - BDT
+            - BIF
+            - CNY
+            - COP
+            - DOP
+            - EGP
+            - ETB
+            - GMD
+            - GTQ
+            - GNF
+            - INR
+            - ILS
+            - JOD
+            - LRD
+            - MRU
+            - MXN
+            - MAD
+            - MZN
+            - PKR
+            - PHP
+            - PLN
+            - AED
+            - SOS
+            - SLL
+            - TND
+            - TRY
+            - USD
+            - ZWL
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Accounts
+    description: Manage internal accounts
+paths:
+  /v1/accounts/applications:
+    post:
+      tags:
+        - Accounts
+      summary: Create account application
+      description: >-
+        Create a new account application for a given customer.
+
+
+        For sandbox and testing integrations, use `polygon` as the
+        `blockchain_network`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountApplicationRequest'
+            examples:
+              Individual application:
+                summary: Create an individual account application
+                value:
+                  customer_id: 123e4567-e89b-12d3-a456-426614174000
+                  application_type: individual
+                  data:
+                    account_type: regular
+                    currency: USD
+                    blockchain_network: polygon
+                    wallet_address: 0x123...
+                    wallet_id: 123e4567-e89b-12d3-a456-426614174000
+                    label: ops
+                    agreement_id: agr_123
+                    tos_link: https://example.com/tos
+                    tier: tier_1
+                    metadata:
+                      source: web
+                    individual:
+                      first_name: John
+                      last_name: Doe
+                      middle_name: Robert
+                      email: john.doe@example.com
+                      role: owner
+                      phone: '+14155552671'
+                      date_of_birth: '1980-01-01'
+                      gender: male
+                      nationality: US
+                      ssn: '000000000'
+                      tin: '000000000'
+                      income_source: employment
+                      employment_status: employed
+                      citizenship: US
+                      identification_type: passport
+                      identification_number: P1234567
+                      identification_country: US
+                      identification_expiry: '2030-01-01'
+                      address:
+                        street_line_1: 123 Main St
+                        street_line_2: Apt 4B
+                        city: San Francisco
+                        state: CA
+                        postal_code: '94105'
+                        country: US
+                      id_document_front: data:application/pdf;base64,...
+                      id_document_back: data:application/pdf;base64,...
+                      proof_of_address_document: data:application/pdf;base64,...
+                      source_of_wealth:
+                        - SALARY
+                      source_of_wealth_other_description: Salary from tech job
+                      account_purposes:
+                        - PERSONAL_BANKING
+                      account_purposes_other_description: Personal savings
+                      source_of_funds_list:
+                        - INCOME
+                      source_of_funds_other_description: Income
+                      expected_counterparty_countries:
+                        - US
+                        - GB
+                      expected_fiat_monthly_volume: 10000_TO_50000
+                      expected_crypto_monthly_volume: 10000_TO_50000
+              Business application:
+                summary: Create a business account application
+                value:
+                  customer_id: 123e4567-e89b-12d3-a456-426614174000
+                  application_type: business
+                  data:
+                    account_type: regular
+                    currency: USD
+                    blockchain_network: polygon
+                    wallet_address: 0x123...
+                    wallet_id: 123e4567-e89b-12d3-a456-426614174000
+                    label: ops
+                    agreement_id: agr_123
+                    tos_link: https://example.com/tos
+                    tier: tier_1
+                    metadata:
+                      source: web
+                    business:
+                      legal_name: Acme Corp
+                      trade_name: Acme
+                      description: A very detailed description of Acme Corp here.
+                      type: llc
+                      industry: software
+                      website: https://acme.corp
+                      registration_number: '12345678'
+                      tax_id_number: '000000000'
+                      date_of_incorporation: '2010-01-01'
+                      country_of_incorporation: US
+                      state_of_incorporation: DE
+                      business_status: active
+                      registered_address:
+                        street_line_1: 123 Business Rd
+                        street_line_2: Suite 100
+                        city: New York
+                        state: NY
+                        postal_code: '10001'
+                        country: US
+                      physical_address:
+                        street_line_1: 123 Business Rd
+                        street_line_2: Suite 100
+                        city: New York
+                        state: NY
+                        postal_code: '10001'
+                        country: US
+                      mailing_address:
+                        street_line_1: 123 Business Rd
+                        street_line_2: Suite 100
+                        city: New York
+                        state: NY
+                        postal_code: '10001'
+                        country: US
+                      primary_contact:
+                        first_name: John
+                        last_name: Doe
+                        email: john.doe@example.com
+                        phone: '+14155552671'
+                        date_of_birth: '1980-01-01'
+                        citizenship: US
+                        identification_type: passport
+                        identification_number: P1234567
+                        identification_country: US
+                        address:
+                          street_line_1: 123 Main St
+                          city: San Francisco
+                          state: CA
+                          postal_code: '94105'
+                          country: US
+                      associated_persons:
+                        - first_name: Jane
+                          last_name: Smith
+                          middle_name: Anne
+                          email: jane@acme.corp
+                          phone: '+14155552672'
+                          date_of_birth: '1985-06-15'
+                          citizenship: US
+                          ssn: '000000000'
+                          title: CEO
+                          role: director
+                          has_ownership: true
+                          has_control: true
+                          is_signer: true
+                          is_director: true
+                          ownership_percentage: 100
+                          identification_type: passport
+                          identification_number: P7654321
+                          identification_country: US
+                          identification_expiry: '2030-01-01'
+                          id_document_front: data:application/pdf;base64,...
+                          id_document_back: data:application/pdf;base64,...
+                          proof_of_address_document: data:application/pdf;base64,...
+                          address:
+                            street_line_1: 456 Home Ave
+                            street_line_2: Apt 1
+                            city: Brooklyn
+                            state: NY
+                            postal_code: '11201'
+                            country: US
+                      has_material_intermediary_ownership: false
+                      formation_document: data:application/pdf;base64,...
+                      ownership_document: data:application/pdf;base64,...
+                      proof_of_address_document: data:application/pdf;base64,...
+                      proof_of_nature_of_business: data:application/pdf;base64,...
+                      is_dao: false
+                      account_purpose: operations
+                      source_of_funds: revenue
+                      industry_financial_services_subtype: none
+                      industry_crypto_subtype: none
+                      industry_other_description: Software dev
+                      expected_counterparty_countries:
+                        - US
+                        - GB
+                      source_of_funds_list:
+                        - REVENUE
+                      source_of_funds_other_description: Sales revenue
+                      tin_verification_document: data:application/pdf;base64,...
+                      authorization_document: data:application/pdf;base64,...
+                      is_msb: false
+                      account_purposes:
+                        - BUSINESS_OPERATIONS
+                      account_purposes_other_description: Operations
+                      primary_target_market: US
+                      primary_target_market_other_description: US market
+                      expected_fiat_monthly_volume: 10000_TO_50000
+                      expected_crypto_monthly_volume: 10000_TO_50000
+      responses:
+        '200':
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+        - Accounts
+      summary: Get account applications
+      description: Retrieve a list of applications with optional filters and pagination.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: application_type
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of applications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/pending:
+    get:
+      tags:
+        - Accounts
+      summary: Get pending applications
+      description: Retrieve a list of pending applications.
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Maximum number of pending applications to return.
+      responses:
+        '200':
+          description: List of pending applications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingApplicationsEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/{id}:
+    get:
+      tags:
+        - Accounts
+      summary: Get account application
+      description: Retrieve details of a single application by ID.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    put:
+      tags:
+        - Accounts
+      summary: Update account application
+      description: Update data for a draft or rejected application.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApplicationRequest'
+            example:
+              data:
+                account_type: regular
+                currency: USD
+                blockchain_network: polygon
+                wallet_address: 0x123...
+                wallet_id: 123e4567-e89b-12d3-a456-426614174000
+                label: ops
+                agreement_id: agr_123
+                tos_link: https://example.com/tos
+                tier: tier_1
+                metadata:
+                  source: web
+                individual:
+                  first_name: John
+                  last_name: Doe
+                  middle_name: Robert
+                  email: john.doe@example.com
+                  role: owner
+                  phone: '+14155552671'
+                  date_of_birth: '1980-01-01'
+                  gender: male
+                  nationality: US
+                  ssn: '000000000'
+                  tin: '000000000'
+                  income_source: employment
+                  employment_status: employed
+                  citizenship: US
+                  identification_type: passport
+                  identification_number: P1234567
+                  identification_country: US
+                  identification_expiry: '2030-01-01'
+                  address:
+                    street_line_1: 123 Main St
+                    street_line_2: Apt 4B
+                    city: San Francisco
+                    state: CA
+                    postal_code: '94105'
+                    country: US
+                  id_document_front: data:application/pdf;base64,...
+                  id_document_back: data:application/pdf;base64,...
+                  proof_of_address_document: data:application/pdf;base64,...
+                  source_of_wealth:
+                    - SALARY
+                  source_of_wealth_other_description: Salary from tech job
+                  account_purposes:
+                    - PERSONAL_BANKING
+                  account_purposes_other_description: Personal savings
+                  source_of_funds_list:
+                    - INCOME
+                  source_of_funds_other_description: Income
+                  expected_counterparty_countries:
+                    - US
+                    - GB
+                  expected_fiat_monthly_volume: 10000_TO_50000
+                  expected_crypto_monthly_volume: 10000_TO_50000
+                business:
+                  legal_name: Acme Corp
+                  trade_name: Acme
+                  description: A very detailed description of Acme Corp here.
+                  type: llc
+                  industry: software
+                  website: https://acme.corp
+                  registration_number: '12345678'
+                  tax_id_number: '000000000'
+                  date_of_incorporation: '2010-01-01'
+                  country_of_incorporation: US
+                  state_of_incorporation: DE
+                  business_status: active
+                  registered_address:
+                    street_line_1: 123 Business Rd
+                    street_line_2: Suite 100
+                    city: New York
+                    state: NY
+                    postal_code: '10001'
+                    country: US
+                  physical_address:
+                    street_line_1: 123 Business Rd
+                    street_line_2: Suite 100
+                    city: New York
+                    state: NY
+                    postal_code: '10001'
+                    country: US
+                  mailing_address:
+                    street_line_1: 123 Business Rd
+                    street_line_2: Suite 100
+                    city: New York
+                    state: NY
+                    postal_code: '10001'
+                    country: US
+                  primary_contact:
+                    first_name: John
+                    last_name: Doe
+                    email: john.doe@example.com
+                    phone: '+14155552671'
+                    date_of_birth: '1980-01-01'
+                    citizenship: US
+                    identification_type: passport
+                    identification_number: P1234567
+                    identification_country: US
+                    address:
+                      street_line_1: 123 Main St
+                      city: San Francisco
+                      state: CA
+                      postal_code: '94105'
+                      country: US
+                  associated_persons:
+                    - first_name: Jane
+                      last_name: Smith
+                      middle_name: Anne
+                      email: jane@acme.corp
+                      phone: '+14155552672'
+                      date_of_birth: '1985-06-15'
+                      citizenship: US
+                      ssn: '000000000'
+                      title: CEO
+                      role: director
+                      has_ownership: true
+                      has_control: true
+                      is_signer: true
+                      is_director: true
+                      ownership_percentage: 100
+                      identification_type: passport
+                      identification_number: P7654321
+                      identification_country: US
+                      identification_expiry: '2030-01-01'
+                      id_document_front: data:application/pdf;base64,...
+                      id_document_back: data:application/pdf;base64,...
+                      proof_of_address_document: data:application/pdf;base64,...
+                      address:
+                        street_line_1: 456 Home Ave
+                        street_line_2: Apt 1
+                        city: Brooklyn
+                        state: NY
+                        postal_code: '11201'
+                        country: US
+                  has_material_intermediary_ownership: false
+                  formation_document: data:application/pdf;base64,...
+                  ownership_document: data:application/pdf;base64,...
+                  proof_of_address_document: data:application/pdf;base64,...
+                  proof_of_nature_of_business: data:application/pdf;base64,...
+                  is_dao: false
+                  account_purpose: operations
+                  source_of_funds: revenue
+                  industry_financial_services_subtype: none
+                  industry_crypto_subtype: none
+                  industry_other_description: Software dev
+                  expected_counterparty_countries:
+                    - US
+                    - GB
+                  source_of_funds_list:
+                    - REVENUE
+                  source_of_funds_other_description: Sales revenue
+                  tin_verification_document: data:application/pdf;base64,...
+                  authorization_document: data:application/pdf;base64,...
+                  is_msb: false
+                  account_purposes:
+                    - BUSINESS_OPERATIONS
+                  account_purposes_other_description: Operations
+                  primary_target_market: US
+                  primary_target_market_other_description: US market
+                  expected_fiat_monthly_volume: 10000_TO_50000
+                  expected_crypto_monthly_volume: 10000_TO_50000
+      responses:
+        '200':
+          description: Application updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags:
+        - Accounts
+      summary: Delete account application
+      description: Delete a single application.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Application deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/{id}/submit:
+    post:
+      tags:
+        - Accounts
+      summary: Submit account application
+      description: Mark the application as submitted for provider processing.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/{id}/process:
+    post:
+      tags:
+        - Accounts
+      summary: Process account application
+      description: Process the submitted application with the relevant provider.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Application processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/{id}/submit-and-process:
+    post:
+      tags:
+        - Accounts
+      summary: Submit and process application
+      description: Combine submission and processing into a single call.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Application submitted and processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitAndProcessEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/{id}/history:
+    get:
+      tags:
+        - Accounts
+      summary: Get application history
+      description: Get the audit log or history of an application.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Application history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationHistoryEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/tos:
+    post:
+      tags:
+        - Accounts
+      summary: Complete TOS acceptance
+      description: >-
+        Record the applicant's acceptance of the provider terms of service for a
+        draft application.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - application_id
+                - agreement_id
+              properties:
+                application_id:
+                  type: string
+                  format: uuid
+                  description: ID of the draft application accepting the terms.
+                  example: 550e8400-e29b-41d4-a716-446655440001
+                agreement_id:
+                  type: string
+                  description: Provider agreement identifier being accepted.
+                  example: agr_123
+      responses:
+        '200':
+          description: TOS marked as accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/applications/validate:
+    post:
+      tags:
+        - Accounts
+      summary: Validate application data
+      description: >-
+        Validates an application payload against provider specific rules without
+        saving.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateApplicationRequest'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateApplicationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts:
+    post:
+      tags:
+        - Accounts
+      summary: Create an account
+      description: >-
+        Create a new internal account for a customer.
+
+
+        For sandbox and testing integrations, we recommend using `polygon` as
+        the `blockchain_network`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+            examples:
+              RegularAccount:
+                summary: Regular Account Example
+                value:
+                  currency: USD
+                  type: regular
+                  label: ops
+                  customer_id: 550e8400-e29b-41d4-a716-446655440178
+                  blockchain_network: polygon
+              RegularAccountWithWallet:
+                summary: Regular account with wallet
+                value:
+                  currency: USD
+                  type: regular
+                  label: ops
+                  customer_id: 550e8400-e29b-41d4-a716-446655440178
+                  blockchain_network: polygon
+                  wallet_address: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+      responses:
+        '200':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+        - Accounts
+      summary: Get accounts
+      description: >-
+        Retrieve a list of internal accounts with optional filters and
+        pagination.
+      parameters:
+        - in: query
+          name: items_per_page
+          schema:
+            type: string
+          description: Number of items per page (pagination limit)
+          example: '10'
+        - in: query
+          name: page
+          schema:
+            type: string
+          description: Page number for pagination
+          example: '1'
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter accounts by customer ID
+          example: 550e8400-e29b-41d4-a716-446655440178
+        - in: query
+          name: blockchain_network
+          schema:
+            type: string
+            enum:
+              - polygon
+              - stellar
+              - ethereum
+              - solana
+              - avalanche
+          description: Filter accounts by blockchain network
+          example: polygon
+        - in: query
+          name: label
+          schema:
+            type: string
+          description: Filter accounts by their label
+          example: ops
+      responses:
+        '200':
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/{account_id}:
+    get:
+      tags:
+        - Accounts
+      summary: Get a single account
+      description: Retrieve details of a specific internal account by `account_id`.
+      parameters:
+        - in: path
+          name: account_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/{account_id}/status:
+    patch:
+      tags:
+        - Accounts
+      summary: Update account status
+      description: >-
+        Change an account's status. Set `frozen` to suspend an account,
+        `active` to reactivate it, or `deleted` to close it.
+
+
+        Deleting requires the account's wallet balance to be zero. A deleted
+        account can't be changed again, and system-managed accounts can't have
+        their status updated.
+      parameters:
+        - in: path
+          name: account_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - frozen
+                    - deleted
+                  description: The new account status.
+            examples:
+              Freeze:
+                summary: Freeze an account
+                value:
+                  status: frozen
+              Reactivate:
+                summary: Reactivate an account
+                value:
+                  status: active
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'

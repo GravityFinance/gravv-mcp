@@ -1,0 +1,1447 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+    CustomerIdPath:
+      name: customer_id
+      in: path
+      required: true
+      description: UUID of the customer
+      schema:
+        type: string
+        format: uuid
+      example: 42ad0adb-e134-4345-b4be-98e5021b0da8
+    DocumentIdPath:
+      name: document_id
+      in: path
+      required: true
+      description: UUID of the KYC document
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    StartKYCRequest:
+      type: object
+      required:
+        - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer ID to start KYC for
+    StartKYCResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - status
+            - web_url
+          properties:
+            review_status:
+              type: string
+              description: Applicant review status from the verification process.
+              example: pending
+            status:
+              type: string
+              description: Request status
+              example: success
+            web_url:
+              type: string
+              format: uri
+              description: URL to complete the KYC process
+              example: https://verify.gravv.xyz/websdk/p/example_token
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    UploadDocumentRequest:
+      type: object
+      required:
+        - customer_id
+        - metadata
+        - content
+        - filename
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer this document belongs to
+          example: b84d9a52-2978-43e5-9b86-eac9839e1146
+        metadata:
+          $ref: '#/components/schemas/DocumentMetadata'
+        content:
+          type: string
+          format: byte
+          description: >
+            Base64-encoded document content. The decoded bytes must be a JPEG,
+            PNG,
+
+            or PDF; the service sniffs the leading bytes and rejects other MIME
+
+            types. Maximum decoded size is 10 MB.
+          example: >-
+            iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+        filename:
+          type: string
+          description: >
+            Original filename of the document. Extension must be one of
+
+            `.jpg`, `.jpeg`, `.png`, `.pdf` (case-insensitive); the file
+            extension
+
+            is validated before the content MIME sniff.
+          example: passport_front.jpg
+          maxLength: 255
+          pattern: (?i)\.(jpe?g|png|pdf)$
+    DocumentMetadata:
+      type: object
+      required:
+        - idDocType
+        - country
+      properties:
+        idDocType:
+          type: string
+          description: >
+            Type of document being uploaded. Individual customers upload a
+            `SELFIE` plus one identification document: `PASSPORT`, `ID_CARD`, or
+            `DRIVERS`. Business customers upload `REGISTRATION_CERTIFICATE`
+            only.
+          enum:
+            - PASSPORT
+            - ID_CARD
+            - DRIVERS
+            - SELFIE
+            - REGISTRATION_CERTIFICATE
+          example: PASSPORT
+        idDocSubType:
+          type: string
+          description: >
+            Subtype indicating which side of the document. Must be uppercase;
+
+            lowercase values are passed through to the upstream verifier and may
+            be
+
+            silently rejected.
+          enum:
+            - FRONT_SIDE
+            - BACK_SIDE
+          example: FRONT_SIDE
+        country:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: Document issuing country (ISO 3166-1 alpha-3 code, uppercase)
+          example: NGA
+        firstName:
+          type: string
+          description: First name as shown on document
+          example: John
+          maxLength: 100
+        middleName:
+          type: string
+          description: Middle name as shown on document (optional)
+          example: Michael
+          maxLength: 100
+        lastName:
+          type: string
+          description: Last name as shown on document
+          example: Doe
+          maxLength: 100
+        issuedDate:
+          type: string
+          format: date
+          description: Document issue date (YYYY-MM-DD)
+          example: '2020-01-15'
+        validUntil:
+          type: string
+          format: date
+          description: Document expiration date (YYYY-MM-DD)
+          example: '2030-01-15'
+        number:
+          type: string
+          description: Document identification number
+          example: A12345678
+          maxLength: 50
+        dob:
+          type: string
+          format: date
+          description: Date of birth (YYYY-MM-DD)
+          example: '1990-05-20'
+        placeOfBirth:
+          type: string
+          description: Place of birth as shown on document
+          example: New York, NY
+          maxLength: 100
+    UploadDocumentResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - status
+            - customer_id
+            - document_type
+            - country
+            - message
+          properties:
+            status:
+              type: string
+              description: Always `"success"` on a successful upload
+              enum:
+                - success
+              example: success
+            customer_id:
+              type: string
+              format: uuid
+              description: ID of the customer the document was saved for
+              example: b84d9a52-2978-43e5-9b86-eac9839e1146
+            document_type:
+              type: string
+              description: Normalised document type derived from `metadata.idDocType`
+              example: PASSPORT
+            country:
+              type: string
+              description: >-
+                ISO 3166-1 alpha-3 country code as supplied in
+                `metadata.country`
+              example: NGA
+            message:
+              type: string
+              description: Human-readable confirmation message
+              example: Document saved. Use /start-s2s to submit for verification.
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    StartKYCS2SRequest:
+      type: object
+      required:
+        - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            Customer ID to initiate KYC verification for. Documents must be
+            uploaded for this customer before calling this endpoint.
+          example: aabe0a33-6716-42e2-bbca-7abf1a8bd91c
+    StartKYCS2SSuccessResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - status
+            - applicant_id
+          properties:
+            status:
+              type: string
+              description: >-
+                Request status. `"success"` indicates all documents were
+                uploaded and verification has been initiated.
+              enum:
+                - success
+              example: success
+            applicant_id:
+              type: string
+              description: Opaque identifier for the applicant in the verification system
+              example: apl_example_123
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    StartKYCS2SPartialSuccessResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - status
+            - applicant_id
+            - web_url
+            - failed_documents
+          properties:
+            status:
+              type: string
+              description: >-
+                `"partial_success"` — some documents failed to upload
+                automatically. The customer must complete verification via the
+                `web_url`.
+              enum:
+                - partial_success
+              example: partial_success
+            applicant_id:
+              type: string
+              description: Opaque identifier for the applicant in the verification system
+              example: apl_example_123
+            web_url:
+              type: string
+              format: uri
+              description: WebSDK URL for the customer to manually complete document upload
+              example: https://verify.gravv.xyz/websdk/p/sbx_example_token
+            failed_documents:
+              type: array
+              description: List of documents that failed to upload automatically
+              items:
+                type: object
+                properties:
+                  doc_type:
+                    type: string
+                    enum:
+                      - passport
+                      - id_card
+                      - drivers_license
+                      - selfie
+                      - registration_certificate
+                    example: selfie
+                  reason:
+                    type: string
+                    example: Upload failed
+            message:
+              type: string
+              description: Instruction message for next steps
+              example: >-
+                Some documents could not be uploaded automatically. Please
+                complete verification using the provided link.
+        error:
+          nullable: true
+          example: null
+    StartKYCS2SMissingDocumentsError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                  enum:
+                    - missing_documents
+                  example: missing_documents
+                message:
+                  type: string
+                  example: Required documents have not been uploaded for this customer
+                details:
+                  type: object
+                  properties:
+                    missing_documents:
+                      type: array
+                      items:
+                        type: string
+                        enum:
+                          - passport
+                          - id_card
+                          - drivers_license
+                          - selfie
+                          - registration_certificate
+                      example:
+                        - selfie
+    InvalidArgumentError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: INVALID_REQUEST
+                message:
+                  example: >-
+                    invalid request format: missing required field
+                    'from_currency'
+    NotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              properties:
+                code:
+                  example: NOT_FOUND
+                message:
+                  example: Resource not found
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          nullable: true
+          description: Always null for error responses
+          example: null
+        error:
+          type: string
+          description: Human-readable error message
+          example: Invalid request parameters
+    KYCStatusResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - reviewStatus
+            - priority
+          properties:
+            reviewStatus:
+              type: string
+              description: >
+                Overall review status from the verification provider. `pending`
+                while a review is in progress; `completed` once a decision is
+                returned.
+              example: completed
+            reviewResult:
+              type: object
+              description: >
+                Review outcome. Present once `reviewStatus` is `completed`;
+                omitted while the review is `pending`.
+              required:
+                - reviewAnswer
+              properties:
+                reviewAnswer:
+                  type: string
+                  description: Verification decision.
+                  enum:
+                    - approved
+                    - rejected
+                  example: approved
+                rejectLabels:
+                  type: array
+                  description: >
+                    Reason codes for a rejection. Present only when
+                    `reviewAnswer` is `rejected`.
+                  items:
+                    type: string
+                  example:
+                    - BAD_SELFIE
+                    - SCREENSHOTS
+                    - UNSATISFACTORY_PHOTOS
+                reviewRejectType:
+                  type: string
+                  description: >
+                    Rejection category, such as `RETRY`. Present only when
+                    `reviewAnswer` is `rejected`.
+                  example: RETRY
+            reviewDate:
+              type: string
+              description: >
+                Timestamp of the review decision, in `YYYY-MM-DD HH:MM:SS+0000`
+                format. Omitted while `reviewStatus` is `pending`.
+              example: 2026-06-19 21:59:00+0000
+            priority:
+              type: integer
+              description: Applicant review priority.
+              example: 0
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    KYCDocumentsResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - customer_id
+            - documents
+            - count
+          properties:
+            customer_id:
+              type: string
+              format: uuid
+              description: ID of the customer the documents belong to
+              example: 42ad0adb-e134-4345-b4be-98e5021b0da8
+            documents:
+              type: array
+              description: Stored documents with their metadata
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    description: Unique identifier for the stored document
+                    example: 550e8400-e29b-41d4-a716-446655440000
+                  IDType:
+                    type: string
+                    description: Document type as stored by the verification provider
+                    example: PASSPORT
+                  IDSubType:
+                    type: string
+                    description: Document side
+                    example: FRONT_SIDE
+                  IDNumber:
+                    type: string
+                    description: Document identification number
+                    example: A12345678
+                  IssuingCountry:
+                    type: string
+                    description: Issuing country (ISO 3166-1 alpha-3)
+                    example: NGA
+                  IssuedDate:
+                    type: string
+                    format: date
+                    description: Document issue date (YYYY-MM-DD)
+                    example: '2020-01-01'
+                  ExpiryDate:
+                    type: string
+                    format: date
+                    description: Document expiration date (YYYY-MM-DD)
+                    example: '2030-01-01'
+                  has_front_image:
+                    type: boolean
+                    description: Whether a front-side image is stored
+                    example: true
+                  has_back_image:
+                    type: boolean
+                    description: Whether a back-side image is stored
+                    example: false
+                  OriginalFilename:
+                    type: string
+                    description: Original filename supplied at upload
+                    example: passport_front.jpg
+            count:
+              type: integer
+              description: Number of stored documents
+              example: 1
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    KYCDocumentDownloadResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - content
+            - content_type
+            - filename
+            - side
+            - document_id
+            - size_bytes
+          properties:
+            content:
+              type: string
+              description: Base64-encoded document image as a data URI
+              example: data:image/png;base64,iVBORw0KGgo...
+            content_type:
+              type: string
+              description: MIME type of the returned image
+              example: image/png
+            filename:
+              type: string
+              description: Original filename of the document
+              example: passport_front.jpg
+            side:
+              type: string
+              description: Which side of the document was returned
+              enum:
+                - front
+                - back
+              example: front
+            document_id:
+              type: string
+              format: uuid
+              description: ID of the downloaded document
+              example: 550e8400-e29b-41d4-a716-446655440000
+            size_bytes:
+              type: integer
+              description: Size of the decoded image in bytes
+              example: 45230
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    StartKYCS2SResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          required:
+            - status
+            - message
+          properties:
+            status:
+              type: string
+              enum:
+                - pending
+              example: pending
+            message:
+              type: string
+              example: KYC verification initiated. Status will be updated via webhook.
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: KYC
+    description: Verify your customers
+paths:
+  /v1/customers/kyc/start:
+    post:
+      tags:
+        - KYC
+      summary: Start KYC verification
+      description: >
+        Initiates KYC verification for a customer. For business customers,
+        complete KYC verification for every associated person before starting
+        the business's verification.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartKYCRequest'
+            examples:
+              KYCRequest:
+                summary: KYC Example
+                value:
+                  customer_id: d2581d3c-7c55-4607-9717-546694194636
+      responses:
+        '200':
+          description: KYC process started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartKYCResponse'
+              example:
+                data:
+                  status: success
+                  web_url: https://verify.gravv.xyz/websdk/p/example_token
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_REQUEST
+                  message: >-
+                    The customer ID provided is not valid. Please verify the
+                    customer ID format.
+        '404':
+          description: Customer or KYC record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              examples:
+                CustomerNotFound:
+                  summary: The specified customer does not exist
+                  value:
+                    data: null
+                    error:
+                      code: CUSTOMER_NOT_FOUND
+                      message: >-
+                        Customer not found. Please verify the customer exists in
+                        our system.
+                KycNotFound:
+                  summary: No KYC record exists for the specified level
+                  value:
+                    data: null
+                    error:
+                      code: KYC_NOT_FOUND
+                      message: KYC record not found for the specified level.
+        '409':
+          description: KYC already completed for this customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_ALREADY_COMPLETED
+                  message: >-
+                    KYC verification has already been completed for this
+                    customer.
+        '412':
+          description: A required precondition was not met
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: INVALID_REQUEST
+                  message: missing required business documents
+        '500':
+          description: Internal processing error during KYC initiation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_PROCESSING_ERROR
+                  message: failed to generate verification link
+  /v1/customers/kyc/upload-document:
+    post:
+      tags:
+        - KYC
+      summary: Upload document
+      description: >
+        Upload a KYC document for individual and business customers. This is the
+        first step of the server-to-server verification flow.
+
+
+        Documents are uploaded as base64-encoded strings along with metadata
+        about the document type,
+
+        customer information, and document details. The document is validated
+        and stored in preparation
+
+        for verification.
+
+
+        ## Supported document types
+
+
+        Individual customers must upload a `SELFIE` and one identification
+        document: `PASSPORT`, `ID_CARD`, or `DRIVERS`.
+
+
+        Business customers upload a single REGISTRATION_CERTIFICATE, which may
+        be a formation document or an ownership document. The `idDocType` value
+        is always `REGISTRATION_CERTIFICATE`.
+
+
+        All `idDocType` values are uppercase.
+
+
+        Selfie documents must be an image (JPEG or PNG); PDF selfies are
+        rejected.
+
+
+        ## Document subtypes
+
+
+        Identification documents use `idDocSubType` to indicate which side is
+        uploaded (case-sensitive, uppercase):
+
+
+        - **FRONT_SIDE:** Front side of document
+
+        - **BACK_SIDE:** Back side of document (if applicable)
+
+
+        Omit `idDocSubType` for SELFIE uploads.
+
+
+        ## File format
+
+
+        The `filename` extension and the decoded `content` MIME type must agree
+        and must be one of: `image/jpeg`, `image/png`, `application/pdf`.
+
+
+        ## Size limits
+
+
+        The maximum decoded document size is 10 MB.
+
+
+        ## Idempotency
+
+
+        The `Idempotency-Key` header is required on this endpoint. If you send
+        the same key again with an identical request body, the API returns the
+        original response instead of uploading the document a second time. If
+        you send the same key with a different request body, then the API
+        rejects the request with a 422.
+
+
+        After uploading all required documents, call the Initiate KYC S2S
+
+        endpoint to start the verification process.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            Unique key to dedupe retries. Required on this endpoint; 1–255 ASCII
+            printable characters. Missing or malformed keys return 400.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: kyc-upload-customer-b4e52d51-attempt-1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadDocumentRequest'
+            examples:
+              PassportUpload:
+                summary: Upload passport document
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: PASSPORT
+                    idDocSubType: FRONT_SIDE
+                    country: USA
+                    firstName: John
+                    middleName: Michael
+                    lastName: Doe
+                    issuedDate: '2020-01-15'
+                    validUntil: '2030-01-15'
+                    number: A12345678
+                    dob: '1990-05-20'
+                    placeOfBirth: New York, NY
+                  content: >-
+                    iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: passport_front.jpg
+              SelfieUpload:
+                summary: Upload selfie
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: SELFIE
+                    country: NGA
+                    firstName: John
+                    lastName: Doe
+                    dob: '1990-05-20'
+                  content: >-
+                    iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: selfie.jpg
+              BusinessRegistrationUpload:
+                summary: Upload business registration certificate
+                value:
+                  customer_id: c84d9a52-2978-43e5-9b86-eac9839e1147
+                  metadata:
+                    idDocType: REGISTRATION_CERTIFICATE
+                    idDocSubType: FRONT_SIDE
+                    country: NGA
+                    firstName: Acme
+                    lastName: Corporation
+                    number: RC123456
+                    issuedDate: '2020-01-15'
+                  content: >-
+                    iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: registration_certificate.pdf
+              IDCardFrontSide:
+                summary: Upload ID card front side
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: ID_CARD
+                    idDocSubType: FRONT_SIDE
+                    country: NGA
+                    firstName: Jane
+                    lastName: Smith
+                    number: ID987654321
+                    issuedDate: '2019-06-10'
+                    validUntil: '2029-06-10'
+                    dob: '1992-03-15'
+                    placeOfBirth: Lagos
+                  content: >-
+                    iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: id_card_front.jpg
+      responses:
+        '200':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadDocumentResponse'
+              examples:
+                SuccessPassport:
+                  summary: Successful passport upload
+                  value:
+                    data:
+                      status: success
+                      customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                      document_type: PASSPORT
+                      country: NGA
+                      message: >-
+                        Document saved. Use /start-s2s to submit for
+                        verification.
+                    error: null
+                SuccessSelfie:
+                  summary: Successful selfie upload
+                  value:
+                    data:
+                      status: success
+                      customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                      document_type: SELFIE
+                      country: NGA
+                      message: >-
+                        Document saved. Use /start-s2s to submit for
+                        verification.
+                    error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              examples:
+                MissingCustomerId:
+                  summary: customer_id is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: customer_id is required
+                MissingContent:
+                  summary: content is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: content is required
+                MissingFilename:
+                  summary: filename is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: filename is required
+                MissingIdDocType:
+                  summary: id_doc_type is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: id_doc_type is required
+                MissingCountry:
+                  summary: country is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: country is required
+                MissingNumber:
+                  summary: number is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: number is required
+                MissingValidUntil:
+                  summary: valid_until is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: valid_until is required
+                MissingIdDocSubType:
+                  summary: id_doc_sub_type is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: id_doc_sub_type is required
+                InvalidCustomerIdFormat:
+                  summary: customer_id is not a valid identifier
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: The customer ID provided is not valid
+                InvalidDocumentType:
+                  summary: Document type is not valid for the customer type
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: invalid document type for customer type
+                InvalidDocumentSubType:
+                  summary: Document sub type is not valid
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: invalid document sub type
+                DocumentSizeExceeded:
+                  summary: Decoded document exceeds the size limit
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: document exceeds maximum allowed size of 10 MB
+                InvalidBase64:
+                  summary: content is not valid base64
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: document content is not valid base64
+                UnsupportedFileType:
+                  summary: Decoded content is not JPEG, PNG, or PDF
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: >-
+                        unsupported file type "application/octet-stream";
+                        allowed types are JPEG, PNG, and PDF
+                MissingIdempotencyKey:
+                  summary: Idempotency-Key header missing (gateway-level)
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: missing idempotency key in request headers
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: CUSTOMER_NOT_FOUND
+                  message: >-
+                    Customer not found. Please verify the customer exists in our
+                    system.
+        '409':
+          description: >-
+            Concurrent in-flight request with the same Idempotency-Key
+            (gateway-level)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: CONFLICT
+                  message: >-
+                    A request with the same Idempotency-Key is currently being
+                    processed
+        '413':
+          description: |
+            Payload too large. The decoded document exceeds the 10 MB service
+            limit, or the request body exceeded the ingress 15 MB limit. The
+            ingress-layer 413 is returned as HTML by nginx and does not match
+            the schema below. (gateway-level)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: PAYLOAD_TOO_LARGE
+                  message: 'file too large: content exceeds maximum allowed size of 10MB'
+        '422':
+          description: >-
+            Idempotency-Key reused with a different request payload
+            (gateway-level)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: UNPROCESSABLE_ENTITY
+                  message: >-
+                    Idempotency-Key was previously used with a different request
+                    payload
+        '500':
+          description: Internal processing error during document upload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_PROCESSING_ERROR
+                  message: >-
+                    Document processing failed. Please verify your documents and
+                    try again.
+  /v1/customers/kyc/start-s2s:
+    post:
+      tags:
+        - KYC
+      summary: Initiate server-to-server KYC verification
+      description: >
+        Initiates server-to-server (S2S) KYC verification for a customer who has
+        already uploaded the required documents using the
+        `/v1/customers/kyc/upload-document` endpoint.
+
+
+        This is step 2 of the S2S verification process. Before calling this
+        endpoint, upload all required documents.
+
+
+        For business customers, complete KYC verification for every associated
+        person before starting the business's verification.
+
+
+        On success, verification is initiated and the review outcome is
+        delivered later by webhook. Business customers must upload a
+        registration certificate first, or the request fails with a 400.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartKYCS2SRequest'
+            examples:
+              IndividualKYC:
+                summary: Individual KYC Request
+                value:
+                  customer_id: aabe0a33-6716-42e2-bbca-7abf1a8bd91c
+              BusinessKYC:
+                summary: Business KYC Request
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+      responses:
+        '200':
+          description: KYC verification initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartKYCS2SResponse'
+              example:
+                data:
+                  status: pending
+                  message: >-
+                    KYC verification initiated. Status will be updated via
+                    webhook.
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_REQUEST
+                  message: The customer ID provided is not valid
+        '404':
+          description: Customer or KYC record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              examples:
+                CustomerNotFound:
+                  summary: The specified customer does not exist
+                  value:
+                    data: null
+                    error:
+                      code: CUSTOMER_NOT_FOUND
+                      message: >-
+                        Customer not found. Please verify the customer exists in
+                        our system.
+                KycNotFound:
+                  summary: No KYC record exists for the specified level
+                  value:
+                    data: null
+                    error:
+                      code: KYC_NOT_FOUND
+                      message: KYC record not found for the specified level.
+        '409':
+          description: KYC already completed for this customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_ALREADY_COMPLETED
+                  message: >-
+                    KYC verification has already been completed for this
+                    customer.
+        '412':
+          description: Required documents have not been uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                NoDocuments:
+                  summary: No documents uploaded for the customer
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: >-
+                        no documents found for customer; please upload required
+                        documents before initiating S2S verification
+                MissingIdDocument:
+                  summary: Required ID document is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: missing required ID document
+                MissingSelfie:
+                  summary: Required selfie document is missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_REQUEST
+                      message: missing required selfie document
+        '500':
+          description: Internal processing error during S2S initiation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_PROCESSING_ERROR
+                  message: failed to upload documents to verification provider
+  /v1/customers/{customer_id}/kyc/documents:
+    get:
+      tags:
+        - KYC
+      summary: Get KYC document data
+      description: >
+        Returns the list of documents a customer has uploaded, with metadata for
+        each one.
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdPath'
+      responses:
+        '200':
+          description: Uploaded documents retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCDocumentsResponse'
+              example:
+                data:
+                  customer_id: 42ad0adb-e134-4345-b4be-98e5021b0da8
+                  documents:
+                    - id: 550e8400-e29b-41d4-a716-446655440000
+                      IDType: PASSPORT
+                      IDSubType: FRONT_SIDE
+                      IDNumber: A12345678
+                      IssuingCountry: NGA
+                      IssuedDate: '2020-01-01'
+                      ExpiryDate: '2030-01-01'
+                      has_front_image: true
+                      has_back_image: false
+                      OriginalFilename: passport_front.jpg
+                  count: 1
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_REQUEST
+                  message: invalid customer_id format
+        '404':
+          description: Customer or document data not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              examples:
+                CustomerNotFound:
+                  summary: The specified customer does not exist
+                  value:
+                    data: null
+                    error:
+                      code: CUSTOMER_NOT_FOUND
+                      message: >-
+                        Customer not found. Please verify the customer exists in
+                        our system.
+                NoDocumentData:
+                  summary: The customer has no stored KYC documents
+                  value:
+                    data: null
+                    error:
+                      code: KYC_NOT_FOUND
+                      message: no KYC document data found for customer
+        '500':
+          description: Internal processing error while retrieving documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_PROCESSING_ERROR
+                  message: failed to retrieve KYC document data
+  /v1/customers/{customer_id}/kyc/status:
+    get:
+      tags:
+        - KYC
+      summary: Get applicant verification status
+      description: >
+        Retrieves the current KYC review status for a customer from the
+        verification provider.
+
+
+        Use this endpoint to check a customer's verification outcome after you
+        initiate KYC. While a review is in progress, `reviewStatus` is `pending`
+        and `reviewResult` is omitted. Once the review finishes, `reviewStatus`
+        is `completed` and `reviewResult` contains the decision.
+      parameters:
+        - $ref: '#/components/parameters/CustomerIdPath'
+      responses:
+        '200':
+          description: Current verification status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KYCStatusResponse'
+              examples:
+                Approved:
+                  summary: Review approved
+                  value:
+                    data:
+                      reviewStatus: completed
+                      reviewResult:
+                        reviewAnswer: approved
+                      reviewDate: 2026-06-19 21:59:00+0000
+                      priority: 0
+                    error: null
+                Rejected:
+                  summary: Review rejected
+                  value:
+                    data:
+                      reviewStatus: completed
+                      reviewResult:
+                        reviewAnswer: rejected
+                        rejectLabels:
+                          - BAD_SELFIE
+                          - SCREENSHOTS
+                          - UNSATISFACTORY_PHOTOS
+                        reviewRejectType: RETRY
+                      reviewDate: 2026-06-19 20:44:19+0000
+                      priority: 0
+                    error: null
+                Pending:
+                  summary: Review pending
+                  value:
+                    data:
+                      reviewStatus: pending
+                      priority: 0
+                    error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              example:
+                data: null
+                error:
+                  code: INVALID_REQUEST
+                  message: >-
+                    The customer ID provided is not valid. Please verify the
+                    customer ID format.
+        '404':
+          description: Customer or applicant not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              examples:
+                CustomerNotFound:
+                  summary: The specified customer does not exist
+                  value:
+                    data: null
+                    error:
+                      code: CUSTOMER_NOT_FOUND
+                      message: >-
+                        Customer not found. Please verify the customer exists in
+                        our system.
+                NoApplicant:
+                  summary: KYC has not been initiated for the customer
+                  value:
+                    data: null
+                    error:
+                      code: KYC_NOT_FOUND
+                      message: >-
+                        no applicant found for customer; KYC has not been
+                        initiated
+        '500':
+          description: Internal processing error while retrieving status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: KYC_PROCESSING_ERROR
+                  message: failed to retrieve applicant status

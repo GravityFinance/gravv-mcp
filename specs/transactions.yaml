@@ -1,0 +1,905 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: A unique key to prevent duplicate requests.
+      schema:
+        type: string
+      example: order_789_attempt_1
+  responses:
+    BadRequest:
+      description: Bad request — invalid parameters or downstream error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            data: null
+            error: invalid query parameter
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        data:
+          nullable: true
+          example: null
+        error:
+          type: string
+          nullable: true
+          example: transaction not found
+    GetTransactionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Transaction'
+        error:
+          type: string
+          nullable: true
+          example: null
+    GetTransactionsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Transaction'
+            page:
+              type: integer
+              example: 1
+            items_per_page:
+              type: integer
+              example: 10
+            total_pages:
+              type: integer
+              nullable: true
+              example: 5
+            total_items:
+              type: integer
+              nullable: true
+              example: 48
+        error:
+          type: string
+          nullable: true
+          example: null
+    TransactionMetadata:
+      type: object
+      description: Additional transaction metadata
+      properties:
+        authorize_time:
+          type: string
+          format: date-time
+          nullable: true
+        card_id:
+          type: string
+          nullable: true
+        card_type:
+          type: string
+          nullable: true
+        declined_reason:
+          type: string
+          nullable: true
+        iban:
+          type: string
+          nullable: true
+        merchant_category:
+          type: string
+          nullable: true
+        merchant_category_code:
+          type: string
+          nullable: true
+        merchant_city:
+          type: string
+          nullable: true
+        merchant_country:
+          type: string
+          nullable: true
+        merchant_id:
+          type: string
+          nullable: true
+        merchant_name:
+          type: string
+          nullable: true
+        payment_link_id:
+          type: string
+          format: uuid
+          nullable: true
+        recipient_blockchain_memo:
+          type: string
+          nullable: true
+        recipient_blockchain_network:
+          type: string
+          nullable: true
+        recipient_crypto_asset:
+          type: string
+          nullable: true
+        recipient_institution_id:
+          type: string
+          format: uuid
+          nullable: true
+        recipient_institution_name:
+          type: string
+          nullable: true
+        recipient_name:
+          type: string
+          nullable: true
+        recipient_number:
+          type: string
+          nullable: true
+        recipient_routing_number:
+          type: string
+          nullable: true
+        recipient_wallet_address:
+          type: string
+          nullable: true
+        sender_account_number:
+          type: string
+          nullable: true
+        sender_bank_name:
+          type: string
+          nullable: true
+        sender_blockchain_network:
+          type: string
+          nullable: true
+        sender_crypto_asset:
+          type: string
+          nullable: true
+        sender_name:
+          type: string
+          nullable: true
+        sender_number:
+          type: string
+          nullable: true
+        sender_routing_number:
+          type: string
+          nullable: true
+        sender_wallet_address:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+        transaction_notes:
+          type: string
+          nullable: true
+        local_amount:
+          type: string
+          description: Local equivalent amount as a decimal string
+          nullable: true
+          example: '4500.00'
+        local_amount_currency:
+          type: string
+          description: ISO 4217 currency code for local_amount
+          nullable: true
+          example: NGN
+        uetr:
+          type: string
+          description: Unique end-to-end transaction reference (SWIFT UETR)
+          nullable: true
+        user_email:
+          type: string
+          nullable: true
+        user_firstname:
+          type: string
+          nullable: true
+        user_id:
+          type: string
+          nullable: true
+        user_lastname:
+          type: string
+          nullable: true
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique transaction identifier
+          example: f77465f8-0bcd-4199-a747-c2618208c907
+        amount:
+          type: string
+          description: Transaction amount as a decimal string
+          example: '5.50'
+        balance_before:
+          type: string
+          description: Account balance before this transaction as a decimal string
+          nullable: true
+          example: '100.00'
+        balance_after:
+          type: string
+          description: Account balance after this transaction as a decimal string
+          nullable: true
+          example: '105.50'
+        channel:
+          type: string
+          description: Transaction channel
+          enum:
+            - avalanche
+            - ethereum
+            - solana
+            - stellar
+            - polygon
+            - ach
+            - wire
+            - swift
+            - bank_transfer
+            - mobile_money
+            - internal
+            - swap
+            - sepa
+            - base
+            - sui
+            - tron
+            - card
+            - card_funding
+            - card_withdrawal
+            - card_payment
+            - savings
+            - savings_withdrawal
+            - savings_interest
+          example: internal
+        client_metadata:
+          type: string
+          description: Caller-supplied opaque JSON string stored verbatim for reference
+          nullable: true
+          example: '{"order_id":"12345"}'
+        client_reference:
+          type: string
+          description: Client reference identifier
+          example: TRXNK0ZCA21
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer identifier
+          example: bfe261a3-3630-4781-8249-6b0ab1123235
+        date_created:
+          type: string
+          format: date-time
+          description: Transaction creation timestamp
+          example: '2025-12-08T12:53:43.845956Z'
+        description:
+          type: string
+          description: Transaction description
+          example: 'Onramp Deposit - Record: TRXNK0ZCA21'
+        direction:
+          type: string
+          enum:
+            - in
+            - out
+          description: Transaction direction
+          example: in
+        external_id:
+          type: string
+          description: External system identifier for this transaction
+          nullable: true
+          example: ext-abc-123
+        fee:
+          type: string
+          description: Transaction fee as a decimal string
+          example: '0'
+        metadata:
+          $ref: '#/components/schemas/TransactionMetadata'
+        receiving_account_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Receiving account identifier
+        reference:
+          type: string
+          format: uuid
+          description: Transaction reference
+          example: e542f18d-3e0c-490d-be2f-023ed94f5b21
+        sending_account_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Sending account identifier
+        sending_account_name:
+          type: string
+          description: Display name of the sending account
+          nullable: true
+          example: John Doe
+        sending_account_number:
+          type: string
+          description: Account number of the sending account
+          nullable: true
+          example: '1234567890'
+        status:
+          type: string
+          enum:
+            - pending
+            - completed
+            - failed
+            - waiting_approval
+          description: Transaction status
+          example: pending
+        tenant_id:
+          type: string
+          format: uuid
+          description: Tenant identifier
+          example: 89fa0d5e-3acf-4834-968f-6a9f0186ab59
+        transaction_type:
+          type: string
+          description: Type of transaction
+          enum:
+            - internal_transfer
+            - crypto_transfer
+            - crypto_funding
+            - global_remittance
+            - card_funding
+            - card_withdrawal
+            - card_payment
+            - account_funding
+            - credit
+            - debit
+            - fee_charge
+            - subscription_fee
+            - invoice_payment
+          example: internal_transfer
+        tx_hash:
+          type: string
+          nullable: true
+          description: Blockchain transaction hash
+          example: '0x4e3a1b7c9d2f8a056b3c7e1d4f9a2b5c8e0f3d6a9b2c5e8f1a4d7b0c3f6e9a2b'
+    TransactionsVolumeResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            total_volume:
+              type: string
+              description: Sum of matched transaction amounts as a decimal string
+              example: '12450.75'
+        error:
+          type: string
+          nullable: true
+          example: null
+    ExportTransactionsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            file_content:
+              type: string
+              description: Base64-encoded file content (CSV or JSON)
+              example: aWQsYW1vdW50LGRpcmVjdGlvbg==
+            file_name:
+              type: string
+              description: Suggested filename for the export
+              example: transactions_export_2025-12-08.csv
+            content_type:
+              type: string
+              description: MIME type of the exported file
+              example: text/csv
+            total_records:
+              type: integer
+              description: Total number of records included in the export (max 50000)
+              example: 1200
+        error:
+          type: string
+          nullable: true
+          example: null
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Transactions
+    description: Retrieve transaction records
+paths:
+  /v1/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: Get transactions
+      description: Retrieve a list of transactions with optional filtering and pagination.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+          example: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of transactions per page
+          example: 10
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by customer ID
+          example: bfe261a3-3630-4781-8249-6b0ab1123235
+        - in: query
+          name: account_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by account ID
+          example: a4d83e55-435e-41c9-9a0b-dcb99f690c95
+        - in: query
+          name: card_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by card ID
+          example: c1d2e3f4-a5b6-7890-abcd-ef1234567890
+        - in: query
+          name: payment_link_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by payment link ID
+          example: d4e5f6a7-b8c9-0123-def4-567890abcdef
+        - in: query
+          name: tx_hash
+          schema:
+            type: string
+          description: Filter by blockchain transaction hash
+          example: '0x4e3a1b7c9d2f8a056b3c7e1d4f9a2b5c8e0f3d6a9b2c5e8f1a4d7b0c3f6e9a2b'
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum:
+              - avalanche
+              - ethereum
+              - solana
+              - stellar
+              - polygon
+              - ach
+              - wire
+              - swift
+              - bank_transfer
+              - mobile_money
+              - internal
+              - swap
+              - sepa
+              - base
+              - sui
+              - tron
+              - card
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - savings
+              - savings_withdrawal
+              - savings_interest
+          description: Filter by transaction channel
+          example: internal
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum:
+              - in
+              - out
+          description: Filter by transaction direction
+          example: in
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - completed
+              - failed
+              - waiting_approval
+          description: Filter by transaction status
+          example: completed
+        - in: query
+          name: transaction_type
+          schema:
+            type: string
+            enum:
+              - internal_transfer
+              - crypto_transfer
+              - crypto_funding
+              - global_remittance
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - account_funding
+              - credit
+              - debit
+              - fee_charge
+              - subscription_fee
+              - invoice_payment
+          description: Filter by transaction type
+          example: internal_transfer
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date-time
+          description: Filter transactions created on or after this timestamp
+          example: '2025-01-01T00:00:00Z'
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date-time
+          description: Filter transactions created on or before this timestamp
+          example: '2025-12-31T23:59:59Z'
+      responses:
+        '200':
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTransactionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transactions/{transaction_id}:
+    get:
+      tags:
+        - Transactions
+      summary: Get a single transaction
+      description: Retrieve details of a specific transaction by transaction ID.
+      parameters:
+        - in: path
+          name: transaction_id
+          required: true
+          description: The ID of the transaction to retrieve
+          schema:
+            type: string
+            format: uuid
+          example: f77465f8-0bcd-4199-a747-c2618208c907
+      responses:
+        '200':
+          description: Transaction details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetTransactionResponse'
+              example:
+                data:
+                  amount: '5.50'
+                  balance_before: '100.00'
+                  balance_after: '105.50'
+                  channel: internal
+                  client_reference: TRXNK0ZCA21
+                  customer_id: bfe261a3-3630-4781-8249-6b0ab1123235
+                  date_created: '2025-12-08T12:53:43.845956Z'
+                  description: 'Onramp Deposit - Record: TRXNK0ZCA21'
+                  direction: in
+                  external_id: null
+                  fee: '0'
+                  id: f77465f8-0bcd-4199-a747-c2618208c907
+                  client_metadata: null
+                  metadata:
+                    authorize_time: null
+                    card_id: null
+                    card_type: null
+                    declined_reason: null
+                    iban: null
+                    merchant_category: null
+                    merchant_category_code: null
+                    merchant_city: null
+                    merchant_country: null
+                    merchant_id: null
+                    merchant_name: null
+                    payment_link_id: null
+                    recipient_blockchain_memo: null
+                    recipient_blockchain_network: null
+                    recipient_crypto_asset: null
+                    recipient_institution_id: null
+                    recipient_institution_name: null
+                    recipient_name: null
+                    recipient_number: null
+                    recipient_routing_number: null
+                    recipient_wallet_address: null
+                    sender_account_number: null
+                    sender_bank_name: null
+                    sender_blockchain_network: null
+                    sender_crypto_asset: null
+                    sender_name: Madman Meek
+                    sender_number: null
+                    sender_routing_number: null
+                    sender_wallet_address: null
+                    session_id: null
+                    transaction_notes: null
+                    local_amount: null
+                    local_amount_currency: null
+                    uetr: null
+                    user_email: null
+                    user_firstname: null
+                    user_id: null
+                    user_lastname: null
+                  receiving_account_id: null
+                  reference: e542f18d-3e0c-490d-be2f-023ed94f5b21
+                  sending_account_id: null
+                  sending_account_name: null
+                  sending_account_number: null
+                  status: pending
+                  tenant_id: 89fa0d5e-3acf-4834-968f-6a9f0186ab59
+                  transaction_type: internal_transfer
+                  tx_hash: null
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transactions/volume:
+    get:
+      tags:
+        - Transactions
+      summary: Get transactions volume
+      description: |
+        Returns the total summed volume of transactions matching the supplied
+        filters. Useful for dashboard metrics and reporting.
+      parameters:
+        - in: query
+          name: sending_account_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by sending account ID
+          example: a4d83e55-435e-41c9-9a0b-dcb99f690c95
+        - in: query
+          name: receiving_account_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by receiving account ID
+          example: b5e94f66-546f-52da-ab1c-eca00g801d06
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by customer ID
+          example: bfe261a3-3630-4781-8249-6b0ab1123235
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum:
+              - avalanche
+              - ethereum
+              - solana
+              - stellar
+              - polygon
+              - ach
+              - wire
+              - swift
+              - bank_transfer
+              - mobile_money
+              - internal
+              - swap
+              - sepa
+              - base
+              - sui
+              - tron
+              - card
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - savings
+              - savings_withdrawal
+              - savings_interest
+          description: Filter by transaction channel
+          example: bank_transfer
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum:
+              - in
+              - out
+          description: Filter by transaction direction
+          example: out
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - completed
+              - failed
+              - waiting_approval
+          description: Filter by transaction status
+          example: completed
+        - in: query
+          name: transaction_type
+          schema:
+            type: string
+            enum:
+              - internal_transfer
+              - crypto_transfer
+              - crypto_funding
+              - global_remittance
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - account_funding
+              - credit
+              - debit
+              - fee_charge
+              - subscription_fee
+              - invoice_payment
+          description: Filter by transaction type
+          example: global_remittance
+      responses:
+        '200':
+          description: Total transaction volume
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionsVolumeResponse'
+              example:
+                data:
+                  total_volume: '12450.75'
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/transactions/export:
+    get:
+      tags:
+        - Transactions
+      summary: Export transactions
+      description: |
+        Exports matching transactions as a downloadable file. Supports CSV and
+        JSON formats. Maximum 50,000 records per export.
+      parameters:
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by customer ID
+          example: bfe261a3-3630-4781-8249-6b0ab1123235
+        - in: query
+          name: account_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by account ID
+          example: a4d83e55-435e-41c9-9a0b-dcb99f690c95
+        - in: query
+          name: card_id
+          schema:
+            type: string
+            format: uuid
+          description: Filter by card ID
+          example: c1d2e3f4-a5b6-7890-abcd-ef1234567890
+        - in: query
+          name: tx_hash
+          schema:
+            type: string
+          description: Filter by blockchain transaction hash
+          example: '0x4e3a1b7c9d2f8a056b3c7e1d4f9a2b5c8e0f3d6a9b2c5e8f1a4d7b0c3f6e9a2b'
+        - in: query
+          name: channel
+          schema:
+            type: string
+            enum:
+              - avalanche
+              - ethereum
+              - solana
+              - stellar
+              - polygon
+              - ach
+              - wire
+              - swift
+              - bank_transfer
+              - mobile_money
+              - internal
+              - swap
+              - sepa
+              - base
+              - sui
+              - tron
+              - card
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - savings
+              - savings_withdrawal
+              - savings_interest
+          description: Filter by transaction channel
+          example: internal
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum:
+              - in
+              - out
+          description: Filter by transaction direction
+          example: in
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - completed
+              - failed
+              - waiting_approval
+          description: Filter by transaction status
+          example: completed
+        - in: query
+          name: transaction_type
+          schema:
+            type: string
+            enum:
+              - internal_transfer
+              - crypto_transfer
+              - crypto_funding
+              - global_remittance
+              - card_funding
+              - card_withdrawal
+              - card_payment
+              - account_funding
+              - credit
+              - debit
+              - fee_charge
+              - subscription_fee
+              - invoice_payment
+          description: Filter by transaction type
+          example: internal_transfer
+        - in: query
+          name: start_date
+          schema:
+            type: string
+            format: date-time
+          description: Filter transactions created on or after this timestamp
+          example: '2025-01-01T00:00:00Z'
+        - in: query
+          name: end_date
+          schema:
+            type: string
+            format: date-time
+          description: Filter transactions created on or before this timestamp
+          example: '2025-12-31T23:59:59Z'
+        - in: query
+          name: export_format
+          schema:
+            type: string
+            enum:
+              - csv
+              - json
+            default: csv
+          description: File format for the export
+          example: csv
+      responses:
+        '200':
+          description: Export file content and metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportTransactionsResponse'
+              example:
+                data:
+                  file_content: aWQsYW1vdW50LGRpcmVjdGlvbg==
+                  file_name: transactions_export_2025-12-08.csv
+                  content_type: text/csv
+                  total_records: 1200
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'

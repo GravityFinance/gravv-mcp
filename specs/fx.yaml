@@ -1,0 +1,1475 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        A unique key to prevent duplicate requests. Required on all FX write
+        operations; requests without it are rejected with a `400`.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+    OrderIdPath:
+      name: order_id
+      in: path
+      required: true
+      description: The order reference returned when the order was created.
+      schema:
+        type: string
+      example: OTC-0VA89I
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            MissingApiKey:
+              summary: No Api-Key header was sent
+              value:
+                data: null
+                error: >-
+                  Invalid or missing Api-Key header. Api-Key is
+                  required!
+            InvalidApiKey:
+              summary: The Api-Key sent is invalid or revoked
+              value:
+                data: null
+                error: Invalid token!
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: Internal server error
+  schemas:
+    SupportedCurrency:
+      type: object
+      properties:
+        from_currency:
+          type: string
+          description: ISO 4217 currency code or crypto ticker for the source currency.
+          example: USD
+        to_currency:
+          type: string
+          description: ISO 4217 currency code or crypto ticker for the target currency.
+          example: ZAR
+        currency_pair:
+          type: string
+          description: The trading pair in `FROM/TO` format.
+          example: USD/ZAR
+        pair_type:
+          type: string
+          description: Category of the currency pair.
+          enum:
+            - fiat/fiat
+            - crypto/crypto
+            - fiat/crypto
+            - crypto/fiat
+          example: fiat/fiat
+        from_currency_name:
+          type: string
+          description: >-
+            Full name of the source currency. Returns `null` when the name is
+            unavailable.
+          example: US Dollar
+        to_currency_name:
+          type: string
+          description: >-
+            Full name of the target currency. Returns `null` when the name is
+            unavailable.
+          example: South African Rand
+    CurrencyPairRate:
+      type: object
+      properties:
+        rate:
+          type:
+            - number
+            - 'null'
+          format: double
+          description: >-
+            Rate for this pair in the given direction; null if unavailable for
+            that direction.
+          example: 18.4025
+        direction:
+          type: string
+          description: Direction of the rate.
+          enum:
+            - BUY
+            - SELL
+          example: BUY
+        currency_pair:
+          type: string
+          example: USD/ZAR
+        pair_type:
+          type: string
+          description: Category of the currency pair.
+          enum:
+            - fiat/fiat
+            - crypto/crypto
+            - fiat/crypto
+            - crypto/fiat
+          example: fiat/fiat
+        from_currency:
+          type: string
+          example: USD
+        from_currency_name:
+          type:
+            - string
+            - 'null'
+          example: null
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-03-23T12:50:32.082350079+01:00'
+        to_currency:
+          type: string
+          example: ZAR
+        to_currency_name:
+          type:
+            - string
+            - 'null'
+          example: null
+    FxQuoteRequest:
+      type: object
+      required:
+        - from_currency
+        - to_currency
+        - amount
+        - direction
+      properties:
+        from_currency:
+          type: string
+          description: Source currency code (ISO 4217).
+          example: USD
+        to_currency:
+          type: string
+          description: Target currency code (ISO 4217).
+          example: ZAR
+        amount:
+          type: number
+          description: Amount in the source currency to convert. Must be greater than zero.
+          example: 10
+        direction:
+          type: string
+          description: Direction of the trade.
+          enum:
+            - BUY
+            - SELL
+          example: BUY
+    FxQuoteResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            amount:
+              type: number
+              example: 10
+            direction:
+              type: string
+              enum:
+                - BUY
+                - SELL
+              example: BUY
+            expires_at:
+              type: string
+              format: date-time
+              example: '2026-03-23T12:45:28.424260688+01:00'
+            from_currency:
+              type: string
+              example: USD
+            quote_id:
+              type: string
+              example: QT-M2hPM9qt
+            rate:
+              type: number
+              example: 17.715
+            display_rate:
+              type: number
+              description: Human-readable display rate for the quote.
+              example: 1666.67
+            display_rate_label:
+              type: string
+              description: Formatted label expressing the rate in plain language.
+              example: 1 USDT = 1666.67 NGN
+            to_currency_amount:
+              type: number
+              description: >-
+                The amount received in the target currency after applying the
+                rate.
+              example: 177.15
+            to_currency:
+              type: string
+              example: ZAR
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    ExecuteTradeRequest:
+      type: object
+      required:
+        - quote_id
+      properties:
+        quote_id:
+          type: string
+          description: The quote ID obtained from the Get FX Quote endpoint.
+          example: QT-M2hPM9qt
+    TradeExecutionResponse:
+      type: object
+      properties:
+        trade_id:
+          type: string
+          example: TR-asdfasdf
+        status:
+          type: string
+          enum:
+            - EXECUTED
+            - PENDING
+            - FAILED
+            - CANCELLED
+          example: PENDING
+        from_currency:
+          type: string
+          example: USD
+        to_currency:
+          type: string
+          example: ZAR
+        executed_rate:
+          type: number
+          format: double
+          example: 17.715
+        executed_amount:
+          type: number
+          format: double
+          example: 177.15
+        direction:
+          type: string
+          enum:
+            - BUY
+            - SELL
+          example: BUY
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-03-23T12:45:30.424260688+01:00'
+    CurrencyPair:
+      type: object
+      required:
+        - base
+        - quote
+      properties:
+        base:
+          type: string
+          description: Base currency code (ISO 4217 or crypto ticker).
+          example: USD
+        quote:
+          type: string
+          description: Quote currency code (ISO 4217 or crypto ticker).
+          example: ZAR
+    CreateFxOrderRequest:
+      type: object
+      required:
+        - customer_id
+        - order_type
+        - pair
+        - amount
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer the order is created for.
+          example: 85034797-3ea1-4ad8-a952-becd67d74acc
+        order_type:
+          type: string
+          description: >-
+            A `market` order executes at the current rate once approved. A
+            `limit` order waits until the rate reaches `target_rate`, then
+            executes once approved.
+          enum:
+            - market
+            - limit
+          example: market
+        pair:
+          $ref: '#/components/schemas/CurrencyPair'
+        amount:
+          type: string
+          description: >-
+            Amount of the base currency to exchange. Must be greater than
+            zero.
+          example: '1000'
+        target_rate:
+          type: string
+          description: >-
+            Required for `limit` orders. The rate at which the order should
+            execute.
+          example: '17.50'
+        side:
+          type: string
+          description: Side of the order. Defaults to `sell`.
+          enum:
+            - buy
+            - sell
+          default: sell
+          example: sell
+        source_type:
+          type: string
+          description: >-
+            Where the funds come from. Fiat base currencies are funded from an
+            `account`; crypto base currencies from a `wallet`.
+          enum:
+            - account
+            - wallet
+          example: account
+        source_id:
+          type: string
+          description: ID of the source account or wallet.
+          example: 74653c7b-ae84-45ab-8085-2d2493f86d81
+        destination_type:
+          type: string
+          description: >-
+            Where the proceeds settle. Use `ssi` to settle to a saved
+            settlement instruction.
+          enum:
+            - account
+            - wallet
+            - ssi
+          example: ssi
+        destination_id:
+          type: string
+          description: >-
+            ID of the destination account, wallet, or settlement instruction.
+          example: b23ffd0e-d0fc-432e-acc9-c396194121b3
+    FxOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal UUID of the order.
+          example: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+        order_id:
+          type: string
+          description: >-
+            Human-readable order reference. Use this value as the `order_id`
+            path parameter in the order endpoints.
+          example: OTC-0VA89I
+        order_type:
+          type: string
+          enum:
+            - market
+            - limit
+          example: market
+        side:
+          type: string
+          enum:
+            - buy
+            - sell
+          example: sell
+        pair:
+          $ref: '#/components/schemas/CurrencyPair'
+        amount:
+          type: string
+          description: Amount of the base currency to exchange.
+          example: '10.00000000'
+        amount_currency:
+          type: string
+          example: USD
+        converted_amount:
+          type: string
+          description: Proceeds in the quote currency.
+          example: '162.42500000'
+        converted_currency:
+          type: string
+          example: ZAR
+        rate:
+          type: string
+          description: Rate applied to the order.
+          example: '16.24250000'
+        target_rate:
+          type:
+            - string
+            - 'null'
+          description: Target rate for `limit` orders. Returns `null` for market orders.
+        fee:
+          type:
+            - string
+            - 'null'
+          description: Fee charged for the order, if any.
+        status:
+          type: string
+          description: |-
+            Current order status:
+            * `waiting_approval`: created and waiting for a second user to approve or reject
+            * `pending`: approved; the funds are charged and the order is executing
+            * `rejected`: a reviewer rejected the order
+            * `cancelled`: cancelled before execution
+            * `expired`: not approved before it expired
+          example: waiting_approval
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer the order was created for.
+          example: 85034797-3ea1-4ad8-a952-becd67d74acc
+        tenant_id:
+          type: string
+          format: uuid
+          description: ID of the tenant that owns the order.
+          example: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+        source_type:
+          type:
+            - string
+            - 'null'
+          description: Where the funds come from (`account` or `wallet`).
+          example: account
+        source_id:
+          type:
+            - string
+            - 'null'
+          description: ID of the source account or wallet.
+          example: 74653c7b-ae84-45ab-8085-2d2493f86d81
+        destination_type:
+          type:
+            - string
+            - 'null'
+          description: Where the proceeds settle (`account`, `wallet`, or `ssi`).
+          example: ssi
+        destination_id:
+          type:
+            - string
+            - 'null'
+          description: >-
+            ID of the destination account, wallet, or settlement instruction.
+          example: b23ffd0e-d0fc-432e-acc9-c396194121b3
+        created_by_user_id:
+          type: string
+          format: uuid
+          description: ID of the user who created the order.
+          example: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+        created_by_role:
+          type: string
+          description: Role of the user who created the order.
+          example: developer
+        approved_by_user_id:
+          type:
+            - string
+            - 'null'
+          description: ID of the user who approved the order. `null` until approved.
+        approved_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the order was approved. `null` until approved.
+        rejected_by_user_id:
+          type:
+            - string
+            - 'null'
+          description: ID of the user who rejected the order. `null` unless rejected.
+        rejected_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the order was rejected. `null` unless rejected.
+        rejection_reason:
+          type:
+            - string
+            - 'null'
+          description: Reason given when the order was rejected. `null` unless rejected.
+        executed_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the order executed. `null` until executed.
+        settled_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the proceeds settled. `null` until settled.
+        expires_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: >-
+            When the order expires if it isn't approved. `null` when the order
+            doesn't expire.
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-07-03T15:32:37.878676Z'
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: When the order was last updated. `null` if never updated.
+    FxOrderResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/FxOrder'
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    FxOrderListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              description: Orders on this page.
+              items:
+                $ref: '#/components/schemas/FxOrder'
+            page:
+              type: integer
+              description: Current page number.
+              example: 1
+            items_per_page:
+              type: integer
+              description: Number of orders per page.
+              example: 20
+            total_items:
+              type: integer
+              description: Total number of orders matching the filters.
+              example: 26
+            total_pages:
+              type: integer
+              description: Total number of pages.
+              example: 2
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
+    RejectFxOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          description: Why the order is being rejected.
+          example: Rate moved outside the agreed range
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+          description: Always null for error responses.
+          example: null
+        error:
+          type: string
+          description: Human-readable error message.
+          example: invalid request
+    InternalError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: string
+              example: Internal server error
+    InvalidArgumentError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: string
+              example: 'invalid request format: missing required field ''from_currency'''
+    UnauthenticatedError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: string
+              example: Invalid Api Key header. Api-Key is required!
+    NotFoundError:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            error:
+              type: string
+              example: Resource not found
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Fx
+    description: Foreign exchange operations including rates, trades, and OTC orders
+paths:
+  /v1/fx/supported-currencies:
+    get:
+      tags:
+        - Fx
+      summary: List currency pairs
+      description: >
+        Retrieves all supported currency pairs from all enabled providers.
+
+
+        By default, only fiat currency pairs are returned. Set
+        `include_crypto=true`
+
+        to include crypto pairs alongside fiat pairs.
+
+
+        This endpoint is cached for 1 hour.
+      parameters:
+        - in: query
+          name: include_crypto
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: >
+            When `true`, returns both fiat and crypto supported currency pairs.
+            When omitted or `false`, only fiat pairs are returned.
+          example: true
+      responses:
+        '200':
+          description: List of supported currency pairs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    description: Array of supported currency pairs.
+                    items:
+                      $ref: '#/components/schemas/SupportedCurrency'
+                  error:
+                    type:
+                      - string
+                      - 'null'
+                    description: Error message. Returns `null` on success.
+              examples:
+                fiat_only:
+                  summary: Default response (fiat pairs only)
+                  value:
+                    data:
+                      - currency_pair: USD/ZAR
+                        pair_type: fiat/fiat
+                        from_currency: USD
+                        from_currency_name: US Dollar
+                        to_currency: ZAR
+                        to_currency_name: South African Rand
+                      - currency_pair: USD/KES
+                        pair_type: fiat/fiat
+                        from_currency: USD
+                        from_currency_name: US Dollar
+                        to_currency: KES
+                        to_currency_name: Kenyan Shilling
+                      - currency_pair: KES/TZS
+                        pair_type: fiat/fiat
+                        from_currency: KES
+                        from_currency_name: Kenyan Shilling
+                        to_currency: TZS
+                        to_currency_name: Tanzanian Shilling
+                    error: null
+                fiat_and_crypto:
+                  summary: Response with include_crypto=true
+                  value:
+                    data:
+                      - currency_pair: USD/ZAR
+                        pair_type: fiat/fiat
+                        from_currency: USD
+                        from_currency_name: US Dollar
+                        to_currency: ZAR
+                        to_currency_name: South African Rand
+                      - currency_pair: USDC/KES
+                        pair_type: crypto/fiat
+                        from_currency: USDC
+                        from_currency_name: USD Coin
+                        to_currency: KES
+                        to_currency_name: Kenyan Shilling
+                      - currency_pair: USDC/MXN
+                        pair_type: crypto/fiat
+                        from_currency: USDC
+                        from_currency_name: USD Coin
+                        to_currency: MXN
+                        to_currency_name: Mexican Peso
+                    error: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/fx/rates:
+    get:
+      tags:
+        - Fx
+      summary: List live exchange rates
+      description: >
+        Fetches exchange rates for multiple currency pairs from all enabled
+        providers.
+
+
+        Filters that match no supported pair (for example an unknown currency
+        code) don't error; they return a `200` with an empty `data` array. Use
+        [Get supported currencies](/reference/get_v1-fx-supported-currencies)
+        to confirm a pair is supported.
+      parameters:
+        - in: query
+          name: include_crypto
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: >
+            When `true`, crypto pairs are included in the rates data alongside
+            fiat pairs. Defaults to `false`.
+        - name: from_currency
+          in: query
+          required: false
+          description: Filter by source currency (3-letter ISO 4217 code)
+          schema:
+            type: string
+          example: USD
+        - name: to_currency
+          in: query
+          required: false
+          description: Filter by target currency (3-letter ISO 4217 code)
+          schema:
+            type: string
+          example: ZAR
+        - name: currency_pairs
+          in: query
+          required: false
+          description: >-
+            Comma-separated list of specific currency pairs to retrieve, each
+            in `FROM/TO` format.
+          schema:
+            type: string
+          example: USD/ZAR,EUR/GBP
+      responses:
+        '200':
+          description: List of exchange rates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CurrencyPairRate'
+                  error:
+                    type:
+                      - string
+                      - 'null'
+              example:
+                data:
+                  - rate: 13.7741
+                    direction: BUY
+                    currency_pair: BWP/USD
+                    pair_type: fiat/fiat
+                    from_currency: BWP
+                    from_currency_name: null
+                    timestamp: '2026-03-23T12:50:32.082350079+01:00'
+                    to_currency: USD
+                    to_currency_name: null
+                  - rate: 18.4025
+                    direction: SELL
+                    currency_pair: USD/ZAR
+                    pair_type: fiat/fiat
+                    from_currency: USD
+                    from_currency_name: null
+                    timestamp: '2026-03-23T12:50:32.450793659+01:00'
+                    to_currency: ZAR
+                    to_currency_name: null
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                InvalidPairFormat:
+                  summary: A currency pair isn't in FROM/TO format
+                  value:
+                    data: null
+                    error: >-
+                      field 'currencypairs[0]' must be a valid currency pair
+                      format (e.g., USD/ZAR, BTC/USDT)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/fx/quote:
+    post:
+      tags:
+        - Fx
+      summary: Create an FX quote
+      operationId: getFxQuote
+      description: >
+        Returns a foreign exchange rate quote for a given currency pair and
+        amount.
+
+        The quote includes a `quote_id` and an expiry time. Use the `quote_id`
+        when
+
+        submitting a transfer to lock in the quoted rate.
+
+
+        The `Idempotency-Key` header is required; requests without it are
+        rejected.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxQuoteRequest'
+            example:
+              from_currency: USD
+              to_currency: ZAR
+              amount: 10
+              direction: BUY
+      responses:
+        '200':
+          description: FX quote returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuoteResponse'
+              example:
+                data:
+                  amount: 10
+                  direction: BUY
+                  display_rate: 16.283561522388
+                  display_rate_label: 1 USD = 16.2836 ZAR
+                  expires_at: '2026-07-03T16:30:05.640502651+01:00'
+                  from_currency: USD
+                  quote_id: QT-rypoCbnP
+                  rate: 16.283561522388
+                  to_currency: ZAR
+                  to_currency_amount: 162.83561522388
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                MissingIdempotencyKey:
+                  summary: No Idempotency-Key header was sent
+                  value:
+                    data: null
+                    error: missing idempotency key in request headers
+                MissingField:
+                  summary: Missing required field
+                  value:
+                    data: null
+                    error: missing required field 'amount'
+                MissingMultipleFields:
+                  summary: Multiple required fields missing
+                  value:
+                    data: null
+                    error: >-
+                      missing required field 'from_currency', missing required
+                      field 'to_currency', missing required field 'amount',
+                      missing required field 'direction'
+                InvalidAmount:
+                  summary: Amount is zero or negative
+                  value:
+                    data: null
+                    error: field 'amount' must be greater than 0
+                InvalidDirection:
+                  summary: Direction isn't BUY or SELL
+                  value:
+                    data: null
+                    error: 'field ''direction'' must be one of: BUY SELL'
+                UnsupportedPair:
+                  summary: Currency pair isn't supported
+                  value:
+                    data: null
+                    error: currency pair KWD/NGN not supported
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: failed to retrieve FX quote
+  /v1/fx/orders:
+    post:
+      tags:
+        - Fx
+      summary: Create order
+      operationId: post_v1-fx-orders
+      description: >
+        Creates an OTC order. The order is created in `waiting_approval` and
+        doesn't execute until a second user approves it.
+
+
+        A `market` order executes at the current rate once approved. A `limit`
+        order waits until the rate reaches `target_rate`, then executes once
+        approved.
+
+
+        Set `destination_type` to control where the converted funds settle: an
+        internal `account`, a crypto `wallet`, or a saved settlement
+        instruction (`ssi`).
+
+
+        The `Idempotency-Key` header is required; requests without it are
+        rejected.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFxOrderRequest'
+            examples:
+              market_order:
+                summary: Market order
+                value:
+                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                  order_type: market
+                  pair:
+                    base: USD
+                    quote: ZAR
+                  amount: '1000'
+                  source_type: account
+                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination_type: ssi
+                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+              limit_order:
+                summary: Limit order
+                value:
+                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                  order_type: limit
+                  pair:
+                    base: USD
+                    quote: ZAR
+                  amount: '1000'
+                  target_rate: '17.50'
+                  source_type: account
+                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination_type: ssi
+                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+      responses:
+        '200':
+          description: Order created and awaiting approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxOrderResponse'
+              example:
+                data:
+                  id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+                  order_id: OTC-0VA89I
+                  order_type: market
+                  side: sell
+                  pair:
+                    base: USD
+                    quote: ZAR
+                  amount: '1000.00000000'
+                  amount_currency: USD
+                  converted_amount: '16242.50000000'
+                  converted_currency: ZAR
+                  rate: '16.24250000'
+                  target_rate: null
+                  fee: null
+                  status: waiting_approval
+                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  source_type: account
+                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination_type: ssi
+                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                  created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+                  created_by_role: developer
+                  approved_by_user_id: null
+                  approved_at: null
+                  rejected_by_user_id: null
+                  rejected_at: null
+                  rejection_reason: null
+                  executed_at: null
+                  settled_at: null
+                  expires_at: null
+                  created_at: '2026-07-03T15:32:37.878676Z'
+                  updated_at: null
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                MissingIdempotencyKey:
+                  summary: No Idempotency-Key header was sent
+                  value:
+                    data: null
+                    error: missing idempotency key in request headers
+                MissingCustomerId:
+                  summary: No customer_id was sent
+                  value:
+                    data: null
+                    error: missing x-customer-id in metadata
+                MissingFields:
+                  summary: Required fields missing
+                  value:
+                    data: null
+                    error: >-
+                      missing required field 'order_type', missing required
+                      field 'base', missing required field 'quote', missing
+                      required field 'amount'
+                InvalidOrderType:
+                  summary: Order type isn't market or limit
+                  value:
+                    data: null
+                    error: 'field ''order_type'' must be one of: market limit'
+                InvalidAmount:
+                  summary: Amount is zero or negative
+                  value:
+                    data: null
+                    error: field 'amount' failed validation on 'gt_zero_string'
+                MissingTargetRate:
+                  summary: Limit order without a target rate
+                  value:
+                    data: null
+                    error: target_rate is required for limit orders
+                UnsupportedPair:
+                  summary: Currency pair isn't supported
+                  value:
+                    data: null
+                    error: currency pair USD/XXX is not supported
+                InvalidSourceType:
+                  summary: Source type doesn't match the base currency
+                  value:
+                    data: null
+                    error: source type for USD must be 'account', got 'vault'
+                CreateFailed:
+                  summary: The order couldn't be created
+                  value:
+                    data: null
+                    error: failed to create order
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      tags:
+        - Fx
+      summary: List orders
+      operationId: get_v1-fx-orders
+      description: >
+        Lists your OTC orders, most recent first. Filter with `status`,
+        `order_type`, `side`, `search`, `start_date`, and `end_date`, and page
+        with `page` and `items_per_page`.
+
+
+        Filter values that match no orders (including unknown `status` values)
+        don't error; they return a `200` with an empty `items` array.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: >-
+            Filter by order status: `waiting_approval`, `pending`, `rejected`,
+            `cancelled`, or `expired`.
+          schema:
+            type: string
+          example: waiting_approval
+        - name: order_type
+          in: query
+          required: false
+          description: Filter by order type.
+          schema:
+            type: string
+            enum:
+              - market
+              - limit
+        - name: side
+          in: query
+          required: false
+          description: Filter by order side.
+          schema:
+            type: string
+            enum:
+              - buy
+              - sell
+        - name: search
+          in: query
+          required: false
+          description: Free-text search filter (for example, an order reference).
+          schema:
+            type: string
+          example: OTC-0VA89I
+        - name: start_date
+          in: query
+          required: false
+          description: Only return orders created on or after this date (ISO 8601).
+          schema:
+            type: string
+            format: date
+          example: '2026-06-01'
+        - name: end_date
+          in: query
+          required: false
+          description: Only return orders created on or before this date (ISO 8601).
+          schema:
+            type: string
+            format: date
+          example: '2026-06-30'
+        - name: page
+          in: query
+          required: false
+          description: Page number to return.
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: items_per_page
+          in: query
+          required: false
+          description: Number of orders per page.
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated list of orders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxOrderListResponse'
+              example:
+                data:
+                  items:
+                    - id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+                      order_id: OTC-0VA89I
+                      order_type: market
+                      side: sell
+                      pair:
+                        base: USD
+                        quote: ZAR
+                      amount: '1000.00000000'
+                      amount_currency: USD
+                      converted_amount: '16242.50000000'
+                      converted_currency: ZAR
+                      rate: '16.24250000'
+                      target_rate: null
+                      fee: null
+                      status: waiting_approval
+                      customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                      tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                      source_type: account
+                      source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                      destination_type: ssi
+                      destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                      created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+                      created_by_role: developer
+                      approved_by_user_id: null
+                      approved_at: null
+                      rejected_by_user_id: null
+                      rejected_at: null
+                      rejection_reason: null
+                      executed_at: null
+                      settled_at: null
+                      expires_at: null
+                      created_at: '2026-07-03T15:32:37.878676Z'
+                      updated_at: null
+                  page: 1
+                  items_per_page: 20
+                  total_items: 26
+                  total_pages: 2
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                InvalidDate:
+                  summary: start_date or end_date isn't a valid date
+                  value:
+                    data: null
+                    error: invalid request format
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/fx/orders/pending-approvals:
+    get:
+      tags:
+        - Fx
+      summary: List pending approvals
+      operationId: get_v1-fx-orders-pending-approvals
+      description: >
+        Lists the orders in `waiting_approval` that are waiting on an approve
+        or reject decision.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Page number to return.
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: items_per_page
+          in: query
+          required: false
+          description: Number of orders per page.
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated list of orders awaiting approval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxOrderListResponse'
+              example:
+                data:
+                  items:
+                    - id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+                      order_id: OTC-0VA89I
+                      order_type: market
+                      side: sell
+                      pair:
+                        base: USD
+                        quote: ZAR
+                      amount: '1000.00000000'
+                      amount_currency: USD
+                      converted_amount: '16242.50000000'
+                      converted_currency: ZAR
+                      rate: '16.24250000'
+                      target_rate: null
+                      fee: null
+                      status: waiting_approval
+                      customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                      tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                      source_type: account
+                      source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                      destination_type: ssi
+                      destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                      created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+                      created_by_role: developer
+                      approved_by_user_id: null
+                      approved_at: null
+                      rejected_by_user_id: null
+                      rejected_at: null
+                      rejection_reason: null
+                      executed_at: null
+                      settled_at: null
+                      expires_at: null
+                      created_at: '2026-07-03T15:32:37.878676Z'
+                      updated_at: null
+                  page: 1
+                  items_per_page: 20
+                  total_items: 1
+                  total_pages: 1
+                error: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/fx/orders/{order_id}:
+    get:
+      tags:
+        - Fx
+      summary: Get order
+      operationId: get_v1-fx-orders-order_id
+      description: Retrieves a single order by its `order_id`.
+      parameters:
+        - $ref: '#/components/parameters/OrderIdPath'
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxOrderResponse'
+              example:
+                data:
+                  id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+                  order_id: OTC-0VA89I
+                  order_type: market
+                  side: sell
+                  pair:
+                    base: USD
+                    quote: ZAR
+                  amount: '1000.00000000'
+                  amount_currency: USD
+                  converted_amount: '16242.50000000'
+                  converted_currency: ZAR
+                  rate: '16.24250000'
+                  target_rate: null
+                  fee: null
+                  status: waiting_approval
+                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  source_type: account
+                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination_type: ssi
+                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                  created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+                  created_by_role: developer
+                  approved_by_user_id: null
+                  approved_at: null
+                  rejected_by_user_id: null
+                  rejected_at: null
+                  rejection_reason: null
+                  executed_at: null
+                  settled_at: null
+                  expires_at: null
+                  created_at: '2026-07-03T15:32:37.878676Z'
+                  updated_at: null
+                error: null
+        '400':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                OrderNotFound:
+                  summary: No order exists with this order_id
+                  value:
+                    data: null
+                    error: order not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/fx/orders/{order_id}/cancel:
+    post:
+      tags:
+        - Fx
+      summary: Cancel order
+      operationId: post_v1-fx-orders-order_id-cancel
+      description: >
+        Cancels an order that hasn't executed yet. Orders that are already in
+        a final state, or in a state that doesn't allow cancellation, can't be
+        cancelled.
+
+
+        The `Idempotency-Key` header is required; requests without it are
+        rejected.
+      parameters:
+        - $ref: '#/components/parameters/OrderIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxOrderResponse'
+              example:
+                data:
+                  id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
+                  order_id: OTC-0VA89I
+                  order_type: market
+                  side: sell
+                  pair:
+                    base: USD
+                    quote: ZAR
+                  amount: '1000.00000000'
+                  amount_currency: USD
+                  converted_amount: '16242.50000000'
+                  converted_currency: ZAR
+                  rate: '16.24250000'
+                  target_rate: null
+                  fee: null
+                  status: cancelled
+                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
+                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
+                  source_type: account
+                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination_type: ssi
+                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                  created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
+                  created_by_role: developer
+                  approved_by_user_id: null
+                  approved_at: null
+                  rejected_by_user_id: null
+                  rejected_at: null
+                  rejection_reason: null
+                  executed_at: null
+                  settled_at: null
+                  expires_at: null
+                  created_at: '2026-07-03T15:32:37.878676Z'
+                  updated_at: '2026-07-03T15:40:11.120943Z'
+                error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                MissingIdempotencyKey:
+                  summary: No Idempotency-Key header was sent
+                  value:
+                    data: null
+                    error: missing idempotency key in request headers
+                OrderNotFound:
+                  summary: No order exists with this order_id
+                  value:
+                    data: null
+                    error: order not found
+                CannotCancel:
+                  summary: The order's current status doesn't allow cancellation
+                  value:
+                    data: null
+                    error: 'order cannot be cancelled in status: waiting_approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'

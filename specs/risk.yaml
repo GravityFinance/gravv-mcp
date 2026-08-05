@@ -1,0 +1,908 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: 'This is the API Gateway for Gravv services.
+
+    Use the `Api-Key` header for authentication.
+
+    '
+  version: 1.0.0
+servers:
+- url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required for POST requests. Reuse only for an identical retry.
+      schema:
+        type: string
+      example: order_789_attempt_1
+    EventIdPath:
+      name: event_id
+      in: path
+      required: true
+      description: UUID of the webhook event
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+    CustomerIdPath:
+      name: customer_id
+      in: path
+      required: true
+      description: UUID of the customer
+      schema:
+        type: string
+        format: uuid
+      example: 42ad0adb-e134-4345-b4be-98e5021b0da8
+  schemas:
+    StartKYCRequest:
+      type: object
+      required:
+      - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer ID to start KYC for
+    StartKYCResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          - web_url
+          properties:
+            review_status:
+              type: string
+              description: Applicant review status from the verification process.
+              example: pending
+            status:
+              type: string
+              description: Request status
+              example: success
+            web_url:
+              type: string
+              format: uri
+              description: URL to complete the KYC process
+              example: https://verify.gravv.xyz/websdk/p/example_token
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    UploadDocumentRequest:
+      type: object
+      required:
+      - customer_id
+      - metadata
+      - content
+      - filename
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: ID of the customer this document belongs to
+          example: b84d9a52-2978-43e5-9b86-eac9839e1146
+        applicant_id:
+          type: string
+          description: 'Optional upstream applicant identifier. When omitted (server-to-server
+
+            flow) the service resolves the applicant from `customer_id`.
+
+            '
+        metadata:
+          $ref: '#/components/schemas/DocumentMetadata'
+        content:
+          type: string
+          format: byte
+          description: 'Base64-encoded document content. The decoded bytes must be
+            a JPEG, PNG,
+
+            or PDF; the service sniffs the leading bytes and rejects other MIME
+
+            types. Maximum decoded size is 10 MB.
+
+            '
+          example: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+        filename:
+          type: string
+          description: 'Original filename of the document. Extension must be one of
+
+            `.jpg`, `.jpeg`, `.png`, `.pdf` (case-insensitive); the file extension
+
+            is validated before the content MIME sniff.
+
+            '
+          example: passport_front.jpg
+          maxLength: 255
+          pattern: (?i)\.(jpe?g|png|pdf)$
+        return_doc_warnings:
+          type: boolean
+          description: Whether to return document quality warnings in the response
+          default: false
+          example: true
+    DocumentMetadata:
+      type: object
+      required:
+      - idDocType
+      - country
+      properties:
+        idDocType:
+          type: string
+          description: 'Type of document being uploaded. Individual customer documents
+            include
+
+            passport, id_card, drivers_license, selfie, residence_permit, utility_bill,
+
+            bank_card, vehicle_registration_certificate, and other. Business customer
+
+            documents include registration_certificate, company_doc, formation_document,
+
+            ownership_document, proof_of_address, and proof_of_address_document.
+
+            '
+          enum:
+          - passport
+          - id_card
+          - drivers_license
+          - selfie
+          - residence_permit
+          - utility_bill
+          - bank_card
+          - vehicle_registration_certificate
+          - other
+          - registration_certificate
+          - company_doc
+          - formation_document
+          - ownership_document
+          - proof_of_address
+          - proof_of_address_document
+          example: passport
+        idDocSubType:
+          type: string
+          description: 'Subtype indicating which side of the document. Must be uppercase;
+
+            lowercase values are passed through to the upstream verifier and may be
+
+            silently rejected.
+
+            '
+          enum:
+          - FRONT_SIDE
+          - BACK_SIDE
+          example: FRONT_SIDE
+        country:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: Document issuing country (ISO 3166-1 alpha-3 code, uppercase)
+          example: NGA
+        firstName:
+          type: string
+          description: First name as shown on document
+          example: John
+          maxLength: 100
+        middleName:
+          type: string
+          description: Middle name as shown on document (optional)
+          example: Michael
+          maxLength: 100
+        lastName:
+          type: string
+          description: Last name as shown on document
+          example: Doe
+          maxLength: 100
+        issuedDate:
+          type: string
+          format: date
+          description: Document issue date (YYYY-MM-DD)
+          example: '2020-01-15'
+        validUntil:
+          type: string
+          format: date
+          description: Document expiration date (YYYY-MM-DD)
+          example: '2030-01-15'
+        number:
+          type: string
+          description: Document identification number
+          example: A12345678
+          maxLength: 50
+        dob:
+          type: string
+          format: date
+          description: Date of birth (YYYY-MM-DD)
+          example: '1990-05-20'
+        placeOfBirth:
+          type: string
+          description: Place of birth as shown on document
+          example: New York, NY
+          maxLength: 100
+    UploadDocumentResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          - customer_id
+          - document_type
+          - document_sub_type
+          - country
+          - message
+          properties:
+            status:
+              type: string
+              description: Always `"success"` on a successful upload
+              enum:
+              - success
+              example: success
+            customer_id:
+              type: string
+              format: uuid
+              description: ID of the customer the document was saved for
+              example: b84d9a52-2978-43e5-9b86-eac9839e1146
+            document_type:
+              type: string
+              description: Normalised document type derived from `metadata.idDocType`
+              example: passport
+            document_sub_type:
+              type: string
+              description: Document sub-type as supplied in `metadata.idDocSubType`
+              example: FRONT_SIDE
+            country:
+              type: string
+              description: ISO 3166-1 alpha-3 country code as supplied in `metadata.country`
+              example: NGA
+            message:
+              type: string
+              description: Human-readable confirmation message
+              example: Document saved. Use /initiate-kyc to submit for verification.
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    StartKYCS2SRequest:
+      type: object
+      required:
+      - customer_id
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer ID to initiate KYC verification for. Documents must
+            be uploaded for this customer before calling this endpoint.
+          example: aabe0a33-6716-42e2-bbca-7abf1a8bd91c
+    StartKYCS2SSuccessResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          - applicant_id
+          properties:
+            status:
+              type: string
+              description: Request status. `"success"` indicates all documents were
+                uploaded and verification has been initiated.
+              enum:
+              - success
+              example: success
+            applicant_id:
+              type: string
+              description: Opaque identifier for the applicant in the verification
+                system
+              example: apl_example_123
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+    StartKYCS2SPartialSuccessResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          - applicant_id
+          - web_url
+          - failed_documents
+          properties:
+            status:
+              type: string
+              description: '`"partial_success"` — some documents failed to upload
+                automatically. The customer must complete verification via the `web_url`.'
+              enum:
+              - partial_success
+              example: partial_success
+            applicant_id:
+              type: string
+              description: Opaque identifier for the applicant in the verification
+                system
+              example: apl_example_123
+            web_url:
+              type: string
+              format: uri
+              description: WebSDK URL for the customer to manually complete document
+                upload
+              example: https://verify.gravv.xyz/websdk/p/sbx_example_token
+            failed_documents:
+              type: array
+              description: List of documents that failed to upload automatically
+              items:
+                type: object
+                properties:
+                  doc_type:
+                    type: string
+                    enum:
+                    - passport
+                    - id_card
+                    - drivers_license
+                    - selfie
+                    - registration_certificate
+                    example: selfie
+                  reason:
+                    type: string
+                    example: Upload failed
+            message:
+              type: string
+              description: Instruction message for next steps
+              example: Some documents could not be uploaded automatically. Please
+                complete verification using the provided link.
+        error:
+          nullable: true
+          example: null
+    StartKYCS2SMissingDocumentsError:
+      allOf:
+      - $ref: '#/components/schemas/ErrorResponse'
+      - type: object
+        properties:
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                enum:
+                - missing_documents
+                example: missing_documents
+              message:
+                type: string
+                example: Required documents have not been uploaded for this customer
+              details:
+                type: object
+                properties:
+                  missing_documents:
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                      - passport
+                      - id_card
+                      - drivers_license
+                      - selfie
+                      - registration_certificate
+                    example:
+                    - selfie
+    InvalidArgumentError:
+      allOf:
+      - $ref: '#/components/schemas/ErrorResponse'
+      - type: object
+        properties:
+          error:
+            properties:
+              code:
+                example: INVALID_ARGUMENT
+              message:
+                example: 'invalid request format: missing required field ''from_currency'''
+    NotFoundError:
+      allOf:
+      - $ref: '#/components/schemas/ErrorResponse'
+      - type: object
+        properties:
+          error:
+            properties:
+              code:
+                example: NOT_FOUND
+              message:
+                example: Resource not found
+    ErrorResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          nullable: true
+          description: Always null for error responses
+          example: null
+        error:
+          type: string
+          description: Human-readable error message
+          example: Invalid request parameters
+    DocumentWarning:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          description: Warning code
+          enum:
+          - low_quality
+          - glare_detected
+          - blurry
+          - dark_image
+          - cut_off
+          - black_and_white
+          - damaged_document
+          example: low_quality
+        message:
+          type: string
+          description: Human-readable warning message
+          example: Document image quality is below recommended threshold
+    KYCStatusResponse:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          required:
+          - reviewStatus
+          properties:
+            reviewStatus:
+              type: string
+              description: 'Overall review status from the verification provider.
+                `pending` while a review is in progress; `completed` once a decision
+                is returned.
+
+                '
+              example: completed
+            reviewResult:
+              type: object
+              description: 'Review outcome. Present once the review reaches a decision;
+                omitted while `reviewStatus` is `pending`.
+
+                '
+              properties:
+                reviewAnswer:
+                  type: string
+                  description: Verification decision.
+                  enum:
+                  - approved
+                  - rejected
+                  - pending
+                  example: approved
+                rejectLabels:
+                  type: array
+                  description: Reason codes when the review is rejected. Empty on
+                    approval.
+                  items:
+                    type: string
+                  example: []
+                reviewRejectType:
+                  type: string
+                  description: 'Rejection category when the review is rejected. Empty
+                    string on approval.
+
+                    '
+                  example: ''
+            reviewDate:
+              type: string
+              description: 'Timestamp of the review decision. Returned by the verification
+                provider in `YYYY-MM-DD` format, not ISO 8601.
+
+                '
+              example: '2026-06-11'
+            priority:
+              type: integer
+              description: Applicant review priority.
+              example: 0
+        error:
+          nullable: true
+          description: Error information if the request failed
+          example: null
+security:
+- ApiKeyAuth: []
+tags:
+- name: Risk (deprecated)
+  description: Verify your customers
+paths:
+  /v1/risk/start-kyc:
+    post:
+      tags:
+      - Risk (deprecated)
+      summary: Start KYC verification
+      description: Initiates KYC verification for a customer.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartKYCRequest'
+            examples:
+              KYCRequest:
+                summary: KYC Example
+                value:
+                  customer_id: d2581d3c-7c55-4607-9717-546694194636
+      responses:
+        '200':
+          description: KYC process started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartKYCResponse'
+              example:
+                data:
+                  status: success
+                  web_url: https://verify.gravv.xyz/websdk/p/example_token
+                error: null
+  /v1/risk/upload-document:
+    post:
+      tags:
+      - Risk (deprecated)
+      summary: Upload document
+      description: "Upload a customer document for KYC or KYB verification. This is\
+        \ the first step of the server-to-server verification flow.\n\nDocuments are\
+        \ uploaded as base64-encoded strings along with metadata about the document\
+        \ type, \ncustomer information, and document details. The document is validated\
+        \ and stored in preparation \nfor verification.\n\n## Supported document types\n\
+        \nThe `metadata.idDocType` field accepts the following values (lowercase):\n\
+        \n- **Individual customers:** passport, id_card, drivers_license, selfie,\n\
+        \  residence_permit, utility_bill, bank_card,\n  vehicle_registration_certificate,\
+        \ other\n\n- **Business customers:** registration_certificate, company_doc,\n\
+        \  formation_document, ownership_document, proof_of_address,\n  proof_of_address_document\n\
+        \n\nSelfie documents must be an image (JPEG or PNG); PDF selfies are rejected.\n\
+        \n## Document subtypes\n\nThe supported document subtypes are as follows (case-sensitive,\
+        \ uppercase):\n\n- **FRONT_SIDE:** Front side of document\n- **BACK_SIDE:**\
+        \ Back side of document (if applicable)\n\n## File format\n\nThe `filename`\
+        \ extension and the decoded `content` MIME type must agree and must be one\
+        \ of: `image/jpeg`, `image/png`, `application/pdf`.\n\n## Size limits\n\n\
+        The maximum decoded document size is 10 MB. The base64-encoded payload sent\
+        \ in `content` may be up to roughly 13.3 MB. Larger payloads are rejected\
+        \ at the ingress layer with a 413 before reaching the service.\n\n## Idempotency\n\
+        \nThe `Idempotency-Key` header is required on this endpoint. Replays of the\
+        \ same key with the same payload return the original response; replays with\
+        \ a different payload return 422.\n\nAfter uploading all required documents,\
+        \ call the Initiate KYC S2S\nendpoint to start the verification process.\n"
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        description: 'Unique key to dedupe retries. Required on this endpoint; 1–255
+          ASCII
+
+          printable characters. Missing or malformed keys return 400.
+
+          '
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 255
+        example: kyc-upload-customer-b4e52d51-attempt-1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadDocumentRequest'
+            examples:
+              PassportUpload:
+                summary: Upload passport document
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: passport
+                    idDocSubType: FRONT_SIDE
+                    country: USA
+                    firstName: John
+                    middleName: Michael
+                    lastName: Doe
+                    issuedDate: '2020-01-15'
+                    validUntil: '2030-01-15'
+                    number: A12345678
+                    dob: '1990-05-20'
+                    placeOfBirth: New York, NY
+                  content: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: passport_front.jpg
+                  return_doc_warnings: true
+              SelfieUpload:
+                summary: Upload selfie
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: selfie
+                    idDocSubType: FRONT_SIDE
+                    country: NGA
+                    firstName: John
+                    lastName: Doe
+                    dob: '1990-05-20'
+                  content: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: selfie.jpg
+                  return_doc_warnings: false
+              BusinessRegistrationUpload:
+                summary: Upload business registration certificate
+                value:
+                  customer_id: c84d9a52-2978-43e5-9b86-eac9839e1147
+                  metadata:
+                    idDocType: registration_certificate
+                    idDocSubType: FRONT_SIDE
+                    country: NGA
+                    firstName: Acme
+                    lastName: Corporation
+                    number: RC123456
+                    issuedDate: '2020-01-15'
+                  content: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: registration_certificate.pdf
+                  return_doc_warnings: true
+              IDCardFrontSide:
+                summary: Upload ID card front side
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                  metadata:
+                    idDocType: id_card
+                    idDocSubType: FRONT_SIDE
+                    country: NGA
+                    firstName: Jane
+                    lastName: Smith
+                    number: ID987654321
+                    issuedDate: '2019-06-10'
+                    validUntil: '2029-06-10'
+                    dob: '1992-03-15'
+                    placeOfBirth: Lagos
+                  content: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+                  filename: id_card_front.jpg
+                  return_doc_warnings: true
+      responses:
+        '200':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadDocumentResponse'
+              examples:
+                SuccessPassport:
+                  summary: Successful passport upload
+                  value:
+                    data:
+                      status: success
+                      customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                      document_type: passport
+                      document_sub_type: FRONT_SIDE
+                      country: NGA
+                      message: Document saved. Use /initiate-kyc to submit for verification.
+                    error: null
+                SuccessSelfie:
+                  summary: Successful selfie upload
+                  value:
+                    data:
+                      status: success
+                      customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                      document_type: selfie
+                      document_sub_type: FRONT_SIDE
+                      country: NGA
+                      message: Document saved. Use /initiate-kyc to submit for verification.
+                    error: null
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidArgumentError'
+              examples:
+                InvalidDocumentType:
+                  summary: Invalid document type for customer
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_ARGUMENT
+                      message: selfie is not a valid document type for business customers
+                      details: {}
+                MissingRequiredField:
+                  summary: Missing required field
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_ARGUMENT
+                      message: filename is required
+                      details: {}
+                InvalidBase64:
+                  summary: Invalid base64 content
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_ARGUMENT
+                      message: Invalid base64 encoded content
+                      details: {}
+                MissingIdempotencyKey:
+                  summary: Idempotency-Key header missing
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_ARGUMENT
+                      message: missing idempotency key in request headers
+                      details: {}
+                UnsupportedMime:
+                  summary: Decoded content is not JPEG/PNG/PDF
+                  value:
+                    data: null
+                    error:
+                      code: INVALID_ARGUMENT
+                      message: 'unsupported file content type: application/octet-stream.
+                        Supported types: JPEG, PNG, PDF'
+                      details: {}
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: NOT_FOUND
+                  message: Customer not found
+                  details: {}
+        '409':
+          description: Concurrent in-flight request with the same Idempotency-Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: CONFLICT
+                  message: A request with the same Idempotency-Key is currently being
+                    processed
+                  details: {}
+        '413':
+          description: 'Payload too large. The decoded document exceeds the 10 MB
+            service
+
+            limit, or the request body exceeded the ingress 15 MB limit. The
+
+            ingress-layer 413 is returned as HTML by nginx and does not match
+
+            the schema below.
+
+            '
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: PAYLOAD_TOO_LARGE
+                  message: 'file too large: content exceeds maximum allowed size of
+                    10MB'
+                  details: {}
+        '422':
+          description: Idempotency-Key reused with a different request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error:
+                  code: UNPROCESSABLE_ENTITY
+                  message: Idempotency-Key was previously used with a different request
+                    payload
+                  details: {}
+  /v1/risk/start-kyc-s2s:
+    post:
+      tags:
+      - Risk (deprecated)
+      summary: Initiate server-to-server KYC verification
+      description: "Initiates KYC verification for a customer using previously uploaded\
+        \ documents in a server-to-server (s2s) flow.\nThis is step 2 of the S2S KYC\
+        \ process. Before calling this endpoint, you must first upload all required\
+        \ \ndocuments using the Upload Document endpoint.\n## Possible outcomes\n\
+        The following are the possible outcomes:\n- **Full success:** All documents\
+        \ uploaded and verification initiated\n- **Missing documents:** Returns error\
+        \ with list of missing required documents\n- **Partial success:** Some documents\
+        \ failed to upload, returns WebSDK link for customer to complete manually\n"
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartKYCS2SRequest'
+            examples:
+              IndividualKYC:
+                summary: Individual KYC Request
+                value:
+                  customer_id: aabe0a33-6716-42e2-bbca-7abf1a8bd91c
+              BusinessKYB:
+                summary: Business KYB Request
+                value:
+                  customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+      responses:
+        '200':
+          description: KYC S2S process response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/StartKYCS2SSuccessResponse'
+                - $ref: '#/components/schemas/StartKYCS2SPartialSuccessResponse'
+              examples:
+                FullSuccess:
+                  summary: All documents uploaded successfully
+                  value:
+                    data:
+                      status: success
+                      applicant_id: apl_example_123
+                    error: null
+                PartialSuccess:
+                  summary: Some documents failed, WebSDK link provided
+                  value:
+                    data:
+                      status: partial_success
+                      applicant_id: apl_example_123
+                      web_url: https://verify.gravv.xyz/websdk/p/sbx_example_token
+                      failed_documents:
+                      - doc_type: selfie
+                        reason: Upload failed
+                      message: Some documents could not be uploaded automatically.
+                        Complete verification using the provided link.
+                    error: null
+        '400':
+          description: Missing required documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartKYCS2SMissingDocumentsError'
+              examples:
+                MissingDocuments:
+                  summary: Required documents not uploaded
+                  value:
+                    data: null
+                    error:
+                      code: missing_documents
+                      message: Required documents have not been uploaded for this
+                        customer
+                      details:
+                        missing_documents:
+                        - passport
+                        - selfie
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+              example:
+                data: null
+                error:
+                  code: not_found
+                  message: Customer not found
+                  details: {}
