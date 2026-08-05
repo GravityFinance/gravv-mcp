@@ -63,12 +63,9 @@ async function main() {
     return;
   }
 
-  const apiKey = process.env.GRAVV_API_KEY;
-  if (!apiKey) {
-    // stderr, not stdout — stdout is the MCP transport.
-    process.stderr.write("error: GRAVV_API_KEY is not set.\n\n" + usage());
-    process.exit(1);
-  }
+  // No key is not fatal: the documentation tools are public and useful on their own,
+  // so an agent can learn the API during evaluation before credentials exist.
+  const apiKey = process.env.GRAVV_API_KEY || undefined;
 
   const raw = arg("toolsets") ?? process.env.GRAVV_TOOLSETS;
   let toolsets: Toolset[] | "all";
@@ -102,11 +99,13 @@ async function main() {
   // Startup banner on stderr so the operator can see which environment they attached to
   // without corrupting the protocol stream.
   process.stderr.write(
-    `gravv-mcp: ${tools.length} tools | environment=${environment}` +
-      (environment !== "sandbox" && process.env.GRAVV_ALLOW_LIVE_WRITES === "true"
-        ? " | LIVE WRITES ENABLED"
-        : "") +
-      "\n",
+    apiKey
+      ? `gravv-mcp: ${tools.length} API tools + 2 docs tools | environment=${environment}` +
+          (environment !== "sandbox" && process.env.GRAVV_ALLOW_LIVE_WRITES === "true"
+            ? " | LIVE WRITES ENABLED"
+            : "") +
+          "\n"
+      : "gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available\n",
   );
 
   await server.connect(new StdioServerTransport());

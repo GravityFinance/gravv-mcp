@@ -45,10 +45,12 @@ export class GravvApiError extends Error {
  * Token bucket matching the server-side limiter so we queue locally instead of
  * generating 429s.
  *
- * NOTE: the ceiling is genuinely ambiguous upstream. throttler.go:15 configures
- * rate.Limit(15/60) with burst 30; its own comment says 5/min; the published docs say
- * 10/min. We default to the published figure — the one merchants are told to expect —
- * and allow an override. Revisit once the real number is settled.
+ * NOTE: the real ceiling is unclear. throttler.go:15 configures rate.Limit(15/60) with
+ * burst 30, its own comment says 5/min, and the published docs say 10/min — but 40
+ * consecutive sandbox requests measured zero 429s, so none of those is being enforced
+ * there. Throttling at 10/min would make the server feel broken for no reason, so the
+ * default is a courtesy 60/min. If live turns out to be stricter, the 429 handler backs
+ * off and GRAVV_RATE_PER_MINUTE lowers the ceiling.
  */
 export class RateLimiter {
   private tokens: number;
@@ -109,8 +111,8 @@ export class GravvClient {
     this.opts = opts;
     this.environment = detectEnvironment(opts.apiKey);
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-    this.limiter = new RateLimiter(opts.ratePerMinute ?? 10, opts.rateBurst ?? 10);
-    this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.limiter = new RateLimiter(opts.ratePerMinute ?? 60, opts.rateBurst ?? 15);
+    this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.doFetch = opts.fetchImpl ?? fetch;
   }
 
@@ -221,13 +223,12 @@ export class GravvClient {
         return { data, idempotencyKey, replayed, status: res.status };
       }
 
-      const apiMessage =
-        (parsed && typeof parsed === "object" && (parsed.error ?? parsed.message)) || res.statusText;
+      const apiMessage = extractErrorMessage(parsed, res.statusText);
 
       if (res.status === 409 && attempt < maxAttempts) {
         const retryAfter = Number(res.headers.get("Retry-After") ?? 1);
         await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
-        lastError = new GravvApiError(String(apiMessage), 409, parsed);
+        lastError = new GravvApiError(apiMessage, 409, parsed);
         continue;
       }
 
@@ -243,6 +244,38 @@ export class GravvClient {
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
   }
+}
+
+/**
+ * Normalise the gateway's error field into a readable string.
+ *
+ * The shape is not consistent across statuses — verified against sandbox:
+ *   400 -> {"data":null,"error":"missing idempotency key in request headers"}
+ *   422 -> {"data":null,"error":{"code":"idempotency_key_reused","message":"..."}}
+ *
+ * Naively stringifying the second form yields "[object Object]", which tells the model
+ * nothing and sends it guessing.
+ */
+export function extractErrorMessage(parsed: unknown, fallback: string): string {
+  if (parsed == null) return fallback;
+  if (typeof parsed === "string") return parsed || fallback;
+  if (typeof parsed !== "object") return String(parsed);
+
+  const err = (parsed as Record<string, unknown>).error ?? (parsed as Record<string, unknown>).message;
+
+  if (typeof err === "string" && err) return err;
+
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const message = typeof e.message === "string" ? e.message : undefined;
+    const code = typeof e.code === "string" ? e.code : undefined;
+    if (message && code) return `${message} (${code})`;
+    if (message) return message;
+    if (code) return code;
+    return JSON.stringify(err);
+  }
+
+  return fallback;
 }
 
 /** Turn the statuses merchants actually hit into something actionable. */

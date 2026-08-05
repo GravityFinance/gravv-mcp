@@ -307,10 +307,21 @@ describe("end-to-end over MCP stdio", () => {
     }
   });
 
-  test("refuses to start without an API key", async () => {
+  test("runs docs-only without an API key", async () => {
+    // Docs are public, so an agent can learn the API before the merchant has credentials.
     const mcp = new McpProcess([], { GRAVV_API_KEY: "" });
-    await new Promise((r) => setTimeout(r, 1200));
-    assert.match(mcp.stderr, /GRAVV_API_KEY is not set/);
-    mcp.kill();
+    try {
+      const init = await mcp.initialize();
+      assert.match(init.result.instructions, /no API key configured/);
+
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.deepEqual(names.sort(), ["getGravvDocPage", "searchGravvDocs"]);
+
+      const res = await mcp.request("tools/call", { name: "listAccounts", arguments: {} });
+      assert.equal(res.result.isError, true);
+      assert.match(textOf(res), /GRAVV_API_KEY/);
+    } finally {
+      mcp.kill();
+    }
   });
 });

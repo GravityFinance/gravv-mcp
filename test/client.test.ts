@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GravvClient, GravvApiError, RateLimiter } from "../src/client.ts";
+import { GravvClient, GravvApiError, RateLimiter, extractErrorMessage } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 /** Records what the client sent and replays canned responses. */
@@ -152,6 +152,59 @@ describe("response handling", () => {
     await assert.rejects(
       client(fetchImpl).call(getAccount, { account_id: "a" }),
       (e: GravvApiError) => /dashboard/.test(e.hint ?? ""),
+    );
+  });
+});
+
+describe("error message extraction", () => {
+  // The gateway's `error` field is not one shape. Both of these are real sandbox
+  // responses; stringifying the second naively produced "[object Object]", which told
+  // the model nothing and sent it guessing at the payload.
+  test("handles the string form (observed on 400)", () => {
+    assert.equal(
+      extractErrorMessage({ data: null, error: "missing idempotency key in request headers" }, "fallback"),
+      "missing idempotency key in request headers",
+    );
+  });
+
+  test("handles the object form (observed on 422)", () => {
+    assert.equal(
+      extractErrorMessage(
+        {
+          data: null,
+          error: {
+            code: "idempotency_key_reused",
+            message: "Idempotency-Key was previously used with a different request payload",
+          },
+        },
+        "fallback",
+      ),
+      "Idempotency-Key was previously used with a different request payload (idempotency_key_reused)",
+    );
+  });
+
+  test("never yields [object Object] for an unexpected error shape", () => {
+    for (const shape of [{ error: { detail: "odd" } }, { error: {} }, { error: 42 }, {}, null]) {
+      const msg = extractErrorMessage(shape, "fallback");
+      assert.doesNotMatch(msg, /\[object Object\]/, `leaked for ${JSON.stringify(shape)}`);
+      assert.ok(msg.length > 0);
+    }
+  });
+
+  test("falls back to the HTTP status text when there is no error field", () => {
+    assert.equal(extractErrorMessage({ data: {} }, "Bad Gateway"), "Bad Gateway");
+  });
+
+  test("surfaces the object form through a real call", async () => {
+    const { fetchImpl } = stub([
+      {
+        status: 422,
+        body: { data: null, error: { code: "idempotency_key_reused", message: "Key reused with a different payload" } },
+      },
+    ]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: GravvApiError) => e.message === "Key reused with a different payload (idempotency_key_reused)",
     );
   });
 });

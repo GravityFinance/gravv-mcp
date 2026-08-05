@@ -4,7 +4,8 @@ MCP server for the [Gravv](https://gravv-docs.syntext.dev) payments API. Connect
 assistant to Gravv so it can onboard customers, run KYC, open accounts, add recipients,
 move money, issue cards, and exchange currency — using the merchant's own API key.
 
-**Status:** working, tested against a stub gateway. Not yet verified against real sandbox.
+**Status:** verified against the real sandbox API — reads, writes, idempotency, and the
+safety gates all confirmed live. Not yet published to npm.
 
 ---
 
@@ -32,6 +33,27 @@ claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravv/mcp
     }
   }
 }
+```
+
+---
+
+## Two halves
+
+**Documentation tools** — `searchGravvDocs`, `getGravvDocPage`. Full-text search across
+all 177 pages of <https://gravv-docs.syntext.dev>. Always loaded, and they need **no API
+key**, so an agent can learn Gravv during evaluation before credentials exist.
+
+**API tools** — 80 generated from the OpenAPI specs, gated by `--toolsets`.
+
+The split matters. The specs describe 86 independent operations and say nothing about
+ordering: that an account needs a KYC-verified customer, or that an external account
+returns `pending` and must be polled to `active` before you can transfer to it. That
+knowledge is only in the guides, so the guides have to be reachable from the same
+connector. An agent with endpoint tools alone will call things in the wrong order.
+
+```bash
+npx @gravv/mcp            # docs + API tools
+npx @gravv/mcp            # with GRAVV_API_KEY unset: docs tools only, still useful
 ```
 
 ---
@@ -108,16 +130,16 @@ npx @gravv/mcp --toolsets=all                        # everything not blockliste
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GRAVV_API_KEY` | — | **Required.** The key selects sandbox or live |
+| `GRAVV_API_KEY` | — | Sandbox or live key; selects the environment. Omit for docs-only mode |
 | `GRAVV_ALLOW_LIVE_WRITES` | unset | `true` permits money movement on a live key |
 | `GRAVV_RATE_PER_MINUTE` | `10` | Client-side throttle |
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 
-> **Rate limit caveat.** The real ceiling is unsettled upstream: `throttler.go:15`
-> configures 15/min burst 30, its comment says 5/min, and the published docs say 10/min.
-> We default to the published figure. If you see repeated 429s, lower
-> `GRAVV_RATE_PER_MINUTE`.
+> **Rate limit caveat.** Measured: 40 consecutive sandbox requests returned zero 429s,
+> so none of the three documented figures (`throttler.go` 15/min, its comment 5/min, the
+> docs 10/min) is enforced there. The default is a courtesy 60/min. If live proves
+> stricter the 429 handler backs off; lower `GRAVV_RATE_PER_MINUTE` to be safe.
 
 ---
 
@@ -177,9 +199,26 @@ and drives it over actual MCP JSON-RPC.
 
 ---
 
-## Known gaps
+## Verified against live sandbox
 
-- **Not yet run against real sandbox.** Everything is verified against a stub.
+Confirmed on 2026-08-05 against `https://api.gravv.xyz`:
+
+- Key prefix `grvSec_sandbox_` detected correctly; environment surfaced in every response
+- Reads return real data through the `{data, error}` envelope
+- `createWallet` on `polygon` returned a real address
+- Idempotency: missing key → 400; same key + same payload → replay with
+  `Idempotency-Replayed: true`; same key + different payload → 422
+- Unconfirmed `createTransfer` returned a preview and never reached the API
+- Blocklisted card endpoints refuse with an explanation
+
+Two things this surfaced, both fixed here:
+
+- The gateway's `error` field is a **string** on 400 but an **object** on 422. Naive
+  stringification produced `[object Object]`; `extractErrorMessage` now handles both.
+- `/v1/accounts` responds in 4–6s where `/v1/customers` takes ~1.2s, and one call
+  exceeded 30s. The client timeout is 60s as a result.
+
+## Known gaps
 - **~20 live endpoints have no OpenAPI spec** and therefore no tool: all of
   `/v1/billings/*`, `/v1/settlement-instructions/*`, `/v1/open-trade/*`,
   `/v1/accounts/sweep-rules/*`, `/v1/wallets/balances`, `/v1/wallets/total-balance`,
@@ -188,3 +227,6 @@ and drives it over actual MCP JSON-RPC.
   API-key callers on the transfer, payee, and FX approval routes. Approvals are a
   dashboard action.
 - **stdio only.** The hosted remote transport is not built.
+- **Docs search is keyword-based**, with payments-domain synonym expansion — not
+  semantic. It handles the vocabulary gap well ("send money" finds the remit recipe) but
+  will miss phrasings not covered by the synonym table.
