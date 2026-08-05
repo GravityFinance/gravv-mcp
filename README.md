@@ -132,7 +132,7 @@ npx @gravv/mcp --toolsets=all                        # everything not blockliste
 |---|---|---|
 | `GRAVV_API_KEY` | — | Sandbox or live key; selects the environment. Omit for docs-only mode |
 | `GRAVV_ALLOW_LIVE_WRITES` | unset | `true` permits money movement on a live key |
-| `GRAVV_RATE_PER_MINUTE` | `10` | Client-side throttle |
+| `GRAVV_RATE_PER_MINUTE` | `60` | Client-side throttle |
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 
@@ -187,7 +187,7 @@ npm install
 npm run sync-specs          # pull specs from ../client-docs/openapi
 npm run generate            # specs -> src/generated/tools.ts
 npm run typecheck
-npm test                    # 43 tests, no API key needed
+npm test                    # 62 tests, no API key needed
 npm run build
 ```
 
