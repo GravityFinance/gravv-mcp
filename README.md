@@ -55,8 +55,8 @@ claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/m
 the Gravv documentation. They need **no API key**, so you can explore Gravv before you
 have credentials.
 
-**API tools** — 80 tools covering customers, KYC, accounts, transfers, cards, wallets,
-FX, collections, payment links, and webhooks.
+**API tools** — 87 tools covering customers, KYC, accounts, transfers, cards, wallets,
+FX, collections, payment links, webhooks, and approvals.
 
 Both matter. The API tools execute calls, but they can't tell you what has to happen
 first — that an account needs a KYC-verified customer, or that a new recipient must reach
@@ -77,9 +77,12 @@ Gravv moves real money, and **sandbox and live share one base URL** — only you
 differs. Nothing in a request visually signals danger, so the server signals it.
 
 **Money-moving tools take two calls.** `createTransfer`, `withdrawFromCard`,
-`createFxOrder`, `createCollection`, and `chargeSavedCard` return a preview on the first
-call and execute only when called again with `confirm: true`. The unconfirmed call never
-reaches the API.
+`createFxOrder`, `createCollection`, `chargeSavedCard`, `approveTransfer`, and
+`approveFxOrder` return a preview on the first call and execute only when called again
+with `confirm: true`. The unconfirmed call never reaches the API.
+
+Approving is included because releasing a held instruction has the same consequence as
+initiating one. Rejecting is not gated — it only prevents execution.
 
 ```
 > Send $50 from acc_1 to acc_2
@@ -138,6 +141,7 @@ npx @gravvfi/mcp --toolsets=all                        # everything
 | `payment-links` | ✓ | stablecoin payment links |
 | `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
+| `approvals` | ✓ | approve/reject transfers, recipients and FX orders |
 | `account-applications` | | account onboarding |
 
 ---
@@ -194,6 +198,10 @@ npx @gravvfi/mcp --toolsets=all                        # everything
 
 **webhooks**
 `getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
+
+**approvals** — sign off on held instructions
+`approveTransfer*` · `rejectTransfer` · `approveExternalAccount` · `rejectExternalAccount` ·
+`approveFxOrder*` · `rejectFxOrder` · `searchWebhookIngestion`
 
 **account-applications** — opt-in via `--toolsets=account-applications`
 `createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
@@ -331,8 +339,6 @@ written to disk, logged, or included in tool output.
 
 ## Notes
 
-- **Approvals happen in the dashboard.** Transfer, payee, and FX order approvals are not
-  available to API-key callers, so there are no tools for them.
 - **Documentation search is keyword-based** with payments-vocabulary synonym expansion.
   It handles most phrasings — "send money to a recipient" finds the remittance guide —
   but it is not semantic search and can miss unusual wording. Rephrase if a search comes
@@ -351,7 +357,7 @@ compiled JavaScript and runs on Node 20+, which CI verifies separately.
 npm install
 npm run generate    # regenerate tool definitions from specs/
 npm run typecheck
-npm test            # 62 tests, no API key or network required
+npm test            # 74 tests, no API key or network required
 npm run build
 ```
 
