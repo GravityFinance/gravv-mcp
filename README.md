@@ -432,42 +432,8 @@ written to disk, logged, or included in tool output.
 
 ## Notes
 
-- **Documentation search is keyword-based** with payments-vocabulary synonym expansion.
-  It handles most phrasings — "send money to a recipient" finds the remittance guide —
-  but it is not semantic search and can miss unusual wording. Rephrase if a search comes
-  back empty.
-- **stdio transport only** in this release.
-
----
-
-## Development
-
-**Development requires Node.js 22.6 or later** — the tests and build scripts are
-TypeScript executed directly via `--experimental-strip-types`. The *published* package is
-compiled JavaScript and runs on Node 20+, which CI verifies separately.
-
-```bash
-npm install
-npm run generate    # regenerate tool definitions from specs/
-npm run typecheck
-npm test            # 86 tests, no API key or network required
-npm run build
-```
-
-Tools are generated from the OpenAPI specifications vendored in `specs/`, so they stay in
-step with the published API. Everything a specification cannot express — tool names,
-which operations move money, and the call-ordering prerequisites in tool descriptions —
-is hand-maintained in `src/curation.ts`. `src/generated/tools.ts` is build output; don't
-edit it.
-
-`npm run sync-specs` refreshes `specs/` from a local checkout of the specification
-source; set `GRAVV_OPENAPI_DIR` to point at it. `npm run sync-specs -- --check` exits
-non-zero when the vendored copies are stale.
-
-Tests run against a local stub, so no API key or network access is needed.
-`test/e2e.test.ts` spawns the binary and drives it over real MCP JSON-RPC, and
-`test/protocol.test.ts` checks protocol conformance — version negotiation, `ping`,
-method-not-found handling, and that every tool name and schema is valid for any client.
+If a documentation search comes back empty, rephrase it. Search matches wording rather
+than meaning, so an unusual phrasing occasionally misses a page that does exist.
 
 ---
 
