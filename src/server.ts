@@ -8,6 +8,7 @@ import { SafetyGate, SafetyError, redact } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DocsIndex } from "./docs.ts";
+import { MANUAL_TOOLS } from "./manual-tools.ts";
 
 /**
  * Documentation tools, always present regardless of --toolsets.
@@ -79,7 +80,10 @@ export interface ServerConfig {
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
   const wanted = toolsets === "all" ? null : new Set(toolsets);
-  return TOOLS.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
+  // Approval tools have no OpenAPI specification, so they are hand-authored and merged
+  // in here rather than generated.
+  const candidates: GeneratedTool[] = [...TOOLS, ...MANUAL_TOOLS];
+  return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
 
 function instructions(
@@ -136,7 +140,7 @@ export function createServer(config: ServerConfig) {
 
   const client = hasApiKey
     ? new GravvClient({
-        apiKey: config.apiKey!,
+        apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         ratePerMinute: config.ratePerMinute,
         fetchImpl: config.fetchImpl,

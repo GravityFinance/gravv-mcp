@@ -23,6 +23,7 @@ export type Toolset =
   | "customers"
   | "accounts"
   | "account-applications"
+  | "approvals"
   | "transfers"
   | "transactions"
   | "external-accounts"
@@ -62,6 +63,7 @@ export const DEFAULT_TOOLSETS: Toolset[] = [
   "payment-links",
   "features",
   "webhooks",
+  "approvals",
 ];
 
 interface Op {
@@ -249,6 +251,10 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/fx/orders",
   "POST /v1/collections",
   "POST /v1/collections/cards/payment-intents/charge",
+  // Approving releases a held instruction for execution, so it moves money just as
+  // surely as initiating one. Rejecting does not, and is not gated.
+  "POST /v1/transfer/{id}/approve",
+  "POST /v1/fx/orders/{order_id}/approve",
 ]);
 
 /**

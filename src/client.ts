@@ -79,7 +79,7 @@ export class RateLimiter {
 }
 
 export interface ClientOptions {
-  apiKey: string;
+  apiKey?: string;
   baseUrl?: string;
   ratePerMinute?: number;
   rateBurst?: number;
@@ -107,7 +107,7 @@ export class GravvClient {
 
   constructor(opts: ClientOptions) {
     this.opts = opts;
-    this.environment = detectEnvironment(opts.apiKey);
+    this.environment = detectEnvironment(opts.apiKey ?? "");
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.limiter = new RateLimiter(opts.ratePerMinute ?? 60, opts.rateBurst ?? 15);
     this.timeoutMs = opts.timeoutMs ?? 60_000;
@@ -162,10 +162,11 @@ export class GravvClient {
     const { url, body } = this.buildRequest(tool, args);
 
     const headers: Record<string, string> = {
-      "Api-Key": this.opts.apiKey,
       Accept: "application/json",
       "User-Agent": "gravv-mcp",
     };
+
+    if (this.opts.apiKey) headers["Api-Key"] = this.opts.apiKey;
 
     // The API rejects any POST without an Idempotency-Key with a 400, so we always
     // generate one rather than relying on the caller. Exemptions are in curation.ts.
@@ -236,7 +237,7 @@ export class GravvClient {
         continue;
       }
 
-      throw new GravvApiError(String(apiMessage), res.status, parsed, hintFor(res.status, tool));
+      throw new GravvApiError(apiMessage, res.status, parsed, hintFor(res.status, tool, apiMessage));
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
@@ -276,13 +277,39 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
   return fallback;
 }
 
-/** Turn the statuses merchants actually hit into something actionable. */
-function hintFor(status: number, tool: GeneratedTool): string | undefined {
+/**
+ * Turn the statuses merchants actually hit into something actionable.
+ *
+ * `message` is consulted so the hint does not contradict the API. A 400 saying
+ * "missing field `client_reference`" needs no speculation about idempotency headers —
+ * guessing there sends the model chasing the wrong thing.
+ */
+function hintFor(status: number, tool: GeneratedTool, message = ""): string | undefined {
+  const mentionsIdempotency = /idempotenc/i.test(message);
+
+  // Not every 400 is a malformed request. Several are business preconditions — the
+  // customer is unverified, the account is empty, the recipient has not gone active.
+  // Those are not fixed by editing the payload, so saying "check the schema" sends the
+  // model editing fields that were already correct.
+  const isStatePrecondition =
+    /kyc|kyb|not verified|unverified|insufficient|balance|inactive|not active|pending|frozen|not allowed|limit/i.test(
+      message,
+    );
+
   switch (status) {
     case 400:
-      return tool.needsIdempotency
-        ? "A 400 on a POST often means a missing or malformed Idempotency-Key. The client generates one automatically, so check the request body against the tool schema."
-        : "Check the request against the tool's input schema — a required field is likely missing.";
+      if (isStatePrecondition) {
+        return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomerKycStatus), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
+      }
+      // The API names the offending field in most 400s. When it has, repeating that is
+      // more useful than a generic theory about what else might be wrong.
+      if (/missing field|required|invalid|not valid|must be|expected/i.test(message)) {
+        return "The API rejected the request body. Fix the field it names, checking the tool's input schema for the expected shape — searchGravvDocs has worked examples if the shape is unclear.";
+      }
+      if (mentionsIdempotency) {
+        return "The Idempotency-Key was missing or malformed. The client generates one automatically, so this suggests the request did not go through the normal path.";
+      }
+      return "Check the request against the tool's input schema — a required field is likely missing or malformed.";
     case 401:
       return "The API key was rejected. Confirm GRAVV_API_KEY is set to a current key for the environment you intend.";
     case 403:

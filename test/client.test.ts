@@ -245,3 +245,36 @@ describe("rate limiter", () => {
     assert.ok(Date.now() - started >= 900, `expected throttling, waited ${Date.now() - started}ms`);
   });
 });
+
+describe("hints distinguish malformed requests from state preconditions", () => {
+  // Measured against sandbox: a crypto transfer to an unverified customer returns
+  // 400 "Customer has no KYC". Telling the model to check its schema there sends it
+  // editing fields that were already correct.
+  const hintFor = async (status: number, error: string) => {
+    const { fetchImpl } = stub([{ status, body: { data: null, error } }]);
+    try {
+      await client(fetchImpl).call(createCustomer, { body: {} });
+      return "";
+    } catch (e) {
+      return (e as GravvApiError).hint ?? "";
+    }
+  };
+
+  test("a business precondition is named as such", async () => {
+    for (const msg of ["Customer has no KYC", "insufficient balance", "account is inactive"]) {
+      const h = await hintFor(400, msg);
+      assert.match(h, /state precondition/i, `wrong hint for "${msg}"`);
+      assert.doesNotMatch(h, /Idempotency-Key/, `must not blame idempotency for "${msg}"`);
+    }
+  });
+
+  test("a malformed body points at the named field", async () => {
+    const h = await hintFor(400, "missing field `client_reference` at line 1 column 290");
+    assert.match(h, /rejected the request body/i);
+    assert.doesNotMatch(h, /state precondition/i);
+  });
+
+  test("an idempotency 400 still blames idempotency", async () => {
+    assert.match(await hintFor(400, "missing idempotency key in request headers"), /Idempotency-Key/);
+  });
+});
