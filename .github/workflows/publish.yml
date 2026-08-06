@@ -100,7 +100,18 @@ jobs:
           npm pack --dry-run --json > /tmp/pack.json
           cat > /tmp/check-tarball.cjs <<'EOF'
           const { readFileSync } = require("node:fs");
-          const [p] = JSON.parse(readFileSync("/tmp/pack.json", "utf8"));
+
+          // `npm pack --json` returns an array of packed entries on some npm versions
+          // and a bare object on others. The workflow installs npm@latest, so the shape
+          // is not pinned — accept both rather than depending on one.
+          const raw = JSON.parse(readFileSync("/tmp/pack.json", "utf8"));
+          const p = Array.isArray(raw) ? raw[0] : raw;
+
+          if (!p || !Array.isArray(p.files)) {
+            console.error("::error::unexpected `npm pack --json` shape: " + JSON.stringify(raw).slice(0, 400));
+            process.exit(1);
+          }
+
           const names = p.files.map((f) => f.path);
 
           const missing = ["dist/bin/gravv-mcp.js", "dist/server.js", "README.md"]
