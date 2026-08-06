@@ -27,13 +27,69 @@ It should call `listAccounts` and come back with real data. If you have no accou
 try *"Search the Gravv docs for how to open an account"* — the documentation tools work
 even before you have any.
 
-### Claude Code
+Any MCP-compatible client works — the server speaks stdio and negotiates protocol
+version `2025-06-18`, falling back to `2024-11-05` for older clients.
+
+<details open>
+<summary><b>Claude Code</b></summary>
 
 ```bash
 claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/mcp
 ```
+</details>
 
-### Claude Desktop / Cursor / VS Code
+<details>
+<summary><b>GitHub Copilot / VS Code</b></summary>
+
+VS Code uses `servers`, not `mcpServers`, and requires an explicit `type`. Put this in
+`.vscode/mcp.json` to share with your team, or run **MCP: Open User Configuration** for a
+personal one:
+
+```json
+{
+  "servers": {
+    "gravv": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@gravvfi/mcp"],
+      "env": { "GRAVV_API_KEY": "grvSec_sandbox_..." }
+    }
+  }
+}
+```
+
+Or from the CLI:
+
+```bash
+code --add-mcp '{"name":"gravv","command":"npx","args":["-y","@gravvfi/mcp"],"env":{"GRAVV_API_KEY":"grvSec_sandbox_..."}}'
+```
+</details>
+
+<details>
+<summary><b>OpenAI Codex CLI</b></summary>
+
+```bash
+codex mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/mcp
+```
+
+Or in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.gravv]
+command = "npx"
+args = ["-y", "@gravvfi/mcp"]
+
+[mcp_servers.gravv.env]
+GRAVV_API_KEY = "grvSec_sandbox_..."
+```
+
+Verify with `codex mcp list`.
+</details>
+
+<details>
+<summary><b>Claude Desktop, Cursor, Windsurf, Cline, Zed</b></summary>
+
+These use the `mcpServers` shape:
 
 ```json
 {
@@ -46,6 +102,43 @@ claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/m
   }
 }
 ```
+
+| Client | Config file |
+|---|---|
+| Claude Desktop | `claude_desktop_config.json` (Settings → Developer → Edit Config) |
+| Cursor | `~/.cursor/mcp.json`, or `.cursor/mcp.json` per project |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Cline | the MCP Servers panel, or `cline_mcp_settings.json` |
+| Zed | `settings.json` under `context_servers` |
+</details>
+
+<details>
+<summary><b>Anything else</b></summary>
+
+The server is a plain stdio MCP process. Point any client at:
+
+```
+command: npx
+args:    ["-y", "@gravvfi/mcp"]
+env:     GRAVV_API_KEY=grvSec_sandbox_...
+```
+
+To try it without a client:
+
+```bash
+GRAVV_API_KEY=grvSec_sandbox_... npx -y @gravvfi/mcp
+```
+
+then paste a JSON-RPC frame on stdin:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual","version":"1"}}}
+```
+</details>
+
+> **Keep the key out of source control.** Several clients support environment-variable
+> substitution or secret prompts — prefer those over pasting a live key into a file you
+> might commit. A sandbox key is the right thing to start with either way.
 
 ---
 
@@ -357,7 +450,7 @@ compiled JavaScript and runs on Node 20+, which CI verifies separately.
 npm install
 npm run generate    # regenerate tool definitions from specs/
 npm run typecheck
-npm test            # 74 tests, no API key or network required
+npm test            # 86 tests, no API key or network required
 npm run build
 ```
 
@@ -372,7 +465,9 @@ source; set `GRAVV_OPENAPI_DIR` to point at it. `npm run sync-specs -- --check` 
 non-zero when the vendored copies are stale.
 
 Tests run against a local stub, so no API key or network access is needed.
-`test/e2e.test.ts` spawns the built binary and drives it over real MCP JSON-RPC.
+`test/e2e.test.ts` spawns the binary and drives it over real MCP JSON-RPC, and
+`test/protocol.test.ts` checks protocol conformance — version negotiation, `ping`,
+method-not-found handling, and that every tool name and schema is valid for any client.
 
 ---
 

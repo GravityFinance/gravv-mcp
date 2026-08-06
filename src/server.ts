@@ -9,6 +9,32 @@ import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+/**
+ * Read the version from package.json rather than hardcoding it. A literal here had
+ * already drifted — the server reported 0.1.0 while the package was 0.2.0, so clients
+ * were told the wrong version.
+ */
+function packageVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    for (const rel of ["../package.json", "../../package.json"]) {
+      try {
+        return JSON.parse(readFileSync(join(here, rel), "utf8")).version;
+      } catch {
+        /* try the next candidate */
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  return "0.0.0";
+}
+
+const VERSION = packageVersion();
 
 /**
  * Documentation tools, always present regardless of --toolsets.
@@ -154,7 +180,7 @@ export function createServer(config: ServerConfig) {
   const activeByName = new Map(active.map((t) => [t.name, t]));
 
   const server = new Server(
-    { name: "gravv", version: "0.1.0" },
+    { name: "gravv", version: VERSION },
     {
       capabilities: { tools: {} },
       instructions: instructions(environment, gate, active, hasApiKey),

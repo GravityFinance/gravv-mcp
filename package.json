@@ -1,6 +1,6 @@
 {
   "name": "@gravvfi/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for the Gravv payments API — onboard customers, open accounts, move money, issue cards.",
   "license": "MIT",
   "type": "module",
