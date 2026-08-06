@@ -1,0 +1,110 @@
+name: Publish to npm
+
+# Publishes when a GitHub Release is published. Creating the release is the deliberate
+# human step; everything after it is automatic.
+#
+# Authentication is npm Trusted Publishing over OIDC — there is no NPM_TOKEN secret to
+# create, rotate, or leak. npm verifies the request came from this repository running
+# this specific workflow file, so the token is short-lived and scoped to this build.
+#
+# One-time setup on npmjs.com, under the package's Settings -> Trusted Publisher:
+#   Organization or user: GravityFinance
+#   Repository:           gravv-mcp
+#   Workflow filename:    publish.yml
+#   Allowed actions:      npm publish
+#
+# That page only exists once the package does, so the very first publish is manual.
+# See the release checklist in the repository README / RELEASING.md.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every check and pack the tarball, but do not publish"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Trusted publishing needs Node >= 22.14.0.
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Ensure npm supports trusted publishing
+        # OIDC support landed in npm 11.5.1. The npm bundled with a given Node release
+        # is often older, so pin it forward explicitly rather than hoping.
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check version matches the release tag
+        if: github.event_name == 'release'
+        # Publishing a version that disagrees with the tag makes the release page lie
+        # about what shipped, and npm versions are immutable once published.
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag is v$TAG but package.json says $PKG. Bump the version, or retag."
+            exit 1
+          fi
+          echo "version $PKG matches tag $GITHUB_REF_NAME"
+
+      - name: Verify the tarball contains what we expect
+        # Catches an over-broad or over-narrow `files` field before it reaches the
+        # registry, where the version can never be reused.
+        run: |
+          npm pack --dry-run
+          npm pack --dry-run --json > /tmp/pack.json
+          node -e '
+            const [p] = require("/tmp/pack.json");
+            const names = p.files.map(f => f.path);
+            const missing = ["dist/bin/gravv-mcp.js", "dist/server.js", "README.md"]
+              .filter(f => !names.includes(f));
+            if (missing.length) {
+              console.error("::error::tarball is missing: " + missing.join(", "));
+              process.exit(1);
+            }
+            const leaked = names.filter(f => /^(src|test|specs|\.env)/.test(f));
+            if (leaked.length) {
+              console.error("::error::tarball contains unexpected files: " + leaked.join(", "));
+              process.exit(1);
+            }
+            console.log(`tarball ok: ${names.length} files, ${(p.size/1024).toFixed(0)} kB`);
+          '
+
+      - name: Publish
+        if: github.event_name == 'release' || inputs.dry_run == false
+        # No NODE_AUTH_TOKEN: the npm CLI detects the OIDC environment and uses it.
+        # Provenance is attached automatically for a public repo publishing a public
+        # package, so consumers can verify this build came from this commit.
+        run: npm publish
+
+      - name: Dry run only
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: echo "Dry run complete — all checks passed, nothing published."

@@ -366,6 +366,13 @@ Tests run against a local stub, so no API key or network access is needed.
 
 ---
 
+## Releasing
+
+Publishing is automated via GitHub Releases and npm trusted publishing — see
+[RELEASING.md](RELEASING.md).
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
