@@ -82,7 +82,7 @@ jobs:
         # about what shipped, and npm versions are immutable once published.
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node --input-type=commonjs -p "require('./package.json').version")"
+          PKG="$(grep -m1 '"version"' package.json | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
           if [ "$TAG" != "$PKG" ]; then
             echo "::error::Tag is v$TAG but package.json says $PKG. Bump the version, or retag."
             exit 1
@@ -92,28 +92,33 @@ jobs:
       - name: Verify the tarball contains what we expect
         # Catches an over-broad or over-narrow `files` field before it reaches the
         # registry, where the version can never be reused.
+        #
+        # Written to a .cjs file rather than passed to `node -e`: package.json declares
+        # "type": "module", and how a bare eval resolves varies by Node version. The
+        # .cjs extension is unambiguous everywhere.
         run: |
-          npm pack --dry-run
           npm pack --dry-run --json > /tmp/pack.json
-          # --input-type=commonjs: package.json declares "type": "module", so a bare
-          # `node -e` is evaluated as ESM (and on some Node versions as TypeScript),
-          # where `require` is unavailable.
-          node --input-type=commonjs -e '
-            const [p] = require("/tmp/pack.json");
-            const names = p.files.map(f => f.path);
-            const missing = ["dist/bin/gravv-mcp.js", "dist/server.js", "README.md"]
-              .filter(f => !names.includes(f));
-            if (missing.length) {
-              console.error("::error::tarball is missing: " + missing.join(", "));
-              process.exit(1);
-            }
-            const leaked = names.filter(f => /^(src|test|specs|\.env)/.test(f));
-            if (leaked.length) {
-              console.error("::error::tarball contains unexpected files: " + leaked.join(", "));
-              process.exit(1);
-            }
-            console.log(`tarball ok: ${names.length} files, ${(p.size/1024).toFixed(0)} kB`);
-          '
+          cat > /tmp/check-tarball.cjs <<'EOF'
+          const { readFileSync } = require("node:fs");
+          const [p] = JSON.parse(readFileSync("/tmp/pack.json", "utf8"));
+          const names = p.files.map((f) => f.path);
+
+          const missing = ["dist/bin/gravv-mcp.js", "dist/server.js", "README.md"]
+            .filter((f) => !names.includes(f));
+          if (missing.length) {
+            console.error("::error::tarball is missing: " + missing.join(", "));
+            process.exit(1);
+          }
+
+          const leaked = names.filter((f) => /^(src|test|specs|\.env|\.npmrc)/.test(f));
+          if (leaked.length) {
+            console.error("::error::tarball contains unexpected files: " + leaked.join(", "));
+            process.exit(1);
+          }
+
+          console.log(`tarball ok: ${p.name}@${p.version}, ${names.length} files, ${(p.size / 1024).toFixed(0)} kB`);
+          EOF
+          node /tmp/check-tarball.cjs
 
       - name: Report which auth path will be used
         if: github.event_name == 'release' || inputs.dry_run == false

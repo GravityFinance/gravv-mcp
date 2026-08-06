@@ -71,6 +71,8 @@ jobs:
       - name: Built server answers an MCP handshake
         # Exercises the real protocol path on the minimum runtime: initialize, then
         # tools/list, asserting the documentation tools are present without a key.
+        # Uses a .cjs file because package.json declares "type": "module" and inline
+        # eval semantics vary by Node version.
         run: |
           printf '%s\n%s\n%s\n' \
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
@@ -78,20 +80,25 @@ jobs:
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
             | node dist/bin/gravv-mcp.js > /tmp/out.jsonl 2>/tmp/err.log || true
           cat /tmp/err.log
-          node --input-type=commonjs -e '
-            const lines = require("fs").readFileSync("/tmp/out.jsonl","utf8")
-              .split("\n").filter(Boolean).map(l => JSON.parse(l));
-            const list = lines.find(m => m.id === 2);
-            if (!list) { console.error("::error::no tools/list response"); process.exit(1); }
-            const names = list.result.tools.map(t => t.name);
-            for (const required of ["searchGravvDocs","getGravvDocPage"]) {
-              if (!names.includes(required)) {
-                console.error(`::error::${required} missing from tools/list`);
-                process.exit(1);
-              }
+          cat > /tmp/check-handshake.cjs <<'EOF'
+          const { readFileSync } = require("node:fs");
+          const lines = readFileSync("/tmp/out.jsonl", "utf8")
+            .split("\n").filter(Boolean).map((l) => JSON.parse(l));
+          const list = lines.find((m) => m.id === 2);
+          if (!list) {
+            console.error("::error::no tools/list response");
+            process.exit(1);
+          }
+          const names = list.result.tools.map((t) => t.name);
+          for (const required of ["searchGravvDocs", "getGravvDocPage"]) {
+            if (!names.includes(required)) {
+              console.error(`::error::${required} missing from tools/list`);
+              process.exit(1);
             }
-            console.log(`ok: ${names.length} tools advertised on node ${process.version}`);
-          '
+          }
+          console.log(`ok: ${names.length} tools advertised on node ${process.version}`);
+          EOF
+          node /tmp/check-handshake.cjs
 
   generated-in-sync:
     name: generated tools match specs
