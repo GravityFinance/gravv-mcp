@@ -1,4 +1,4 @@
-# @gravv/mcp
+# @gravvfi/mcp
 
 MCP server for the [Gravv](https://gravv-docs.syntext.dev) payments API. Connects an AI
 assistant to Gravv so it can onboard customers, run KYC, open accounts, add recipients,
@@ -13,7 +13,7 @@ Works with Claude, Cursor, VS Code, and any [MCP](https://modelcontextprotocol.i
 **Requires Node.js 20 or later.** Check with `node --version`.
 
 ```bash
-GRAVV_API_KEY=grvSec_sandbox_... npx @gravv/mcp
+GRAVV_API_KEY=grvSec_sandbox_... npx @gravvfi/mcp
 ```
 
 Get an API key from your [Gravv dashboard](https://gravv-docs.syntext.dev/getting-started/authentication).
@@ -30,7 +30,7 @@ even before you have any.
 ### Claude Code
 
 ```bash
-claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravv/mcp
+claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/mcp
 ```
 
 ### Claude Desktop / Cursor / VS Code
@@ -40,7 +40,7 @@ claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravv/mcp
   "mcpServers": {
     "gravv": {
       "command": "npx",
-      "args": ["-y", "@gravv/mcp"],
+      "args": ["-y", "@gravvfi/mcp"],
       "env": { "GRAVV_API_KEY": "grvSec_sandbox_..." }
     }
   }
@@ -65,8 +65,8 @@ from the same connector. Ask the assistant how to do something and it can look i
 write your integration, then run it against sandbox to prove it works.
 
 ```bash
-npx @gravv/mcp     # with GRAVV_API_KEY: docs + API tools
-npx @gravv/mcp     # without it: docs tools only, still useful
+npx @gravvfi/mcp     # with GRAVV_API_KEY: docs + API tools
+npx @gravvfi/mcp     # without it: docs tools only, still useful
 ```
 
 ---
@@ -118,9 +118,9 @@ Everything except `account-applications` loads by default. Account onboarding ca
 large schemas and is an infrequent, deliberate flow, so it is opt-in.
 
 ```bash
-npx @gravv/mcp                                       # default
-npx @gravv/mcp --toolsets=customers,accounts,cards   # specific groups
-npx @gravv/mcp --toolsets=all                        # everything
+npx @gravvfi/mcp                                       # default
+npx @gravvfi/mcp --toolsets=customers,accounts,cards   # specific groups
+npx @gravvfi/mcp --toolsets=all                        # everything
 ```
 
 | Toolset | Default | Covers |
@@ -259,7 +259,7 @@ them up.
   "mcpServers": {
     "gravv": {
       "command": "npx",
-      "args": ["-y", "@gravv/mcp"],
+      "args": ["-y", "@gravvfi/mcp"],
       "env": {
         "GRAVV_API_KEY": "grvSec_live_...",
         "GRAVV_ALLOW_LIVE_WRITES": "true"

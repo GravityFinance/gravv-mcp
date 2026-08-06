@@ -14,17 +14,17 @@ repository running `publish.yml`, and issues a short-lived token scoped to that 
 npm's Trusted Publisher settings live on a package's page, which only exists once the
 package does. So the first release is manual and every release after it is automated.
 
-### 1. Claim the scope
+### 1. Confirm scope access
 
-The `@gravv` scope must exist and you must be able to publish to it.
+The package publishes under the `@gravvfi` scope, backed by the `gravvfi` organisation on
+npmjs.com.
 
 ```bash
 npm login
-npm org ls gravv          # confirms the org exists and you are a member
+npm org ls gravvfi        # confirms the org exists and you are a member
 ```
 
-If it does not exist, create the organisation named `gravv` on npmjs.com. Scoped
-packages publish as private by default — `publishConfig.access` is already set to
+Scoped packages publish as private by default — `publishConfig.access` is already set to
 `public` in `package.json`, so this does not need remembering at publish time.
 
 ### 2. Publish once, by hand
@@ -115,7 +115,7 @@ Do not delete and re-publish a version. npm versions are immutable, and anyone w
 already installed it keeps the broken copy.
 
 ```bash
-npm deprecate @gravv/mcp@X.Y.Z "Broken: <reason>. Use X.Y.Z+1."
+npm deprecate @gravvfi/mcp@X.Y.Z "Broken: <reason>. Use X.Y.Z+1."
 ```
 
 Then fix forward with a new patch version. `npm unpublish` is only available within 72
