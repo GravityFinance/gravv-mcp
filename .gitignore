@@ -6,3 +6,10 @@ dist/
 .env
 .env.*
 !.env.example
+
+# An .npmrc here would hold a registry auth token. Publishing uses OIDC in CI, so
+# this should only ever exist transiently during a local publish.
+.npmrc
+
+# npm pack output
+*.tgz
