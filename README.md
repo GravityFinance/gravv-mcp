@@ -471,13 +471,6 @@ method-not-found handling, and that every tool name and schema is valid for any 
 
 ---
 
-## Releasing
-
-Publishing is automated via GitHub Releases and npm trusted publishing — see
-[RELEASING.md](RELEASING.md).
-
----
-
 ## License
 
 MIT — see [LICENSE](LICENSE).

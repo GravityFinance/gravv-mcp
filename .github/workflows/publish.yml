@@ -27,6 +27,8 @@ name: Publish to npm
 #   Then delete the NPM_TOKEN secret and revoke the token — it is a long-lived
 #   credential that can publish to this package and stops being needed.
 #
+# The full release process is maintained internally, not in this repository.
+#
 # NOTE: the token must bypass 2FA. A classic token of type "Automation", or a granular
 # token created with the bypass setting enabled. A classic "Publish" token will 403.
 
