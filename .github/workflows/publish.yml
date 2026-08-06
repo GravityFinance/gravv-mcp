@@ -82,7 +82,7 @@ jobs:
         # about what shipped, and npm versions are immutable once published.
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./package.json').version")"
+          PKG="$(node --input-type=commonjs -p "require('./package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
             echo "::error::Tag is v$TAG but package.json says $PKG. Bump the version, or retag."
             exit 1
@@ -95,7 +95,10 @@ jobs:
         run: |
           npm pack --dry-run
           npm pack --dry-run --json > /tmp/pack.json
-          node -e '
+          # --input-type=commonjs: package.json declares "type": "module", so a bare
+          # `node -e` is evaluated as ESM (and on some Node versions as TypeScript),
+          # where `require` is unavailable.
+          node --input-type=commonjs -e '
             const [p] = require("/tmp/pack.json");
             const names = p.files.map(f => f.path);
             const missing = ["dist/bin/gravv-mcp.js", "dist/server.js", "README.md"]

@@ -78,7 +78,7 @@ jobs:
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
             | node dist/bin/gravv-mcp.js > /tmp/out.jsonl 2>/tmp/err.log || true
           cat /tmp/err.log
-          node -e '
+          node --input-type=commonjs -e '
             const lines = require("fs").readFileSync("/tmp/out.jsonl","utf8")
               .split("\n").filter(Boolean).map(l => JSON.parse(l));
             const list = lines.find(m => m.id === 2);
