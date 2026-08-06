@@ -16,9 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 20 is the floor declared in package.json engines; 22 is the version the
-        # publish job runs on, so both paths that users and CI take are covered.
-        node: [20, 22]
+        # The test suite and build scripts are TypeScript run directly via
+        # --experimental-strip-types, which requires Node 22.6+. This is a development
+        # requirement only — see the `published-artifact` job for what users need.
+        node: [22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +40,58 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  published-artifact:
+    # What ships is compiled JavaScript, so it can support an older runtime than the
+    # toolchain does. This proves the floor declared in package.json engines is real
+    # rather than assumed — CI previously claimed to test Node 20 but was actually
+    # running TypeScript that Node 20 cannot parse.
+    name: dist runs on the minimum supported node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Switch to the minimum supported Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Built binary starts and reports its interface
+        run: |
+          node --version
+          node dist/bin/gravv-mcp.js --help
+
+      - name: Built server answers an MCP handshake
+        # Exercises the real protocol path on the minimum runtime: initialize, then
+        # tools/list, asserting the documentation tools are present without a key.
+        run: |
+          printf '%s\n%s\n%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | node dist/bin/gravv-mcp.js > /tmp/out.jsonl 2>/tmp/err.log || true
+          cat /tmp/err.log
+          node -e '
+            const lines = require("fs").readFileSync("/tmp/out.jsonl","utf8")
+              .split("\n").filter(Boolean).map(l => JSON.parse(l));
+            const list = lines.find(m => m.id === 2);
+            if (!list) { console.error("::error::no tools/list response"); process.exit(1); }
+            const names = list.result.tools.map(t => t.name);
+            for (const required of ["searchGravvDocs","getGravvDocPage"]) {
+              if (!names.includes(required)) {
+                console.error(`::error::${required} missing from tools/list`);
+                process.exit(1);
+              }
+            }
+            console.log(`ok: ${names.length} tools advertised on node ${process.version}`);
+          '
 
   generated-in-sync:
     name: generated tools match specs

@@ -343,11 +343,15 @@ written to disk, logged, or included in tool output.
 
 ## Development
 
+**Development requires Node.js 22.6 or later** — the tests and build scripts are
+TypeScript executed directly via `--experimental-strip-types`. The *published* package is
+compiled JavaScript and runs on Node 20+, which CI verifies separately.
+
 ```bash
 npm install
 npm run generate    # regenerate tool definitions from specs/
 npm run typecheck
-npm test            # 62 tests, no API key required
+npm test            # 62 tests, no API key or network required
 npm run build
 ```
 
