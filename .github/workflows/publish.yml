@@ -101,13 +101,19 @@ jobs:
           cat > /tmp/check-tarball.cjs <<'EOF'
           const { readFileSync } = require("node:fs");
 
-          // `npm pack --json` returns an array of packed entries on some npm versions
-          // and a bare object on others. The workflow installs npm@latest, so the shape
-          // is not pinned — accept both rather than depending on one.
+          // `npm pack --json` has shipped three shapes across npm versions, and the
+          // workflow installs npm@latest so the shape is not pinned:
+          //   [ { name, files } ]              array of entries
+          //   { name, files }                  bare entry
+          //   { "@scope/pkg": { name, files } } keyed by package name  <- npm@latest
+          // Find the first value that actually looks like a packed entry.
           const raw = JSON.parse(readFileSync("/tmp/pack.json", "utf8"));
-          const p = Array.isArray(raw) ? raw[0] : raw;
+          const looksLikeEntry = (x) => x && typeof x === "object" && Array.isArray(x.files);
+          const p = looksLikeEntry(raw)
+            ? raw
+            : (Array.isArray(raw) ? raw : Object.values(raw ?? {})).find(looksLikeEntry);
 
-          if (!p || !Array.isArray(p.files)) {
+          if (!p) {
             console.error("::error::unexpected `npm pack --json` shape: " + JSON.stringify(raw).slice(0, 400));
             process.exit(1);
           }
