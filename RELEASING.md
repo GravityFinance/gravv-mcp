@@ -27,18 +27,28 @@ npm org ls gravvfi        # confirms the org exists and you are a member
 Scoped packages publish as private by default — `publishConfig.access` is already set to
 `public` in `package.json`, so this does not need remembering at publish time.
 
-### 2. Publish once, by hand
+### 2. First publish
+
+The Trusted Publisher page only exists once the package does, so the first publish uses a
+token. Doing it from CI avoids fighting 2FA prompts locally.
+
+**From CI (recommended).** Add a repository secret `NPM_TOKEN` holding a classic token of
+type **Automation**, or a granular token created with the 2FA bypass setting enabled. A
+classic **Publish** token will fail with a 403 — the type is fixed at creation.
+
+Then: Actions → **Publish to npm** → **Run workflow** → untick *dry run*.
+
+**Or locally**, if you prefer:
 
 ```bash
-npm ci
-npm test
-npm run build
-npm publish --dry-run     # inspect the file list before it is permanent
-npm publish
+npm ci && npm test && npm run build
+npm publish --dry-run                                   # inspect the file list first
+npm publish --//registry.npmjs.org/:_authToken=<token>  # CLI override beats ~/.npmrc
 ```
 
-Check the dry run output. Only `dist/` and `README.md` should appear — `src/`, `test/`,
-and `specs/` must not. A published version can never be reused, only deprecated.
+Either way, check the dry run output. Only `dist/`, `LICENSE`, and `README.md` should
+appear — `src/`, `test/`, and `specs/` must not. A published version can never be reused,
+only deprecated.
 
 ### 3. Wire trusted publishing
 
@@ -53,6 +63,9 @@ Actions**, and enter:
 | Allowed actions | `npm publish` |
 
 Leave **Environment name** empty unless you add a GitHub deployment environment.
+
+Then **delete the `NPM_TOKEN` secret and revoke the token.** Once OIDC is configured it is
+an unnecessary long-lived credential that can publish to this package.
 
 ### 4. Confirm it works
 

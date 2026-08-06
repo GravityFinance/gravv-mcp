@@ -3,18 +3,32 @@ name: Publish to npm
 # Publishes when a GitHub Release is published. Creating the release is the deliberate
 # human step; everything after it is automatic.
 #
-# Authentication is npm Trusted Publishing over OIDC — there is no NPM_TOKEN secret to
-# create, rotate, or leak. npm verifies the request came from this repository running
-# this specific workflow file, so the token is short-lived and scoped to this build.
+# Authentication supports two paths, and the npm CLI picks whichever is available:
 #
-# One-time setup on npmjs.com, under the package's Settings -> Trusted Publisher:
-#   Organization or user: GravityFinance
-#   Repository:           gravv-mcp
-#   Workflow filename:    publish.yml
-#   Allowed actions:      npm publish
+#   1. Trusted Publishing over OIDC — preferred. Nothing to store; npm verifies the
+#      request came from this repository running this workflow file and issues a
+#      short-lived token. Not subject to the account's 2FA requirement, because there is
+#      no interactive session to challenge.
 #
-# That page only exists once the package does, so the very first publish is manual.
-# See the release checklist in the repository README / RELEASING.md.
+#   2. NODE_AUTH_TOKEN from the NPM_TOKEN secret — the bootstrap path. Trusted Publisher
+#      settings live on a package's page, which does not exist until the package is
+#      published once. This lets that first publish happen here rather than on a laptop
+#      wrestling with 2FA prompts.
+#
+# The npm CLI detects an OIDC environment and uses it before falling back to the token,
+# so having both configured is safe.
+#
+# After the first successful publish:
+#   npmjs.com -> the package -> Settings -> Trusted Publisher -> GitHub Actions
+#     Organization or user: GravityFinance
+#     Repository:           gravv-mcp
+#     Workflow filename:    publish.yml
+#     Allowed actions:      npm publish
+#   Then delete the NPM_TOKEN secret and revoke the token — it is a long-lived
+#   credential that can publish to this package and stops being needed.
+#
+# NOTE: the token must bypass 2FA. A classic token of type "Automation", or a granular
+# token created with the bypass setting enabled. A classic "Publish" token will 403.
 
 on:
   release:
@@ -98,12 +112,29 @@ jobs:
             console.log(`tarball ok: ${names.length} files, ${(p.size/1024).toFixed(0)} kB`);
           '
 
+      - name: Report which auth path will be used
+        if: github.event_name == 'release' || inputs.dry_run == false
+        run: |
+          if [ -n "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN secret is present — available as a fallback."
+          else
+            echo "No NPM_TOKEN secret. Publishing requires Trusted Publishing to be configured."
+          fi
+          echo "The npm CLI prefers OIDC when this repository is a configured trusted publisher."
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish
         if: github.event_name == 'release' || inputs.dry_run == false
-        # No NODE_AUTH_TOKEN: the npm CLI detects the OIDC environment and uses it.
-        # Provenance is attached automatically for a public repo publishing a public
-        # package, so consumers can verify this build came from this commit.
+        # NODE_AUTH_TOKEN is consumed by the .npmrc that setup-node wrote. The CLI uses
+        # OIDC instead when this repository is a configured trusted publisher, so this
+        # is a fallback rather than the primary path.
+        #
+        # Provenance is attached automatically when publishing a public package from a
+        # public repository, letting consumers verify the artifact was built here.
         run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Dry run only
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
