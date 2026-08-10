@@ -2,9 +2,9 @@
 /**
  * stdio entry point.
  *
- *   GRAVV_API_KEY=grvSec_sandbox_... npx @gravvfi/mcp
- *   npx @gravvfi/mcp --toolsets=customers,accounts,transfers
- *   npx @gravvfi/mcp --read-only
+ *   GRAVV_API_KEY=grvSec_sandbox_... npx @gravv-infra/mcp
+ *   npx @gravv-infra/mcp --toolsets=customers,accounts,transfers
+ *   npx @gravv-infra/mcp --read-only
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";

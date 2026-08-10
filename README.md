@@ -1,4 +1,4 @@
-# @gravvfi/mcp
+# @gravv-infra/mcp
 
 MCP server for the [Gravv](https://gravv-docs.syntext.dev) payments API. Connects an AI
 assistant to Gravv so it can onboard customers, run KYC, open accounts, add recipients,
@@ -13,7 +13,7 @@ Works with Claude, Cursor, VS Code, and any [MCP](https://modelcontextprotocol.i
 **Requires Node.js 20 or later.** Check with `node --version`.
 
 ```bash
-GRAVV_API_KEY=grvSec_sandbox_... npx @gravvfi/mcp
+GRAVV_API_KEY=grvSec_sandbox_... npx @gravv-infra/mcp
 ```
 
 Get an API key from your [Gravv dashboard](https://gravv-docs.syntext.dev/getting-started/authentication).
@@ -34,7 +34,7 @@ version `2025-06-18`, falling back to `2024-11-05` for older clients.
 <summary><b>Claude Code</b></summary>
 
 ```bash
-claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/mcp
+claude mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravv-infra/mcp
 ```
 </details>
 
@@ -51,7 +51,7 @@ personal one:
     "gravv": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@gravvfi/mcp"],
+      "args": ["-y", "@gravv-infra/mcp"],
       "env": { "GRAVV_API_KEY": "grvSec_sandbox_..." }
     }
   }
@@ -61,7 +61,7 @@ personal one:
 Or from the CLI:
 
 ```bash
-code --add-mcp '{"name":"gravv","command":"npx","args":["-y","@gravvfi/mcp"],"env":{"GRAVV_API_KEY":"grvSec_sandbox_..."}}'
+code --add-mcp '{"name":"gravv","command":"npx","args":["-y","@gravv-infra/mcp"],"env":{"GRAVV_API_KEY":"grvSec_sandbox_..."}}'
 ```
 </details>
 
@@ -69,7 +69,7 @@ code --add-mcp '{"name":"gravv","command":"npx","args":["-y","@gravvfi/mcp"],"en
 <summary><b>OpenAI Codex CLI</b></summary>
 
 ```bash
-codex mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravvfi/mcp
+codex mcp add gravv --env GRAVV_API_KEY=grvSec_sandbox_... -- npx -y @gravv-infra/mcp
 ```
 
 Or in `~/.codex/config.toml`:
@@ -77,7 +77,7 @@ Or in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.gravv]
 command = "npx"
-args = ["-y", "@gravvfi/mcp"]
+args = ["-y", "@gravv-infra/mcp"]
 
 [mcp_servers.gravv.env]
 GRAVV_API_KEY = "grvSec_sandbox_..."
@@ -96,7 +96,7 @@ These use the `mcpServers` shape:
   "mcpServers": {
     "gravv": {
       "command": "npx",
-      "args": ["-y", "@gravvfi/mcp"],
+      "args": ["-y", "@gravv-infra/mcp"],
       "env": { "GRAVV_API_KEY": "grvSec_sandbox_..." }
     }
   }
@@ -119,14 +119,14 @@ The server is a plain stdio MCP process. Point any client at:
 
 ```
 command: npx
-args:    ["-y", "@gravvfi/mcp"]
+args:    ["-y", "@gravv-infra/mcp"]
 env:     GRAVV_API_KEY=grvSec_sandbox_...
 ```
 
 To try it without a client:
 
 ```bash
-GRAVV_API_KEY=grvSec_sandbox_... npx -y @gravvfi/mcp
+GRAVV_API_KEY=grvSec_sandbox_... npx -y @gravv-infra/mcp
 ```
 
 then paste a JSON-RPC frame on stdin:
@@ -158,8 +158,8 @@ from the same connector. Ask the assistant how to do something and it can look i
 write your integration, then run it against sandbox to prove it works.
 
 ```bash
-npx @gravvfi/mcp     # with GRAVV_API_KEY: docs + API tools
-npx @gravvfi/mcp     # without it: docs tools only, still useful
+npx @gravv-infra/mcp     # with GRAVV_API_KEY: docs + API tools
+npx @gravv-infra/mcp     # without it: docs tools only, still useful
 ```
 
 ---
@@ -214,9 +214,9 @@ Everything except `account-applications` loads by default. Account onboarding ca
 large schemas and is an infrequent, deliberate flow, so it is opt-in.
 
 ```bash
-npx @gravvfi/mcp                                       # default
-npx @gravvfi/mcp --toolsets=customers,accounts,cards   # specific groups
-npx @gravvfi/mcp --toolsets=all                        # everything
+npx @gravv-infra/mcp                                       # default
+npx @gravv-infra/mcp --toolsets=customers,accounts,cards   # specific groups
+npx @gravv-infra/mcp --toolsets=all                        # everything
 ```
 
 | Toolset | Default | Covers |
@@ -366,7 +366,7 @@ them up.
   "mcpServers": {
     "gravv": {
       "command": "npx",
-      "args": ["-y", "@gravvfi/mcp"],
+      "args": ["-y", "@gravv-infra/mcp"],
       "env": {
         "GRAVV_API_KEY": "grvSec_live_...",
         "GRAVV_ALLOW_LIVE_WRITES": "true"
