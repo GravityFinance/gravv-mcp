@@ -230,7 +230,7 @@ npx @gravvfi/mcp --toolsets=all                        # everything
 | `cards` | ✓ | issue, balance, status, withdraw, applications |
 | `wallets` | ✓ | blockchain wallet creation and lookup |
 | `fx` | ✓ | quotes, rates, OTC orders |
-| `collections` | ✓ | deposits, payment intents, saved cards |
+| `collections` | ✓ | card payment intents, saved cards, and pix / mobile money / bank transfer collections |
 | `payment-links` | ✓ | stablecoin payment links |
 | `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
@@ -279,8 +279,14 @@ npx @gravvfi/mcp --toolsets=all                        # everything
 `listFxOrders` · `cancelFxOrder` · `listFxPendingApprovals`
 
 **collections** — taking money in
-`createCollection*` · `getCollection` · `createCardPaymentIntent` · `chargeSavedCard*` ·
-`listSavedCards` · `getSavedCard` · `deleteSavedCard`
+
+Card payments go through `createCardPaymentIntent`. It returns the same hosted payment
+link as a collection, plus the intent id and the card token that recurring and
+merchant-initiated charges need. `createCollection` covers the rails a payment intent
+cannot express — pix, mobile money, and bank transfer.
+
+`createCardPaymentIntent` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
+`deleteSavedCard` · `createCollection*` · `getCollection`
 
 **payment-links**
 `createPaymentLink` · `getPaymentLink` · `listPaymentLinks` · `updatePaymentLink` ·

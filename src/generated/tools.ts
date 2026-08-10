@@ -1746,7 +1746,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections",
-    "description": "Initiate a collection — Initiates a collection request using a specified collection method (card, bank transfer, and mobile money). If the collection method is card, a payment link will be generated for the customer to complete the payment. For mobile money and bank transfer methods, payment instructions will be provided.\n\nMOVES MONEY: initiates a collection from a payer. Requires confirm: true.",
+    "description": "Initiate a collection — Initiates a collection request using a specified collection method (card, bank transfer, and mobile money). If the collection method is card, a payment link will be generated for the customer to complete the payment. For mobile money and bank transfer methods, payment instructions will be provided.\n\nMOVES MONEY: initiates a collection from a payer. Requires confirm: true.\n\nNOT FOR CARD PAYMENTS. Card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token this endpoint cannot provide.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1815,18 +1815,12 @@ export const TOOLS: GeneratedTool[] = [
                   "items": {
                     "type": "string",
                     "enum": [
-                      "card",
-                      "apple_pay",
-                      "google_pay",
                       "pix",
                       "mobile_money",
                       "bank_transfer"
                     ]
                   },
                   "example": [
-                    "card",
-                    "apple_pay",
-                    "google_pay",
                     "pix"
                   ]
                 }

@@ -4,7 +4,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { GravvClient, GravvApiError, detectEnvironment, type Environment } from "./client.ts";
-import { SafetyGate, SafetyError, redact } from "./safety.ts";
+import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DocsIndex } from "./docs.ts";
@@ -280,6 +280,12 @@ export function createServer(config: ServerConfig) {
 
     try {
       const preview = client!.buildRequest(tool, args);
+
+      // Redirect a card method smuggled past the schema, before it reaches the API and
+      // silently succeeds through the weaker path.
+      const wrongTool = checkCollectionMethods(tool.name, preview.body);
+      if (wrongTool) return errorResult(wrongTool);
+
       const gateResult = gate.check(tool, args, {
         method: tool.method.toUpperCase(),
         path: tool.path,

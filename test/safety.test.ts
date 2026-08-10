@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { SafetyGate, SafetyError, redact } from "../src/safety.ts";
+import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "../src/safety.ts";
 import { detectEnvironment } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
@@ -103,5 +103,64 @@ describe("redaction", () => {
     assert.equal(redact("plain"), "plain");
     assert.equal(redact(null), null);
     assert.deepEqual(redact([1, 2]), [1, 2]);
+  });
+});
+
+describe("collections routes card payments to payment intents", () => {
+  // createCollection and createCardPaymentIntent both return a hosted payment link for
+  // cards, but only the intent yields an intent id and the card token recurring charges
+  // need. Two tools offering the same job is how a model lands on the weaker one.
+  test("the schema no longer offers card methods", () => {
+    const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
+    for (const m of ["card", "apple_pay", "google_pay"]) {
+      assert.doesNotMatch(schema, new RegExp(`"${m}"`), `${m} should not be offered`);
+    }
+  });
+
+  test("the rails payment intents cannot express are still offered", () => {
+    const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
+    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
+      assert.match(schema, new RegExp(`"${m}"`), `${m} must remain available`);
+    }
+  });
+
+  test("the description says where card payments go", () => {
+    const d = TOOLS_BY_NAME.get("createCollection")!.description;
+    assert.match(d, /NOT FOR CARD PAYMENTS/);
+    assert.match(d, /createCardPaymentIntent/);
+  });
+
+  test("createCardPaymentIntent still handles cards", () => {
+    assert.match(JSON.stringify(TOOLS_BY_NAME.get("createCardPaymentIntent")!.inputSchema), /"card"/);
+  });
+
+  test("a card method smuggled past the schema is redirected", () => {
+    // additionalProperties is true, so the model can still send methods the enum omits
+    // and the API would accept them — succeeding through the weaker path with no error.
+    for (const m of ["card", "apple_pay", "google_pay"]) {
+      const msg = checkCollectionMethods("createCollection", { source: { methods: [m] } });
+      assert.ok(msg, `${m} should be redirected`);
+      assert.match(msg, /createCardPaymentIntent/);
+    }
+  });
+
+  test("the remaining rails pass through untouched", () => {
+    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
+      assert.equal(checkCollectionMethods("createCollection", { source: { methods: [m] } }), null);
+    }
+  });
+
+  test("a mixed request is caught on the card element", () => {
+    const msg = checkCollectionMethods("createCollection", {
+      source: { methods: ["bank_transfer", "card"] },
+    });
+    assert.match(msg!, /card/);
+  });
+
+  test("other tools and malformed bodies are ignored", () => {
+    assert.equal(checkCollectionMethods("createTransfer", { source: { methods: ["card"] } }), null);
+    assert.equal(checkCollectionMethods("createCollection", {}), null);
+    assert.equal(checkCollectionMethods("createCollection", { source: { methods: "card" } }), null);
+    assert.equal(checkCollectionMethods("createCollection", undefined), null);
   });
 });

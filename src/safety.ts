@@ -75,6 +75,34 @@ export function redact(value: unknown, depth = 0): unknown {
   return out;
 }
 
+/**
+ * Card-family methods removed from createCollection's schema.
+ *
+ * `additionalProperties: true` means a model can still send `methods: ["card"]` even
+ * though the enum no longer lists it, and the API would accept it — producing a card
+ * collection through the weaker path with no error to learn from. Checked here so the
+ * redirect is explicit rather than silent.
+ */
+const CARD_METHODS = new Set(["card", "apple_pay", "google_pay"]);
+
+/** Returns a redirect message when a collection request smuggles a card method through. */
+export function checkCollectionMethods(toolName: string, body: unknown): string | null {
+  if (toolName !== "createCollection") return null;
+
+  const methods = (body as { source?: { methods?: unknown } })?.source?.methods;
+  if (!Array.isArray(methods)) return null;
+
+  const card = methods.filter((m) => typeof m === "string" && CARD_METHODS.has(m));
+  if (card.length === 0) return null;
+
+  return (
+    `createCollection does not handle card payments (received: ${card.join(", ")}). ` +
+    `Use createCardPaymentIntent instead — it returns the same hosted payment link, plus ` +
+    `an intent id and the card token needed for recurring charges. ` +
+    `createCollection covers pix, mobile_money and bank_transfer.`
+  );
+}
+
 export class SafetyGate {
   // Explicit field rather than a TS parameter property: Node's --experimental-strip-types
   // erases annotations without emitting code, so parameter properties never initialise.

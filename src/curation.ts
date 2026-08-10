@@ -220,6 +220,30 @@ export const BLOCKED: Record<string, string> = {
 };
 
 /**
+ * Enum values stripped from a generated schema, so a tool cannot offer a path that a
+ * better tool already owns.
+ *
+ * `POST /v1/collections` accepts card, apple_pay and google_pay alongside pix,
+ * mobile_money and bank_transfer, and for cards it returns the same hosted
+ * `payment_link` that `POST /v1/collections/cards/payment-intents` does. The payment
+ * intent is strictly more capable on that rail: it also returns an `intent_id`,
+ * `expires_at` and `requires_action`, and it is the only route to the `card_token` that
+ * recurring and merchant-initiated charges need.
+ *
+ * Two tools offering the same job is how a model ends up on the weaker one. So the card
+ * family is removed from createCollection, leaving it responsible for the rails payment
+ * intents cannot express.
+ */
+export const ENUM_RESTRICTIONS: Record<string, { remove: string[]; because: string }> = {
+  createCollection: {
+    remove: ["card", "apple_pay", "google_pay"],
+    because:
+      "Card payments go through createCardPaymentIntent, which returns the same hosted " +
+      "payment link plus the intent id and card token this endpoint cannot provide.",
+  },
+};
+
+/**
  * Names a model is likely to reach for that map to blocked operations.
  *
  * Without this, asking for `getCardSensitiveDetails` returns a bare "unknown tool" and
