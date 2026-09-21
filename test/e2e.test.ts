@@ -100,6 +100,17 @@ class McpProcess {
     this.proc.stderr.on("data", (c) => (this.stderr += c.toString()));
   }
 
+  /** Resolves with the process's exit code, for the startup-failure cases. */
+  waitForExit(timeoutMs = 10_000): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`process did not exit; stderr: ${this.stderr}`)), timeoutMs);
+      this.proc.on("exit", (code) => {
+        clearTimeout(timer);
+        resolve(code ?? -1);
+      });
+    });
+  }
+
   request(method: string, params: unknown = {}): Promise<any> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
@@ -222,6 +233,51 @@ describe("end-to-end over MCP stdio", () => {
       assert.equal(received[0]!.url, "/v1/collections/txn_1/refund");
       assert.ok(received[0]!.headers["idempotency-key"], "the POST must carry a generated key");
       assert.equal(received[0]!.body.confirm, undefined);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a config naming the retired approvals toolset still starts", async () => {
+    // An MCP client keeps its --toolsets line in a config file. Treating a retired name
+    // as a typo would exit(1) and take the whole connection down on upgrade, for a group
+    // that is merely no longer offered.
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=transfers,approvals"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.ok(names.includes("createTransfer"), "the toolsets that are still valid must load");
+      assert.ok(!names.includes("approveTransfer"));
+      assert.match(mcp.stderr, /"approvals" toolset is retired/, "the operator should be told why");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a config naming only retired toolsets falls back rather than loading nothing", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=approvals"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.ok(names.length > 50, `expected the default set, got ${names.length} tools`);
+      assert.match(mcp.stderr, /using the default set/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a genuinely unknown toolset is still a hard error", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=nonsense"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      const exit = await mcp.waitForExit();
+      assert.equal(exit, 1, "a typo must not start a half-configured server");
+      assert.match(mcp.stderr, /unknown toolset\(s\): nonsense/);
     } finally {
       mcp.kill();
     }

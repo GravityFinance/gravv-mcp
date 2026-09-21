@@ -36,6 +36,15 @@ const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 
 type Json = Record<string, any>;
 
+/**
+ * `$ref` targets that do not exist in the document.
+ *
+ * A dangling ref is indistinguishable from an empty schema once resolved, so the tool it
+ * belongs to silently loses every field the referenced schema carried. Recorded here and
+ * reported as a build failure rather than shipped.
+ */
+const danglingRefs = new Set<string>();
+
 /** Resolve internal `$ref`s and flatten `allOf`. Cycles resolve to a bare object. */
 function deref(node: any, doc: Json, seen: Set<string> = new Set(), depth = 0): any {
   if (node === null || typeof node !== "object") return node;
@@ -51,7 +60,10 @@ function deref(node: any, doc: Json, seen: Set<string> = new Set(), depth = 0): 
       .slice(2)
       .split("/")
       .reduce<any>((acc, key) => (acc == null ? acc : acc[key.replace(/~1/g, "/").replace(/~0/g, "~")]), doc);
-    if (target == null) return {};
+    if (target == null) {
+      danglingRefs.add(ref);
+      return {};
+    }
     const { $ref, ...siblings } = node;
     return { ...deref(target, doc, new Set([...seen, ref]), depth + 1), ...deref(siblings, doc, seen, depth + 1) };
   }
@@ -279,6 +291,14 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
 }
 
 // ---- integrity checks -------------------------------------------------------
+for (const ref of danglingRefs) {
+  problems.push(
+    `${ref} is referenced but not defined in the specification that uses it. It resolved ` +
+      `to an empty schema, which silently strips every field it should have contributed — ` +
+      `restore the definition or remove the reference.`,
+  );
+}
+
 const byName = new Map<string, string[]>();
 for (const t of tools) byName.set(t.name, [...(byName.get(t.name) ?? []), `${t.method.toUpperCase()} ${t.path}`]);
 for (const [name, where] of byName) {

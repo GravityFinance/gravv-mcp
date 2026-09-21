@@ -112,6 +112,34 @@ describe("manual tool registration", () => {
   });
 });
 
+describe("descriptions only point at tools that exist", () => {
+  // Descriptions route the model between tools — "check getExternalAccount first",
+  // "take the token from createCardPaymentIntent". A name that is wrong or retired sends
+  // it looking for a tool that is not there, which reads as a broken server rather than a
+  // typo in prose. Includes the generated tools, whose PREREQUISITES do the same thing.
+  const VERB =
+    /\b(get|list|create|update|delete|charge|refund|capture|reject|start|submit|process|approve|search|check|activate|verify|withdraw|export|retry|has|save|respond|accept|upload|complete)[A-Z][A-Za-z0-9]+/g;
+
+  // Names that legitimately appear in prose without being tools of this server.
+  const NOT_TOOLS = new Set(["getStarted"]);
+
+  test("every tool name mentioned in a description is a real tool", () => {
+    const known = new Set([
+      ...all().map((t) => t.name),
+      ...Object.keys(BLOCKED_TOOL_NAMES),
+      "searchGravvDocs",
+      "getGravvDocPage",
+    ]);
+    const bad: string[] = [];
+    for (const tool of all()) {
+      for (const match of tool.description.match(VERB) ?? []) {
+        if (!known.has(match) && !NOT_TOOLS.has(match)) bad.push(`${tool.name} -> ${match}`);
+      }
+    }
+    assert.deepEqual(bad, [], "a description points at a tool that does not exist");
+  });
+});
+
 describe("manual tools agree with curation about money and idempotency", () => {
   test("movesMoney matches MONEY_OPS, which the generated tools also read", () => {
     for (const t of MANUAL_TOOLS) {

@@ -64,6 +64,19 @@ export const DEFAULT_TOOLSETS: Toolset[] = [
   "webhooks",
 ];
 
+/**
+ * Toolsets that existed in an earlier release, and why they are gone.
+ *
+ * A client configures `--toolsets` once and forgets it. Treating a retired name as an
+ * unknown one would fail startup and take the whole MCP connection down on upgrade, for
+ * a group that is merely no longer offered — so the name is recognised, explained on
+ * stderr, and dropped from the selection instead.
+ */
+export const RETIRED_TOOLSETS: Record<string, string> = {
+  approvals:
+    "retired in 0.4.0: every approve/reject route accepts dashboard sessions only and refuses an API key with a 403, so the tools could never succeed. Approvals are done by a person in the Gravv dashboard.",
+};
+
 interface Op {
   name: string;
   toolset: Toolset;

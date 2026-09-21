@@ -230,7 +230,7 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
       return `Resubmit refund ${target("refund_id")} on payment ${target("id")}, returning its amount to the payer.`;
     case "captureCollection": {
       const value = minor(b.amount_cents) ?? "the full held amount";
-      return `Capture ${value} from the authorization held on payment ${target("id")}. This is the moment the payer is charged; any remainder of the hold is released.`;
+      return `Capture ${value} from the authorization held on payment ${target("id")}. This is the moment the payer is charged.`;
     }
     default:
       return `Execute ${tool.method.toUpperCase()} ${tool.path} with ${money}.`;

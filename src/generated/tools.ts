@@ -129,6 +129,50 @@ export const TOOLS: GeneratedTool[] = [
     "inputSchema": {
       "type": "object",
       "properties": {
+        "first_name": {
+          "type": "string",
+          "example": "Jane"
+        },
+        "last_name": {
+          "type": "string",
+          "example": "Doe"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "example": "jane@example.com"
+        },
+        "phone_number": {
+          "type": "string",
+          "description": "E.164 format",
+          "example": "+14155551234"
+        },
+        "date_of_birth": {
+          "type": "string",
+          "description": "Accepts YYYY-MM-DD",
+          "example": "1990-05-12"
+        },
+        "billing_address1": {
+          "type": "string",
+          "example": "123 Market St"
+        },
+        "billing_city": {
+          "type": "string",
+          "example": "San Francisco"
+        },
+        "billing_state": {
+          "type": "string",
+          "example": "CA"
+        },
+        "billing_zip": {
+          "type": "string",
+          "example": "94105"
+        },
+        "billing_country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2",
+          "example": "US"
+        },
         "payment_intent_id": {
           "type": "string",
           "example": "pi_429f578b-..."
@@ -152,6 +196,16 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
+      "first_name",
+      "last_name",
+      "email",
+      "phone_number",
+      "date_of_birth",
+      "billing_address1",
+      "billing_city",
+      "billing_state",
+      "billing_zip",
+      "billing_country",
       "payment_intent_id",
       "card_token"
     ],
@@ -1655,9 +1709,9 @@ export const TOOLS: GeneratedTool[] = [
         },
         "save_card": {
           "type": "boolean",
-          "description": "Whether the payer's card is stored for later charges. DEFAULTS TO TRUE — send false to take a one-off payment without keeping a token.",
-          "default": true,
-          "example": true
+          "description": "Whether the payer's card is stored for later charges. DEFAULTS TO FALSE — the payer opts in, and without it no reusable card_token is produced, so a later chargeSavedCard has nothing to charge.",
+          "default": false,
+          "example": false
         },
         "redirect_url": {
           "type": "string",

@@ -8,7 +8,7 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
-import { DEFAULT_TOOLSETS, type Toolset } from "../curation.ts";
+import { DEFAULT_TOOLSETS, RETIRED_TOOLSETS, type Toolset } from "../curation.ts";
 
 const VALID_TOOLSETS: Toolset[] = [
   "customers",
@@ -79,14 +79,31 @@ async function main() {
     toolsets = "all";
   } else {
     const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    const bad = requested.filter((t) => !VALID_TOOLSETS.includes(t as Toolset));
+
+    // A name that used to be valid is explained and dropped, not treated as a typo:
+    // failing here would take down the whole connection over a stale config line.
+    const retired = requested.filter((t) => t in RETIRED_TOOLSETS);
+    for (const name of retired) {
+      process.stderr.write(`gravv-mcp: the "${name}" toolset is ${RETIRED_TOOLSETS[name]}\n`);
+    }
+
+    const kept = requested.filter((t) => !retired.includes(t));
+    const bad = kept.filter((t) => !VALID_TOOLSETS.includes(t as Toolset));
     if (bad.length) {
       process.stderr.write(
         `error: unknown toolset(s): ${bad.join(", ")}\nAvailable: ${VALID_TOOLSETS.join(", ")}\n`,
       );
       process.exit(1);
     }
-    toolsets = requested as Toolset[];
+
+    if (kept.length === 0) {
+      // Every name they asked for is retired. Starting with no API tools at all would
+      // look like a broken install, so fall back to the default set and say so.
+      process.stderr.write("gravv-mcp: nothing left to load from --toolsets; using the default set\n");
+      toolsets = DEFAULT_TOOLSETS;
+    } else {
+      toolsets = kept as Toolset[];
+    }
   }
 
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");

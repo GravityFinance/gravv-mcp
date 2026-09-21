@@ -118,7 +118,8 @@ export const MANUAL_TOOLS: ManualTool[] = [
     path: "/v1/collections",
     description:
       "List the collections you have taken in, newest first, each in the same shape getCollection returns. " +
-      "Use this to reconcile payments, or to find the transaction_id of a payment you only know by client_reference.",
+      "Use this to reconcile payments, or to find the transaction_id of a payment you only know by client_reference. " +
+      "Returns 20 per page unless limit says otherwise.",
     inputSchema: {
       type: "object",
       properties: {
@@ -160,8 +161,8 @@ export const MANUAL_TOOLS: ManualTool[] = [
     path: "/v1/collections/{id}/refund",
     description:
       "Refund a settled card payment, in full or in part.\n\n" +
-      "Omit amount_cents for a full refund of what remains. Amounts are in MINOR UNITS — 1050 is $10.50, not $1050. " +
-      "A refund that fails leaves the payment refundable again; retry it with retryCollectionRefund rather than issuing a second refund.\n\n" +
+      "Omit amount_cents for a full refund of the payment's amount. Amounts are in MINOR UNITS — 1050 is $10.50, not $1050. " +
+      "A refund that fails at the provider is resubmitted with retryCollectionRefund rather than by issuing a second refund.\n\n" +
       "MOVES MONEY: returns funds to the payer and cannot be undone. Requires confirm: true.",
     inputSchema: {
       type: "object",
@@ -230,8 +231,9 @@ export const MANUAL_TOOLS: ManualTool[] = [
     path: "/v1/collections/{id}/capture",
     description:
       "Settle a card authorization that is holding funds, turning the hold into an actual payment.\n\n" +
-      "Only applies to a payment whose status is `awaiting_capture`. Omit amount_cents to capture the full hold; " +
-      "a smaller amount captures part and releases the rest. Amounts are in MINOR UNITS.\n\n" +
+      "Only applies to a payment whose status is `awaiting_capture`; anything else is refused as an invalid state. " +
+      "Omit amount_cents to capture the full authorized amount; a smaller value captures only that much. " +
+      "Amounts are in MINOR UNITS.\n\n" +
       "NOTE: holds are placed by the hosted checkout flow. There is no API-key route that authorizes a card without " +
       "capturing, so a hold you can capture will have been created outside this server.\n\n" +
       "MOVES MONEY: this is the moment the payer is actually charged. Requires confirm: true.",
@@ -257,7 +259,9 @@ export const MANUAL_TOOLS: ManualTool[] = [
     path: "/v1/collections/{id}/reject",
     description:
       "Release a card authorization without taking the money — the void half of the authorize/capture pair. " +
-      "The payer's hold is dropped and nothing is charged. Not a refund: a payment that already settled is refunded with refundCollection.",
+      "The payer's hold is dropped and nothing is charged.\n\n" +
+      "Only applies to a payment whose status is `awaiting_capture`; anything else is refused as an invalid state. " +
+      "Not a refund: a payment that already settled is refunded with refundCollection.",
     inputSchema: {
       type: "object",
       properties: {
@@ -497,9 +501,9 @@ export const MANUAL_TOOLS: ManualTool[] = [
     method: "get",
     path: "/v1/wallets/total-balance",
     description:
-      "Aggregate balance across every wallet you hold, summed per asset and per network. " +
-      "Served from a cached snapshot: `cached_at` says how old it is and `refreshing` whether a refresh is running, " +
-      "so this is a treasury overview, not a settlement figure.",
+      "Aggregate balance across every wallet you hold, summed per asset and per network, computed on demand.\n\n" +
+      "The response still carries `cached_at` and `refreshing` from an earlier caching design; both are vestigial and " +
+      "mean nothing now — do not report a balance as stale on their account.",
     inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
     pathParams: [],
     bodyMode: "none",
@@ -527,7 +531,10 @@ export const MANUAL_TOOLS: ManualTool[] = [
     method: "get",
     path: "/v1/accounts/has-card-account",
     description:
-      "Whether a card-funding account already exists, and which one. Check before createCardApplication — card issuance funds from this account.",
+      "Whether a card account already exists for the tenant, and which one.\n\n" +
+      "Check this before createCardApplication: it needs an account whose type is `card` and whose status is `active`, " +
+      "and listAccounts shows regular and savings accounts alongside it with no way to tell them apart. Passing the wrong " +
+      "one fails with \"account must be a card account\".",
     inputSchema: {
       type: "object",
       properties: {
@@ -623,7 +630,8 @@ export const MANUAL_TOOLS: ManualTool[] = [
         },
         minimum_sweep_amount: {
           type: "string",
-          description: "Decimal string. Deposits below this are left alone.",
+          description:
+            "Decimal string. Compared against the COMPUTED sweep, not the deposit — with sweep_type percentage, a 10% rule on a 100 deposit is checked as 10. Below it, the deposit is left in place.",
         },
       },
       required: ["destination_account_id", "currency", "sweep_type"],

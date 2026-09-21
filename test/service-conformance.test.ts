@@ -16,6 +16,9 @@
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse } from "yaml";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 const tool = (name: string) => TOOLS_BY_NAME.get(name)!;
@@ -149,15 +152,88 @@ describe("collections: the payment intent the service accepts", () => {
     }
   });
 
-  test("save_card's default is stated, because it stores a card when omitted", () => {
-    // SaveCard *bool `json:"save_card,omitempty"` // Optional, defaults to true
-    assert.equal(props("createCardPaymentIntent").save_card.default, true);
-    assert.match(props("createCardPaymentIntent").save_card.description, /DEFAULTS TO\s+TRUE/i);
+  test("save_card's default follows the use case, not the DTO's comment", () => {
+    // The DTO says `// Optional, defaults to true`
+    // (create_payment_intent_dto.go), but the code that reads it says the opposite:
+    // create_payment_intent_usecase.go:479 — "Extract SaveCard — defaults to false so
+    // the user explicitly opts in", saveCard := false. The comment is stale; the
+    // behaviour is opt-in, and getting this backwards would tell a merchant a card is
+    // being stored when it is not, or the reverse.
+    assert.equal(props("createCardPaymentIntent").save_card.default, false);
+    assert.match(props("createCardPaymentIntent").save_card.description, /DEFAULTS TO\s+FALSE/i);
+  });
+
+  test("the consequence of not opting in is stated where it bites", () => {
+    // No save_card means no reusable token, so the recurring-charge flow the payment
+    // intent description points at silently has nothing to charge later.
+    assert.match(props("createCardPaymentIntent").save_card.description, /chargeSavedCard/);
   });
 
   test("getCollection is not advertised as a public endpoint", () => {
     // It is registered on apiKeyServicesRoutesV1 in api-gateway routes/base.go, so the
     // spec's "no API key is required" was wrong and would send a caller down a dead end.
     assert.doesNotMatch(tool("getCollection").description, /public|no API key/i);
+  });
+});
+
+describe("the specifications resolve", () => {
+  // A $ref whose target is missing resolves to an empty schema, so the tool that
+  // references it loses every field silently — which is exactly how chargeSavedCard lost
+  // its ten billing fields to an unrelated edit above them in the same file. The
+  // generator now fails the build on this; the test states the invariant independently.
+  test("every $ref points at a schema that exists", () => {
+    const dangling: string[] = [];
+    for (const file of readdirSync("specs").filter((f) => f.endsWith(".yaml"))) {
+      const doc = parse(readFileSync(join("specs", file), "utf8")) as Record<string, unknown>;
+      const refs: string[] = [];
+      const walk = (node: unknown): void => {
+        if (node === null || typeof node !== "object") return;
+        if (Array.isArray(node)) return node.forEach(walk);
+        for (const [k, v] of Object.entries(node)) {
+          if (k === "$ref" && typeof v === "string") refs.push(v);
+          else walk(v);
+        }
+      };
+      walk(doc);
+      for (const ref of refs) {
+        const target = ref
+          .slice(2)
+          .split("/")
+          .reduce<any>((acc, key) => (acc == null ? acc : acc[key]), doc);
+        if (target == null) dangling.push(`${file}: ${ref}`);
+      }
+    }
+    assert.deepEqual(dangling, [], "dangling refs strip fields from tools without any error");
+  });
+
+  test("the billing precedence is the service's three levels, not two", () => {
+    // charge_saved_card_usecase.go applyRequestOverrides / applyBillingRecordOverrides:
+    // "Priority: request overrides > saved card billing > customer data". The spec
+    // described only the customer fallback, which understates where a surprising value
+    // on a charge came from.
+    const d = (TOOLS_BY_NAME.get("chargeSavedCard")!.inputSchema as any).properties.first_name;
+    assert.ok(d, "billing fields must be present to carry the note");
+    assert.match(tool("chargeSavedCard").description, /billing/i);
+  });
+
+  test("chargeSavedCard still carries its billing fields", () => {
+    // onramp ChargeCardRequest (charge_card_dto.go) takes optional billing detail that
+    // falls back to the customer record. They reach the schema through a $ref, which is
+    // what made their loss invisible.
+    const p = (TOOLS_BY_NAME.get("chargeSavedCard")!.inputSchema as any).properties;
+    for (const field of [
+      "first_name",
+      "last_name",
+      "email",
+      "phone_number",
+      "date_of_birth",
+      "billing_address1",
+      "billing_city",
+      "billing_state",
+      "billing_zip",
+      "billing_country",
+    ]) {
+      assert.ok(p[field], `${field} is accepted by onramp and must stay in the schema`);
+    }
   });
 });
