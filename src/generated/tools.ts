@@ -129,50 +129,6 @@ export const TOOLS: GeneratedTool[] = [
     "inputSchema": {
       "type": "object",
       "properties": {
-        "first_name": {
-          "type": "string",
-          "example": "Jane"
-        },
-        "last_name": {
-          "type": "string",
-          "example": "Doe"
-        },
-        "email": {
-          "type": "string",
-          "format": "email",
-          "example": "jane@example.com"
-        },
-        "phone_number": {
-          "type": "string",
-          "description": "E.164 format",
-          "example": "+14155551234"
-        },
-        "date_of_birth": {
-          "type": "string",
-          "description": "Accepts YYYY-MM-DD",
-          "example": "1990-05-12"
-        },
-        "billing_address1": {
-          "type": "string",
-          "example": "123 Market St"
-        },
-        "billing_city": {
-          "type": "string",
-          "example": "San Francisco"
-        },
-        "billing_state": {
-          "type": "string",
-          "example": "CA"
-        },
-        "billing_zip": {
-          "type": "string",
-          "example": "94105"
-        },
-        "billing_country": {
-          "type": "string",
-          "description": "ISO 3166-1 alpha-2",
-          "example": "US"
-        },
         "payment_intent_id": {
           "type": "string",
           "example": "pi_429f578b-..."
@@ -196,16 +152,6 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "first_name",
-      "last_name",
-      "email",
-      "phone_number",
-      "date_of_birth",
-      "billing_address1",
-      "billing_city",
-      "billing_state",
-      "billing_zip",
-      "billing_country",
       "payment_intent_id",
       "card_token"
     ],
@@ -1668,7 +1614,6 @@ export const TOOLS: GeneratedTool[] = [
           "type": "object",
           "required": [
             "source_type",
-            "id",
             "methods"
           ],
           "properties": {
@@ -1681,7 +1626,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "id": {
               "type": "string",
-              "description": "Source identifier required by the provider",
+              "description": "Optional. Not used to resolve the provider — the service ignores it when absent.",
               "example": "src_80aebb6ea2594a74bc215a64"
             },
             "methods": {
@@ -1698,10 +1643,44 @@ export const TOOLS: GeneratedTool[] = [
             }
           }
         },
+        "country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-2. Inferred from the customer when omitted.",
+          "example": "NG"
+        },
         "card_token": {
           "type": "string",
-          "description": "To auto-charge a customer, use the token you got from the webhook response in your first call of this endpoint.",
+          "description": "To auto-charge a customer, use the token you got from the webhook response in your first call of this endpoint. Sending it charges that stored card immediately.",
           "example": "tokn_80aebb6ea2594a74bc215a64"
+        },
+        "save_card": {
+          "type": "boolean",
+          "description": "Whether the payer's card is stored for later charges. DEFAULTS TO TRUE — send false to take a one-off payment without keeping a token.",
+          "default": true,
+          "example": true
+        },
+        "redirect_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Where the hosted checkout returns the payer once they finish. Appended to the payment link.",
+          "example": "https://merchant.example/checkout/complete"
+        },
+        "network": {
+          "type": "string",
+          "description": "Settlement network. Inferred from the destination when omitted.",
+          "enum": [
+            "polygon",
+            "stellar",
+            "ethereum",
+            "solana",
+            "avalanche"
+          ],
+          "example": "polygon"
+        },
+        "asset": {
+          "type": "string",
+          "description": "Settlement asset. Inferred from the destination when omitted.",
+          "example": "USDC"
         },
         "metadata": {
           "type": "object",
@@ -1720,7 +1699,6 @@ export const TOOLS: GeneratedTool[] = [
         "client_customer_id",
         "amount",
         "currency",
-        "client_reference",
         "destination",
         "source"
       ],
@@ -1737,7 +1715,12 @@ export const TOOLS: GeneratedTool[] = [
       "client_reference",
       "destination",
       "source",
+      "country",
       "card_token",
+      "save_card",
+      "redirect_url",
+      "network",
+      "asset",
       "metadata"
     ],
     "alsoInBody": [],
@@ -2603,92 +2586,85 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders",
-    "description": "Create order — Creates an OTC order. The order is created in `waiting_approval` and doesn't execute until a second user approves it. A `market` order executes at the current rate once approved. A `limit` order waits until the rate reaches `target_rate`, then executes once approved. Set `destination_type` to control where the converted funds settle: an internal `account`, a crypto `wallet`, or a saved settlement instruction (`ssi`). The `Idempotency-Key` header is required; requests without it are rejected.\n\nOrders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "description": "Create order — Places an OTC order against a quote taken with getFxQuote. The quote carries the corridor, the rate and the amounts; `source` and `destination` say which account, wallet or settlement instruction each leg uses. WHO PLACES IT DECIDES WHETHER IT EXECUTES. An order placed with an API key is created in `pending` and proceeds — there is no second approval step for API callers, and the approve/reject endpoints refuse API keys. Dashboard users without the FX approval permission create `waiting_approval` orders instead, which a second user releases in the dashboard. The `Idempotency-Key` header is required; requests without it are rejected.\n\nPREREQUISITE: take a quote with getFxQuote and pass its quote_id — the quote carries the corridor, the rate and the amounts, and an order without a valid, unexpired quote_id is refused outright. `source` and `destination` are objects ({type, id}), where type is account, wallet or ssi.\n\nNO SECOND PAIR OF EYES ON THIS PATH: an order placed with an API key — which is what this server holds — is created in `pending` and proceeds. The `waiting_approval` queue applies to dashboard users without FX approval rights, not to you, and the approve/reject endpoints refuse API keys outright. Treat a confirmed call as final. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "customer_id": {
+        "quote_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "ID of the customer the order is created for.",
-          "example": "85034797-3ea1-4ad8-a952-becd67d74acc"
+          "description": "Quote from getFxQuote. It fixes the pair, the rate and the amounts, and it must still be valid — an expired quote is refused.",
+          "example": "QT-M2hPM9qt"
         },
-        "order_type": {
-          "type": "string",
-          "description": "A `market` order executes at the current rate once approved. A `limit` order waits until the rate reaches `target_rate`, then executes once approved.",
-          "enum": [
-            "market",
-            "limit"
-          ],
-          "example": "market"
-        },
-        "pair": {
+        "source": {
           "type": "object",
+          "description": "One leg of the order — where the funds come from, or where the proceeds settle.",
           "required": [
-            "base",
-            "quote"
+            "type",
+            "id"
           ],
           "properties": {
-            "base": {
+            "type": {
               "type": "string",
-              "description": "Base currency code (ISO 4217 or crypto ticker).",
-              "example": "USD"
+              "description": "Kind of endpoint. Fiat legs are an `account`, crypto legs a `wallet`, and `ssi` settles to a saved settlement instruction.",
+              "enum": [
+                "account",
+                "wallet",
+                "ssi"
+              ],
+              "example": "account"
             },
-            "quote": {
+            "id": {
               "type": "string",
-              "description": "Quote currency code (ISO 4217 or crypto ticker).",
-              "example": "ZAR"
+              "description": "ID of the account, wallet, or settlement instruction.",
+              "example": "74653c7b-ae84-45ab-8085-2d2493f86d81"
+            }
+          }
+        },
+        "destination": {
+          "type": "object",
+          "description": "One leg of the order — where the funds come from, or where the proceeds settle.",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Kind of endpoint. Fiat legs are an `account`, crypto legs a `wallet`, and `ssi` settles to a saved settlement instruction.",
+              "enum": [
+                "account",
+                "wallet",
+                "ssi"
+              ],
+              "example": "account"
+            },
+            "id": {
+              "type": "string",
+              "description": "ID of the account, wallet, or settlement instruction.",
+              "example": "74653c7b-ae84-45ab-8085-2d2493f86d81"
             }
           }
         },
         "amount": {
           "type": "string",
-          "description": "Amount of the base currency to exchange. Must be greater than zero.",
+          "description": "Optional. The quote already carries the amount; send this only where the corridor allows a partial fill.",
           "example": "1000"
         },
-        "target_rate": {
+        "client_reference": {
           "type": "string",
-          "description": "Required for `limit` orders. The rate at which the order should execute.",
-          "example": "17.50"
+          "description": "Your own reference, echoed back on the order.",
+          "example": "order-abc-123"
         },
-        "side": {
+        "transaction_id": {
           "type": "string",
-          "description": "Side of the order. Defaults to `sell`.",
-          "enum": [
-            "buy",
-            "sell"
-          ],
-          "default": "sell",
-          "example": "sell"
+          "format": "uuid",
+          "description": "Optional. The id the order is created under. Generated when absent.",
+          "example": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
         },
-        "source_type": {
-          "type": "string",
-          "description": "Where the funds come from. Fiat base currencies are funded from an `account`; crypto base currencies from a `wallet`.",
-          "enum": [
-            "account",
-            "wallet"
-          ],
-          "example": "account"
-        },
-        "source_id": {
-          "type": "string",
-          "description": "ID of the source account or wallet.",
-          "example": "74653c7b-ae84-45ab-8085-2d2493f86d81"
-        },
-        "destination_type": {
-          "type": "string",
-          "description": "Where the proceeds settle. Use `ssi` to settle to a saved settlement instruction.",
-          "enum": [
-            "account",
-            "wallet",
-            "ssi"
-          ],
-          "example": "ssi"
-        },
-        "destination_id": {
-          "type": "string",
-          "description": "ID of the destination account, wallet, or settlement instruction.",
-          "example": "b23ffd0e-d0fc-432e-acc9-c396194121b3"
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Arbitrary key/value pairs stored with the order."
         },
         "confirm": {
           "type": "boolean",
@@ -2696,10 +2672,9 @@ export const TOOLS: GeneratedTool[] = [
         }
       },
       "required": [
-        "customer_id",
-        "order_type",
-        "pair",
-        "amount"
+        "quote_id",
+        "source",
+        "destination"
       ],
       "additionalProperties": true
     },
@@ -2707,16 +2682,13 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "customer_id",
-      "order_type",
-      "pair",
+      "quote_id",
+      "source",
+      "destination",
       "amount",
-      "target_rate",
-      "side",
-      "source_type",
-      "source_id",
-      "destination_type",
-      "destination_id"
+      "client_reference",
+      "transaction_id",
+      "metadata"
     ],
     "alsoInBody": [],
     "movesMoney": true,
@@ -2806,7 +2778,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nRESPONSE: check `requires_approval`. When it is true the transfer is HELD, not sent, and only a dashboard user can release it — API keys cannot approve. `transfer_status` alone does not tell you this.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2825,6 +2797,16 @@ export const TOOLS: GeneratedTool[] = [
                 "internal_crypto_wallet"
               ],
               "description": "source can be `internal_account` or `internal_crypto_wallet`"
+            },
+            "currency": {
+              "type": "string",
+              "description": "ISO 4217 code the sender is paying in. Inferred from the destination rail when omitted — SEPA settles EUR, FPS settles GBP, everything else USD.",
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP"
+              ],
+              "example": "USD"
             },
             "crypto_asset": {
               "type": "string",
@@ -2867,6 +2849,7 @@ export const TOOLS: GeneratedTool[] = [
                   "enum": [
                     "ach",
                     "wire",
+                    "rtp",
                     "sepa",
                     "swift",
                     "fps",
@@ -2895,6 +2878,29 @@ export const TOOLS: GeneratedTool[] = [
                     "internal_account"
                   ],
                   "example": "internal_account"
+                }
+              }
+            },
+            {
+              "title": "Internal Crypto Wallet Destination",
+              "description": "A wallet Gravv custodies for you, addressed by its wallet id.",
+              "type": "object",
+              "required": [
+                "id",
+                "destination_type"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Internal wallet ID"
+                },
+                "destination_type": {
+                  "type": "string",
+                  "enum": [
+                    "internal_crypto_wallet"
+                  ],
+                  "example": "internal_crypto_wallet"
                 }
               }
             },
@@ -3068,9 +3074,7 @@ export const TOOLS: GeneratedTool[] = [
         "source",
         "destination",
         "amount",
-        "customer_id",
-        "description",
-        "client_reference"
+        "customer_id"
       ],
       "additionalProperties": true
     },
@@ -3562,7 +3566,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of an onramp transaction. This endpoint is public — no API key is required.\n\nStatus lookup for a collection transaction, including one started by a payment intent — pass the `transaction_id` from createCardPaymentIntent or chargeSavedCard. The status field is named `transaction_status` here, not `status`.",
+    "description": "Get transaction by ID — Returns the status and details of a collection transaction — the `transaction_id` returned by createCardPaymentIntent or chargeSavedCard. Requires the same API key as every other endpoint.\n\nStatus lookup for a collection transaction, including one started by a payment intent — pass the `transaction_id` from createCardPaymentIntent or chargeSavedCard. The status field is named `transaction_status` here, not `status`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3743,40 +3747,28 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/quote",
-    "description": "Create an FX quote — Returns a foreign exchange rate quote for a given currency pair and amount. The quote includes a `quote_id` and an expiry time. Use the `quote_id` when submitting a transfer to lock in the quoted rate. The `Idempotency-Key` header is required; requests without it are rejected.\n\nQuotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "description": "Create an FX quote — Returns a foreign exchange rate quote for a given currency pair and amount. The quote includes a `quote_id` and an expiry time. Use the `quote_id` when submitting a transfer to lock in the quoted rate. The `Idempotency-Key` header is required; requests without it are rejected.\n\nSTEP 1 of an FX order, and the only way to get the quote_id createFxOrder requires. Name the corridor with either `currency_pair` (exact market, e.g. USD_US_XAF_CM) or `direction` (e.g. USD_XAF, service picks the market) — NOT a buy/sell side, and not separate from/to currency fields. Quotes expire: the response carries quote_id and expires_at, and an expired quote is refused by createFxOrder. A quote_id also locks the rate for createTransfer.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "from_currency": {
+        "currency_pair": {
           "type": "string",
-          "description": "Source currency code (ISO 4217).",
-          "example": "USD"
-        },
-        "to_currency": {
-          "type": "string",
-          "description": "Target currency code (ISO 4217).",
-          "example": "ZAR"
-        },
-        "amount": {
-          "type": "number",
-          "description": "Amount in the source currency to convert. Must be greater than zero.",
-          "example": 10
+          "description": "Exact market corridor, `FROM_FROMCOUNTRY_TO_TOCOUNTRY`. Takes precedence over `direction` when both are sent.",
+          "example": "USD_US_XAF_CM"
         },
         "direction": {
           "type": "string",
-          "description": "Direction of the trade.",
-          "enum": [
-            "BUY",
-            "SELL"
-          ],
-          "example": "BUY"
+          "description": "Currency exchange direction, `FROM_TO`. The service selects the best market for that pair. This is a corridor, NOT a buy/sell side.",
+          "example": "USD_XAF"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Amount of the FROM currency being sold, as a decimal string.",
+          "example": "100.00"
         }
       },
       "required": [
-        "from_currency",
-        "to_currency",
-        "amount",
-        "direction"
+        "amount"
       ],
       "additionalProperties": true
     },
@@ -3784,10 +3776,9 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "from_currency",
-      "to_currency",
-      "amount",
-      "direction"
+      "currency_pair",
+      "direction",
+      "amount"
     ],
     "alsoInBody": [],
     "movesMoney": false,
@@ -5281,7 +5272,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nHandles both individuals and businesses: a customer whose type is business is routed to KYB automatically, so there is no separate call for it here. For a business, complete KYC for every associated person BEFORE starting the business's own verification. Some tenants are configured for document-based auto-verification and reject this call — on that refusal use uploadCustomerKycDocument instead. Poll getCustomerKycStatus for the outcome: verification is asynchronous and driven by the provider.",
     "inputSchema": {
       "type": "object",
       "properties": {

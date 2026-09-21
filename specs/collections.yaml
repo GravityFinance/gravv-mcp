@@ -322,7 +322,6 @@ components:
       type: object
       required:
         - source_type
-        - id
         - methods
       properties:
         source_type:
@@ -332,7 +331,9 @@ components:
           example: external
         id:
           type: string
-          description: Source identifier required by the provider
+          description: >-
+            Optional. Not used to resolve the provider — the service ignores it
+            when absent.
           example: src_80aebb6ea2594a74bc215a64
         methods:
           type: array
@@ -349,7 +350,6 @@ components:
         - client_customer_id
         - amount
         - currency
-        - client_reference
         - destination
         - source
       properties:
@@ -373,138 +373,130 @@ components:
           $ref: '#/components/schemas/PaymentIntentDestination'
         source:
           $ref: '#/components/schemas/PaymentIntentSource'
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2. Inferred from the customer when omitted.
+          example: NG
         card_token:
           type: string
           description: >-
             To auto-charge a customer, use the token you got from the webhook
-            response in your first call of this endpoint.
+            response in your first call of this endpoint. Sending it charges
+            that stored card immediately.
           example: tokn_80aebb6ea2594a74bc215a64
+        save_card:
+          type: boolean
+          description: >-
+            Whether the payer's card is stored for later charges. DEFAULTS TO
+            TRUE — send false to take a one-off payment without keeping a token.
+          default: true
+          example: true
+        redirect_url:
+          type: string
+          format: uri
+          description: >-
+            Where the hosted checkout returns the payer once they finish. Appended
+            to the payment link.
+          example: https://merchant.example/checkout/complete
+        network:
+          type: string
+          description: >-
+            Settlement network. Inferred from the destination when omitted.
+          enum:
+            - polygon
+            - stellar
+            - ethereum
+            - solana
+            - avalanche
+          example: polygon
+        asset:
+          type: string
+          description: Settlement asset. Inferred from the destination when omitted.
+          example: USDC
         metadata:
           type: object
           additionalProperties: true
           example:
             order_id: ord_123
     CreatePaymentIntentResponse:
-      oneOf:
-        - title: Intent created (no card token)
-          type: object
-          properties:
-            intent_id:
-              type: string
-              example: pi_429f578b-675a-4b68-abe3-856cd976257f
-            client_secret:
-              type: string
-              description: AES-256-GCM key material for client-side card encryption
-              example: pis_a1b2c3d4...
-            client_reference:
-              type: string
-              example: order-abc-123
-            amount:
-              type: string
-              example: '100.50'
-            currency:
-              type: string
-              example: USD
-            requires_action:
-              type: boolean
-              example: false
-            payment_key:
-              type: string
-              description: Signed JWT for hosted UI operations
-              example: eyJhbGciOiJIUzI1NiIs...
-            payment_link:
-              type: string
-              format: uri
-              description: >-
-                Ready-to-use URL with an embedded session parameter for the
-                hosted UI
-              example: https://your-hosted-ui.com/pi_429f578b-...?session=eyJqd3Q...
-            metadata:
-              type: object
-              additionalProperties: true
-            created_at:
-              type: string
-              format: date-time
-              example: '2026-04-08T10:00:00Z'
-            expires_at:
-              type: string
-              format: date-time
-              example: '2026-04-09T10:00:00Z'
-        - title: Payment intent for auto-charge using token
-          type: object
-          properties:
-            intent_id:
-              type: string
-              example: pi_429f578b-675a-4b68-abe3-856cd976257f
-            client_secret:
-              type: string
-              example: pis_a1b2c3d4...
-            status:
-              type: string
-              enum:
-                - succeeded
-              example: succeeded
-            transaction_id:
-              type: string
-              format: uuid
-              example: txn_a1b2c3d4-...
-            amount:
-              type: string
-              example: '100.50'
-            currency:
-              type: string
-              example: USD
-            requires_action:
-              type: boolean
-              example: false
-            created_at:
-              type: string
-              format: date-time
-              example: '2026-04-08T10:00:00Z'
-            expires_at:
-              type: string
-              format: date-time
-              example: '2026-04-09T10:00:00Z'
-    BillingFields:
       type: object
       description: >-
-        Optional billing details. Any field omitted falls back to the customer
-        record on file.
+        One shape for both forms. Without `card_token` the intent is created and
+        `payment_link` carries the payer to hosted checkout. With one, the charge
+        is attempted immediately and `status` / `transaction_id` describe its
+        outcome.
       properties:
-        first_name:
+        intent_id:
           type: string
-          example: Jane
-        last_name:
+          example: pi_429f578b-675a-4b68-abe3-856cd976257f
+        client_secret:
           type: string
-          example: Doe
-        email:
+          description: AES-256-GCM key material for client-side card encryption
+          example: pis_a1b2c3d4...
+        client_reference:
           type: string
-          format: email
-          example: jane@example.com
-        phone_number:
+          example: order-abc-123
+        status:
           type: string
-          description: E.164 format
-          example: '+14155551234'
-        date_of_birth:
+          description: >-
+            `created` for a plain intent; `succeeded` or `failed` when a
+            card_token was charged.
+          example: created
+        transaction_id:
           type: string
-          description: Accepts YYYY-MM-DD
-          example: '1990-05-12'
-        billing_address1:
+          description: >-
+            Present once a charge exists. Pass it to getCollection to read the
+            payment's status.
+          example: txn_a1b2c3d4-...
+        message:
           type: string
-          example: 123 Market St
-        billing_city:
+          description: Provider detail, present on a failure.
+        amount:
           type: string
-          example: San Francisco
-        billing_state:
+          example: '100.50'
+        currency:
           type: string
-          example: CA
-        billing_zip:
+          example: USD
+        requires_action:
+          type: boolean
+          description: >-
+            True when the payer must complete a 3-D Secure challenge before the
+            charge settles. See `next_action_url`.
+          example: false
+        next_action_type:
           type: string
-          example: '94105'
-        billing_country:
+          description: What the payer has to do, present when requires_action is true.
+          example: three_ds_redirect
+        next_action_url:
           type: string
-          description: ISO 3166-1 alpha-2
-          example: US
+          format: uri
+          description: >-
+            Where to send the PAYER to satisfy the challenge. There is no
+            API-key route that completes 3-D Secure server to server — the payer
+            has to open this.
+          example: https://your-hosted-ui.com/pi_429f578b-.../3ds?session=eyJqd3Q...
+        payment_key:
+          type: string
+          description: Signed JWT for hosted UI operations
+          example: eyJhbGciOiJIUzI1NiIs...
+        payment_link:
+          type: string
+          format: uri
+          description: >-
+            Ready-to-use URL with an embedded session parameter for the hosted
+            UI. Absent when a card_token was charged directly.
+          example: https://your-hosted-ui.com/pi_429f578b-...?session=eyJqd3Q...
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-04-08T10:00:00Z'
+        expires_at:
+          type: string
+          format: date-time
+          example: '2026-04-09T10:00:00Z'
     ChargeCardRequest:
       allOf:
         - $ref: '#/components/schemas/BillingFields'
@@ -520,45 +512,51 @@ components:
               type: string
               example: tokn_80aebb6ea2594a74bc215a64
     ChargeCardResponse:
-      oneOf:
-        - title: Charge succeeded
-          type: object
-          properties:
-            payment_intent_id:
-              type: string
-              example: pi_429f578b-...
-            transaction_id:
-              type: string
-              format: uuid
-              example: txn_a1b2c3d4-...
-            status:
-              type: string
-              enum:
-                - succeeded
-              example: succeeded
-            requires_action:
-              type: boolean
-              example: false
-        - title: Charge failed
-          type: object
-          properties:
-            payment_intent_id:
-              type: string
-              example: pi_429f578b-...
-            status:
-              type: string
-              enum:
-                - failed
-              example: failed
-            requires_action:
-              type: boolean
-              example: false
-            failure_code:
-              type: string
-              example: card_declined
-            failure_message:
-              type: string
-              example: Your card was declined
+      type: object
+      properties:
+        payment_intent_id:
+          type: string
+          example: pi_429f578b-...
+        transaction_id:
+          type: string
+          description: >-
+            Present once a charge exists. Pass it to getCollection for status.
+          example: txn_a1b2c3d4-...
+        status:
+          type: string
+          description: >-
+            `succeeded` once settled, `failed` on a decline, and
+            `awaiting_capture` when the call placed a hold rather than settling.
+          enum:
+            - succeeded
+            - failed
+            - awaiting_capture
+          example: succeeded
+        authorization_id:
+          type: string
+          description: >-
+            Provider hold reference, present only for an authorization. Capture
+            and void are addressed by transaction_id, not by this.
+          example: auth_9f2c...
+        requires_action:
+          type: boolean
+          example: false
+        next_action_type:
+          type: string
+          description: What the payer has to do, present when requires_action is true.
+          example: three_ds_redirect
+        next_action_url:
+          type: string
+          format: uri
+          description: >-
+            Where to send the PAYER to satisfy a 3-D Secure challenge. No
+            API-key route completes this server to server.
+        failure_code:
+          type: string
+          example: card_declined
+        failure_message:
+          type: string
+          example: Your card was declined
     SavedCard:
       type: object
       properties:
@@ -762,8 +760,9 @@ paths:
         - Collections
       summary: Get transaction by ID
       description: >
-        Returns the status and details of an onramp transaction.
-        This endpoint is public — no API key is required.
+        Returns the status and details of a collection transaction — the
+        `transaction_id` returned by createCardPaymentIntent or chargeSavedCard.
+        Requires the same API key as every other endpoint.
       parameters:
         - in: path
           name: id

@@ -140,6 +140,8 @@ function instructions(
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
       "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
+      "- Approving a held transfer, recipient or FX order is NOT possible here. Those routes accept dashboard sessions only and refuse an API key with a bare 403, so when something comes back requiring approval, say so and let a dashboard user release it.",
+      "- Card payments, card issuing and the OTC desk are gated per business. A bare 403 from one of them usually means the entitlement is missing, not the request: check listFeatureAccess and apply with requestFeatureAccess.",
       "- Idempotency keys are generated automatically for POSTs. The key used is returned with each result, so a deliberate retry can reuse it.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",

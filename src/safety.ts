@@ -162,7 +162,7 @@ export class SafetyGate {
       status: "confirmation_required",
       tool: tool.name,
       environment: this.config.environment,
-      willDo: summarise(tool, preview.body),
+      willDo: summarise(tool, preview.body, args),
       request: preview,
       next: `Show this to the user and get their agreement. Then call ${tool.name} again with the identical arguments plus confirm: true.`,
       warning: isLive
@@ -172,12 +172,32 @@ export class SafetyGate {
   }
 }
 
-/** Plain-language summary of what a money-moving call will do, for the confirmation step. */
-function summarise(tool: GeneratedTool, body: unknown): string {
+/**
+ * Plain-language summary of what a money-moving call will do, for the confirmation step.
+ *
+ * This is the sentence a person reads before real money moves, so every clause has to be
+ * true of the request actually being sent. Two ways it goes wrong, both of which have
+ * happened here: reading a field the API no longer takes (a summary that silently says
+ * "an unspecified amount" while the body carries one), and describing a safety net that
+ * does not exist on this path. A tool that moves money and is not named below falls to
+ * the default, which promises nothing it cannot show.
+ */
+function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unknown> = {}): string {
   const b = (body ?? {}) as Record<string, any>;
+  // Path parameters build the URL and are stripped from the body, so the resource being
+  // acted on is only ever in the arguments.
+  const target = (key: string) => (typeof args[key] === "string" ? (args[key] as string) : "(unspecified)");
   const amount = b.amount ?? b.value ?? b.source_amount;
   const currency = b.currency ?? b.source_currency ?? b.from_currency ?? "";
   const money = amount !== undefined ? `${amount}${currency ? ` ${currency}` : ""}` : "an unspecified amount";
+
+  // Collections price in minor units. Rendering 1050 as "1050 USD" in a confirmation
+  // would overstate a $10.50 refund by a hundredfold, so they are converted here and
+  // labelled, rather than reusing `money` above.
+  const minor = (cents: unknown) =>
+    typeof cents === "number" && Number.isFinite(cents)
+      ? `${(cents / 100).toFixed(2)}${b.currency ? ` ${b.currency}` : ""}`
+      : null;
 
   switch (tool.name) {
     case "createTransfer": {
@@ -189,11 +209,29 @@ function summarise(tool: GeneratedTool, body: unknown): string {
     case "withdrawFromCard":
       return `Withdraw ${money} from card ${b.card_id ?? "(unspecified)"}.`;
     case "createFxOrder":
-      return `Place an FX ${b.side ?? ""} order for ${money}${b.pair ? ` on ${b.pair}` : ""}. It will sit in waiting_approval until a second user approves it in the dashboard.`;
+      // No approval step stands between this and execution: fx's canCreatePending
+      // returns true for an API-key caller, so the order is created `pending` and
+      // proceeds. Saying otherwise would offer a second chance that never comes.
+      return (
+        `Place an FX order against quote ${b.quote_id ?? "(unspecified)"}, ` +
+        `selling from ${b.source?.type ?? "source"} ${b.source?.id ?? "(unspecified)"} ` +
+        `and settling to ${b.destination?.type ?? "destination"} ${b.destination?.id ?? "(unspecified)"}. ` +
+        `The quote fixes the rate and the amounts. Placed with an API key it executes — no one approves it first.`
+      );
     case "createCardPaymentIntent":
       return `Create a card payment intent for ${money} and immediately charge saved card token ${b.card_token ?? "(unspecified)"}. Omit card_token to get a checkout link the payer completes themselves, which charges nothing now.`;
     case "chargeSavedCard":
       return `Charge ${money} to saved card ${b.card_id ?? b.card_token ?? "(unspecified)"}.`;
+    case "refundCollection": {
+      const value = minor(b.amount_cents) ?? "the full remaining amount";
+      return `Refund ${value} of payment ${target("id")} back to the payer. This cannot be undone.`;
+    }
+    case "retryCollectionRefund":
+      return `Resubmit refund ${target("refund_id")} on payment ${target("id")}, returning its amount to the payer.`;
+    case "captureCollection": {
+      const value = minor(b.amount_cents) ?? "the full held amount";
+      return `Capture ${value} from the authorization held on payment ${target("id")}. This is the moment the payer is charged; any remainder of the hold is released.`;
+    }
     default:
       return `Execute ${tool.method.toUpperCase()} ${tool.path} with ${money}.`;
   }

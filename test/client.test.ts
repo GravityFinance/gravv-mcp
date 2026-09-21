@@ -1,6 +1,13 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GravvClient, GravvApiError, RateLimiter, extractErrorMessage } from "../src/client.ts";
+import {
+  GravvClient,
+  GravvApiError,
+  RateLimiter,
+  extractErrorMessage,
+  DEFAULT_RATE_PER_MINUTE,
+  DEFAULT_RATE_BURST,
+} from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 /** Records what the client sent and replays canned responses. */
@@ -210,9 +217,15 @@ describe("error message extraction", () => {
 });
 
 describe("retries", () => {
+  // The middleware's in-flight body, verbatim: this is the only 409 worth retrying.
+  const inFlight = {
+    code: "idempotency_in_flight",
+    message: "A request with the same Idempotency-Key is currently being processed",
+  };
+
   test("retries a 409 in-flight conflict then succeeds", async () => {
     const { calls, fetchImpl } = stub([
-      { status: 409, body: { error: "in flight" }, headers: { "Retry-After": "1" } },
+      { status: 409, body: inFlight, headers: { "Retry-After": "1" } },
       { status: 200, body: { data: { ok: true } } },
     ]);
     const res = await client(fetchImpl).call(createCustomer, { body: {} });
@@ -220,10 +233,35 @@ describe("retries", () => {
     assert.deepEqual(res.data, { ok: true });
   });
 
-  test("gives up after repeated 409s rather than looping", async () => {
-    const { calls, fetchImpl } = stub([{ status: 409, body: { error: "still running" } }]);
+  test("gives up after repeated in-flight 409s rather than looping", async () => {
+    const { calls, fetchImpl } = stub([{ status: 409, body: inFlight }]);
     await assert.rejects(client(fetchImpl).call(createCustomer, { body: {} }));
     assert.equal(calls.length, 3);
+  });
+
+  test("an AlreadyExists 409 is final, not retried", async () => {
+    // Since the gateway started mapping gRPC codes, a duplicate customer and a KYC that
+    // is already complete both arrive as 409. Retrying those twice more only delays the
+    // answer the caller needed on the first attempt.
+    const { calls, fetchImpl } = stub([
+      { status: 409, body: { data: null, error: "customer with this email already exists" } },
+    ]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: Error) => e instanceof GravvApiError && e.status === 409 && /already exists/.test(e.message),
+    );
+    assert.equal(calls.length, 1, "a state conflict must not be retried");
+  });
+
+  test("the in-flight code is recognised wherever the envelope puts it", async () => {
+    // Nested under `error` rather than at the top level — same middleware, and the
+    // gateway wraps some bodies in its { data, error } envelope on the way out.
+    const { calls, fetchImpl } = stub([
+      { status: 409, body: { data: null, error: inFlight }, headers: { "Retry-After": "1" } },
+      { status: 200, body: { data: { ok: true } } },
+    ]);
+    await client(fetchImpl).call(createCustomer, { body: {} });
+    assert.equal(calls.length, 2);
   });
 
   test("does not retry a 400 — the request is wrong, not unlucky", async () => {
@@ -276,5 +314,63 @@ describe("hints distinguish malformed requests from state preconditions", () => 
 
   test("an idempotency 400 still blames idempotency", async () => {
     assert.match(await hintFor(400, "missing idempotency key in request headers"), /Idempotency-Key/);
+  });
+
+  // The gateway now maps gRPC codes to HTTP for customers, payees, webhooks,
+  // feature-access and the v2 accounts — utils/responses.go grpcToHTTPStatus. Three
+  // statuses the client never used to see arrive from there, and each needs a different
+  // response from the model.
+  test("a 403 on a feature-gated tool names the entitlement to apply for", async () => {
+    // cardAcquiringGate and friends deny with a bare "forbidden", identical to a
+    // permission denial, so the tool is the only signal for which fix applies.
+    const { fetchImpl } = stub([{ status: 403, body: { data: null, error: "forbidden" } }]);
+    const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    try {
+      await client(fetchImpl).call(intent, { amount: "1.00" });
+      assert.fail("expected a 403");
+    } catch (e) {
+      const hint = (e as GravvApiError).hint ?? "";
+      assert.match(hint, /card acquiring/);
+      assert.match(hint, /listFeatureAccess/);
+    }
+  });
+
+  test("a 403 elsewhere points at the dashboard instead", async () => {
+    assert.match(await hintFor(403, "forbidden"), /dashboard/i);
+  });
+
+  test("a 409 says the state is already what was asked for", async () => {
+    const h = await hintFor(409, "customer with this email already exists");
+    assert.match(h, /already/i);
+    assert.doesNotMatch(h, /idempotency/i, "an AlreadyExists conflict is not an idempotency problem");
+  });
+
+  test("a 503 is named as transient, with the retry rule", async () => {
+    const h = await hintFor(503, "circuit breaker customers is open");
+    assert.match(h, /unavailable|circuit/i);
+    assert.match(h, /idempotency key/i, "a safe retry reuses the key");
+  });
+
+  test("a 504 warns the operation may have completed", async () => {
+    const h = await hintFor(504, "context deadline exceeded");
+    assert.match(h, /MAY still have completed/i, "blind retries after a timeout can double-execute");
+  });
+});
+
+describe("the client throttles to the gateway's real ceiling", () => {
+  // api-gateway middleware/throttler.go:17 — rate.Limit(15.0/60.0) with burst 30, per
+  // tenant. The client defaulted to 60/min, four times what the gateway admits, so
+  // sustained use discovered the limit as 429s instead of pacing below it.
+  test("the default matches middleware.AuthenticatedRateLimiter", () => {
+    assert.equal(DEFAULT_RATE_PER_MINUTE, 15);
+    assert.equal(DEFAULT_RATE_BURST, 30);
+  });
+
+  test("the burst is spendable, and the next call waits", async () => {
+    const limiter = new RateLimiter(DEFAULT_RATE_PER_MINUTE, 2);
+    const started = Date.now();
+    await limiter.take();
+    await limiter.take();
+    assert.ok(Date.now() - started < 50, "the burst should not block");
   });
 });

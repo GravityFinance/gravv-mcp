@@ -148,8 +148,8 @@ then paste a JSON-RPC frame on stdin:
 the Gravv documentation. They need **no API key**, so you can explore Gravv before you
 have credentials.
 
-**API tools** — 86 tools covering customers, KYC, accounts, transfers, cards, wallets,
-FX, collections, payment links, webhooks, and approvals.
+**API tools** — 115 tools covering customers, KYC, accounts, transfers, cards, wallets,
+FX, collections and disputes, payment links, feature access, and webhooks.
 
 Both matter. The API tools execute calls, but they can't tell you what has to happen
 first — that an account needs a KYC-verified customer, or that a new recipient must reach
@@ -170,14 +170,16 @@ Gravv moves real money, and **sandbox and live share one base URL** — only you
 differs. Nothing in a request visually signals danger, so the server signals it.
 
 **Money-moving tools take two calls.** `createTransfer`, `withdrawFromCard`,
-`createFxOrder`, `chargeSavedCard`, `approveTransfer`, and `approveFxOrder` return a
-preview on the first call and execute only when called again with `confirm: true`. The
-unconfirmed call never reaches the API. `createCardPaymentIntent` joins them only when
-you pass a `card_token`, because that charges the stored card immediately — without one
-it just mints a checkout link and needs no confirmation.
+`createFxOrder`, `chargeSavedCard`, `refundCollection`, `retryCollectionRefund`, and
+`captureCollection` return a preview on the first call and execute only when called again
+with `confirm: true`. The unconfirmed call never reaches the API.
+`createCardPaymentIntent` joins them only when you pass a `card_token`, because that
+charges the stored card immediately — without one it just mints a checkout link and needs
+no confirmation.
 
-Approving is included because releasing a held instruction has the same consequence as
-initiating one. Rejecting is not gated — it only prevents execution.
+Refunding is included because returning money to a payer moves value just as surely as
+taking it; capturing is the moment a held card is actually charged. Releasing a hold with
+`rejectCollection` is not gated — nothing moves.
 
 ```
 > Send $50 from acc_1 to acc_2
@@ -215,6 +217,10 @@ the key used is returned with the result so a deliberate retry can reuse it.
 Everything except `account-applications` loads by default. Account onboarding carries
 large schemas and is an infrequent, deliberate flow, so it is opt-in.
 
+The default set is 103 tools, around 25k tokens of tool definitions. Narrow it with
+`--toolsets` when a session only needs one domain — `--toolsets=customers,kyc,accounts`
+is 24 tools and about a quarter of that.
+
 ```bash
 npx @gravv-infra/mcp                                       # default
 npx @gravv-infra/mcp --toolsets=customers,accounts,cards   # specific groups
@@ -224,19 +230,18 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | Toolset | Default | Covers |
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
-| `accounts` | ✓ | accounts and status |
+| `accounts` | ✓ | accounts, status, main account, auto-sweep rules |
 | `transfers` | ✓ | transfers, rates, supported countries and currencies |
 | `transactions` | ✓ | history, volume, export |
-| `external-accounts` | ✓ | recipients, verification, institutions |
+| `external-accounts` | ✓ | recipients, corrections, verification, institutions |
 | `kyc` | ✓ | KYC start, server-to-server, document upload, status |
 | `cards` | ✓ | issue, balance, status, withdraw, applications |
-| `wallets` | ✓ | blockchain wallet creation and lookup |
+| `wallets` | ✓ | blockchain wallets, and their balances |
 | `fx` | ✓ | quotes, rates, OTC orders |
-| `collections` | ✓ | card payment intents, saved cards, payment status |
+| `collections` | ✓ | card payment intents, saved cards, refunds, captures, chargebacks |
 | `payment-links` | ✓ | stablecoin payment links |
-| `features` | ✓ | feature eligibility and activation |
+| `features` | ✓ | risk features, and the entitlements gating cards and OTC |
 | `webhooks` | ✓ | event history, delivery calls, retry |
-| `approvals` | ✓ | approve/reject transfers, recipients and FX orders |
 | `account-applications` | | account onboarding |
 
 ---
@@ -249,36 +254,46 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 `searchGravvDocs` · `getGravvDocPage`
 
 **customers**
-`createCustomer` · `getCustomer` · `listCustomers` · `updateCustomer`
+`createCustomer` · `getCustomer` · `getCustomerByEmail` · `listCustomers` ·
+`updateCustomer` · `listCustomerWallets` · `startCustomerKyb`
 
 **kyc**
 `startCustomerKyc` · `startCustomerKycS2S` · `uploadCustomerKycDocument` ·
 `getCustomerKycDocuments` · `getCustomerKycStatus`
 
 **accounts**
-`createAccount` · `getAccount` · `listAccounts` · `updateAccountStatus`
+`createAccount` · `getAccount` · `getMainAccount` · `listAccounts` · `updateAccountStatus` ·
+`hasCardAccount` · `hasAutoSweepAccount` · `listSweepRules` · `createSweepRule` ·
+`getSweepRule` · `updateSweepRule` · `deleteSweepRule`
 
 **external-accounts** — recipients you pay out to
 `createExternalAccount` · `getExternalAccount` · `listExternalAccounts` ·
-`verifyExternalAccount` · `listExternalAccountInstitutions`
+`updateExternalAccount` · `verifyExternalAccount` · `listExternalAccountInstitutions`
 
 **transfers**
 `createTransfer*` · `getTransferRates` · `listTransferSupportedCurrencies` ·
 `listTransferSupportedCountries` · `listTransferSupportedCountriesForAddress`
 
 **transactions**
-`listTransactions` · `getTransaction` · `getTransactionsVolume` · `exportTransactions`
+`listTransactions` · `getTransaction` · `listTransactionActivities` ·
+`getTransactionsVolume` · `exportTransactions`
 
 **cards**
 `createCard` · `getCard` · `listCards` · `getCardBalance` · `updateCardStatus` ·
 `withdrawFromCard*` · `createCardApplication` · `getCardApplication` · `listCardApplications`
 
 **wallets**
-`createWallet` · `getWallet` · `listWallets`
+`createWallet` · `getWallet` · `listWallets` · `getWalletBalance` · `getWalletBalances` ·
+`getTotalWalletBalance`
 
 **fx**
-`getFxQuote` · `listFxRates` · `listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` ·
-`listFxOrders` · `cancelFxOrder` · `listFxPendingApprovals`
+`getFxQuote` · `getFxPayoutQuote` · `listFxRates` · `listFxOtcRates` ·
+`listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` · `listFxOrders` ·
+`cancelFxOrder` · `listFxPendingApprovals`
+
+`createFxOrder` takes the `quote_id` from `getFxQuote` and nothing else prices it. An
+order placed with an API key is created `pending` and proceeds — the `waiting_approval`
+queue applies to dashboard users, not to API callers.
 
 **collections** — taking money in
 
@@ -295,21 +310,30 @@ with none of the rest, and two tools for one job is how an assistant ends up on 
 one. Rails other than card are not currently exposed over MCP.
 
 `createCardPaymentIntent*` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
-`deleteSavedCard` · `getCollection`
+`deleteSavedCard` · `getCollection` · `listCollections`
+
+Once a payment exists: `refundCollection*` · `listCollectionRefunds` ·
+`retryCollectionRefund*` · `captureCollection*` · `rejectCollection`
+
+Disputes: `listChargebacks` · `listCollectionChargebacks` · `getChargeback` ·
+`getChargebackDraft` · `saveChargebackDraft` · `respondToChargeback` · `acceptChargeback`
 
 **payment-links**
 `createPaymentLink` · `getPaymentLink` · `listPaymentLinks` · `updatePaymentLink` ·
 `updatePaymentLinkStatus` · `deletePaymentLink` · `getPublicPaymentLink`
 
-**features**
-`listFeatures` · `checkFeatureEligibility` · `activateFeature`
+**features** — risk features, and the entitlements that gate card payments
+`listFeatures` · `checkFeatureEligibility` · `activateFeature` ·
+`listFeatureAccess` · `listFeatureCatalogue` · `requestFeatureAccess` ·
+`getFeatureAccessRequest` · `updateFeatureAccessRequest`
+
+These are two systems. `listFeatures` / `activateFeature` cover risk features.
+`listFeatureAccess` and friends cover the compliance entitlements that gate card
+acquiring, card issuing and the OTC desk — that is the one to check when
+`createCardPaymentIntent`, `createCard` or `createFxOrder` returns a bare `403`.
 
 **webhooks**
 `getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
-
-**approvals** — sign off on held instructions
-`approveTransfer*` · `rejectTransfer` · `approveExternalAccount` · `rejectExternalAccount` ·
-`approveFxOrder*` · `rejectFxOrder` · `searchWebhookIngestion`
 
 **account-applications** — opt-in via `--toolsets=account-applications`
 `createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
@@ -418,7 +442,18 @@ The same key was reused with a different payload. A genuinely new operation need
 key; the server generates one per call, so this usually means a retry changed the body.
 
 **Repeated `429`**
-Lower `GRAVV_RATE_PER_MINUTE`.
+The client paces itself at 15 requests a minute to match the gateway. If a deployment is
+stricter still, lower `GRAVV_RATE_PER_MINUTE`.
+
+**A bare `403` with no reason**
+Two causes. Approving a transfer, recipient or FX order is dashboard-only and always
+returns this — ask someone to approve it in the dashboard. Otherwise the business may not
+be entitled to the capability: check `listFeatureAccess` and apply with
+`requestFeatureAccess`.
+
+**A transfer succeeded but nothing moved**
+Check `requires_approval` on the response. A held transfer still reports
+`transfer_status: pending`, and only a dashboard user can release it.
 
 **Documentation search returns nothing**
 It's keyword-based, not semantic. Rephrase using the vocabulary the docs use — "transfer"
@@ -432,7 +467,7 @@ rather than an unusual synonym — or drop the section filter.
 |---|---|---|
 | `GRAVV_API_KEY` | — | Sandbox or live key; selects the environment. Omit for docs-only mode |
 | `GRAVV_ALLOW_LIVE_WRITES` | unset | `true` permits money movement on a live key |
-| `GRAVV_RATE_PER_MINUTE` | `60` | Client-side request throttle |
+| `GRAVV_RATE_PER_MINUTE` | `15` | Client-side request throttle, matching the gateway's per-tenant limit |
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 

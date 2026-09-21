@@ -23,7 +23,6 @@ export type Toolset =
   | "customers"
   | "accounts"
   | "account-applications"
-  | "approvals"
   | "transfers"
   | "transactions"
   | "external-accounts"
@@ -63,7 +62,6 @@ export const DEFAULT_TOOLSETS: Toolset[] = [
   "payment-links",
   "features",
   "webhooks",
-  "approvals",
 ];
 
 interface Op {
@@ -229,6 +227,23 @@ export const BLOCKED: Record<string, string> = {
 };
 
 /**
+ * Why an approve/reject name resolves to a refusal rather than a tool.
+ *
+ * Every approval route on the gateway carries middleware.DashboardOnly(), which
+ * refuses anything presenting an API key — the only credential this server holds — with
+ * a bare 403 "forbidden" that names no reason. Tools for them could therefore never
+ * succeed, only waste a call and leave the model guessing, so they are not shipped.
+ * The names stay here because a model asked to "approve the transfer" will reach for
+ * one, and being told where approval actually happens beats an unknown-tool error.
+ */
+const dashboardOnly = (what: string, readBack: string) =>
+  `${what} is not possible with an API key. The route accepts signed-in dashboard users only and ` +
+  `refuses everything else with a bare 403, so there is no tool for it and no payload that would ` +
+  `make it work. A person with the approval permission has to do it in the Gravv dashboard, and ` +
+  `the instruction stays held until they do — tell the user that, rather than retrying. ` +
+  `Follow the outcome with ${readBack}.`;
+
+/**
  * Names a model is likely to reach for that map to blocked operations.
  *
  * Without this, asking for `getCardSensitiveDetails` returns a bare "unknown tool" and
@@ -243,6 +258,14 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
   createCollection:
     "Removed: card collection goes through createCardPaymentIntent, which returns the hosted payment link plus the intent id and the card token recurring charges need. Check a payment's status with getCollection using the transaction_id it returns.",
+  approveTransfer: dashboardOnly("Approving a transfer", "getTransaction or listTransactions"),
+  rejectTransfer: dashboardOnly("Rejecting a transfer", "getTransaction or listTransactions"),
+  approveExternalAccount: dashboardOnly("Approving a recipient", "getExternalAccount"),
+  rejectExternalAccount: dashboardOnly("Rejecting a recipient", "getExternalAccount"),
+  approveFxOrder: dashboardOnly("Approving an FX order", "getFxOrder or listFxPendingApprovals"),
+  rejectFxOrder: dashboardOnly("Rejecting an FX order", "getFxOrder or listFxPendingApprovals"),
+  searchWebhookIngestion:
+    "Not available over MCP: /v1/webhooks/ingestion/search is gated by DashboardOnly plus an admin-operations permission, so an API key is refused with a bare 403. getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory do accept API keys.",
   startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
   startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
   uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
@@ -261,10 +284,12 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/cards/withdraw",
   "POST /v1/fx/orders",
   "POST /v1/collections/cards/payment-intents/charge",
-  // Approving releases a held instruction for execution, so it moves money just as
-  // surely as initiating one. Rejecting does not, and is not gated.
-  "POST /v1/transfer/{id}/approve",
-  "POST /v1/fx/orders/{order_id}/approve",
+  // Returning a payment to the payer moves value out just as surely as taking it in,
+  // and settling a hold is the moment the payer is actually charged. Rejecting a hold
+  // releases it without moving anything, so it is not gated.
+  "POST /v1/collections/{id}/refund",
+  "POST /v1/collections/{id}/refunds/{refund_id}/retry",
+  "POST /v1/collections/{id}/capture",
 ]);
 
 /**
@@ -311,7 +336,7 @@ export const PREREQUISITES: Record<string, string> = {
     "RETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "RESPONSE: check `requires_approval`. When it is true the transfer is HELD, not sent, and only a dashboard user can release it — API keys cannot approve. `transfer_status` alone does not tell you this.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
 
   submitAccountApplication:
     "ORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
@@ -326,10 +351,10 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
 
   getFxQuote:
-    "Quotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "STEP 1 of an FX order, and the only way to get the quote_id createFxOrder requires. Name the corridor with either `currency_pair` (exact market, e.g. USD_US_XAF_CM) or `direction` (e.g. USD_XAF, service picks the market) — NOT a buy/sell side, and not separate from/to currency fields. Quotes expire: the response carries quote_id and expires_at, and an expired quote is refused by createFxOrder. A quote_id also locks the rate for createTransfer.",
 
   createFxOrder:
-    "Orders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITE: take a quote with getFxQuote and pass its quote_id — the quote carries the corridor, the rate and the amounts, and an order without a valid, unexpired quote_id is refused outright. `source` and `destination` are objects ({type, id}), where type is account, wallet or ssi.\n\nNO SECOND PAIR OF EYES ON THIS PATH: an order placed with an API key — which is what this server holds — is created in `pending` and proceeds. The `waiting_approval` queue applies to dashboard users without FX approval rights, not to you, and the approve/reject endpoints refuse API keys outright. Treat a confirmed call as final. MOVES MONEY: requires confirm: true.",
 
   withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
 
@@ -343,7 +368,7 @@ export const PREREQUISITES: Record<string, string> = {
     "PREREQUISITE: a payment intent and a card token from an earlier completed checkout — create the intent with createCardPaymentIntent and take the token from the webhook. MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "Handles both individuals and businesses: a customer whose type is business is routed to KYB automatically, so there is no separate call for it here. For a business, complete KYC for every associated person BEFORE starting the business's own verification. Some tenants are configured for document-based auto-verification and reject this call — on that refusal use uploadCustomerKycDocument instead. Poll getCustomerKycStatus for the outcome: verification is asynchronous and driven by the provider.",
 
   uploadCustomerKycDocument:
     "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",

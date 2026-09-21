@@ -11,6 +11,10 @@ import type { GeneratedTool } from "./generated/tools.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
 
+/** Mirrors middleware.AuthenticatedRateLimiter on the gateway: 15/min, burst 30, per tenant. */
+export const DEFAULT_RATE_PER_MINUTE = 15;
+export const DEFAULT_RATE_BURST = 30;
+
 export type Environment = "sandbox" | "live" | "unknown";
 
 /**
@@ -44,11 +48,16 @@ export class GravvApiError extends Error {
  * Token bucket matching the server-side limiter so we queue locally instead of
  * generating 429s.
  *
- * NOTE: the enforced ceiling is not clearly documented. The published limit is 10/min,
- * but 40 consecutive sandbox requests measured zero 429s, so throttling that hard would
- * make the server feel broken for no reason. The default is a courtesy 60/min; if a
- * given environment is stricter the 429 handler backs off, and GRAVV_RATE_PER_MINUTE
- * lowers the ceiling.
+ * The ceiling matches the gateway's: middleware.AuthenticatedRateLimiter admits
+ * rate.Limit(15.0/60.0) per second with a burst of 30, per tenant — 15 requests a
+ * minute, not the 10 the published docs say and not the 60 this client used to assume.
+ * Guessing high meant the client waved through four times what the gateway accepts and
+ * discovered the limit as 429s.
+ *
+ * The gateway's limiter lives in each pod's memory, so a multi-replica deployment
+ * tolerates more than one tenant's share in practice. Throttling to the single-pod
+ * figure is the safe reading; GRAVV_RATE_PER_MINUTE raises or lowers it, and the 429
+ * handler still backs off when an environment is stricter than expected.
  */
 export class RateLimiter {
   private tokens: number;
@@ -109,7 +118,7 @@ export class GravvClient {
     this.opts = opts;
     this.environment = detectEnvironment(opts.apiKey ?? "");
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-    this.limiter = new RateLimiter(opts.ratePerMinute ?? 60, opts.rateBurst ?? 15);
+    this.limiter = new RateLimiter(opts.ratePerMinute ?? DEFAULT_RATE_PER_MINUTE, opts.rateBurst ?? DEFAULT_RATE_BURST);
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.doFetch = opts.fetchImpl ?? fetch;
   }
@@ -223,7 +232,13 @@ export class GravvClient {
 
       const apiMessage = extractErrorMessage(parsed, res.statusText);
 
-      if (res.status === 409 && attempt < maxAttempts) {
+      // A 409 is two unrelated answers. The idempotency middleware sends one while an
+      // identical request is still in flight, and asks for a short pause. The gRPC error
+      // mapping sends the other for AlreadyExists — a duplicate customer, a KYC already
+      // completed — which is a final answer about state. Retrying that one changes
+      // nothing, costs three attempts, and buries the reason, so the body's code
+      // decides rather than the status alone.
+      if (res.status === 409 && isIdempotencyInFlight(parsed) && attempt < maxAttempts) {
         const retryAfter = Number(res.headers.get("Retry-After") ?? 1);
         await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
         lastError = new GravvApiError(apiMessage, 409, parsed);
@@ -242,6 +257,23 @@ export class GravvClient {
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
   }
+}
+
+/**
+ * True only for the idempotency middleware's in-flight 409, which is worth a retry.
+ *
+ * The middleware sets `code: "idempotency_in_flight"` on that body and nothing else
+ * does; an AlreadyExists 409 arrives through utils.HttpGrpcErrorResponse with the
+ * service's own message. Without a code we do not retry: a final 409 returned three
+ * times over three seconds is worse than one returned immediately.
+ */
+function isIdempotencyInFlight(body: unknown): boolean {
+  if (body === null || typeof body !== "object") return false;
+  const record = body as Record<string, unknown>;
+  const candidates = [record, record.error, record.data].filter(
+    (v): v is Record<string, unknown> => v !== null && typeof v === "object",
+  );
+  return candidates.some((c) => c.code === "idempotency_in_flight");
 }
 
 /**
@@ -276,6 +308,22 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
 
   return fallback;
 }
+
+/**
+ * Tools behind a per-business entitlement, and which one.
+ *
+ * These carry cardIssuanceGate / cardAcquiringGate / otcTradeDeskGate on the gateway,
+ * each of which is RequireFeatureAccess plus the route's own permission. A denial there
+ * is indistinguishable on the wire from a permission denial — both are a bare 403 — so
+ * the mapping lives here rather than being read off the response.
+ */
+const FEATURE_GATED: Record<string, string> = {
+  createCardPaymentIntent: "card acquiring",
+  chargeSavedCard: "card acquiring",
+  createCard: "card issuance",
+  createCardApplication: "card issuance",
+  createFxOrder: "the OTC trade desk",
+};
 
 /**
  * Turn the statuses merchants actually hit into something actionable.
@@ -313,13 +361,24 @@ function hintFor(status: number, tool: GeneratedTool, message = ""): string | un
     case 401:
       return "The API key was rejected. Confirm GRAVV_API_KEY is set to a current key for the environment you intend.";
     case 403:
-      return "Forbidden. Some endpoints are dashboard-only and reject API-key callers — approvals in particular must be done in the Gravv dashboard.";
+      // The gateway's DashboardOnly() and RequireFeatureAccess() both answer a bare
+      // "forbidden" with no reason, so the tool being called is the only way to tell
+      // which of the two it was. Naming the wrong one sends the model down a dead end.
+      return FEATURE_GATED[tool.name]
+        ? `Forbidden, and this endpoint is gated per business: ${FEATURE_GATED[tool.name]} requires a compliance decision before a business may use it. Check listFeatureAccess for the entitlement, and apply with requestFeatureAccess if it is missing. If the entitlement is already approved, the API key may simply lack the permission.`
+        : "Forbidden. Either the key lacks the permission, or the endpoint is dashboard-only: approving a held transfer, recipient or FX order rejects API keys outright and must be done by a person in the Gravv dashboard.";
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
+    case 409:
+      return "Conflict: the resource is already in the state you asked for — a customer with that email exists, KYC is already complete, or an equivalent request is already open. Read the current state before retrying; sending this again will fail the same way.";
     case 422:
       return "This idempotency key was already used with a different payload. Retrying the same operation must reuse the key with an identical body; a genuinely new operation needs a new key.";
     case 429:
-      return "Rate limited. The client throttles locally, so repeated 429s suggest the configured ceiling is above the real one — lower GRAVV_RATE_PER_MINUTE.";
+      return "Rate limited. The client throttles to 15 requests a minute to match the gateway; repeated 429s suggest this deployment is stricter still — lower GRAVV_RATE_PER_MINUTE.";
+    case 503:
+      return "The downstream service is unavailable or its circuit breaker is open. Nothing is wrong with the request — wait and retry. If this was a POST, reuse the same idempotency key so a retry cannot double-execute.";
+    case 504:
+      return "The downstream service did not answer in time. The operation MAY still have completed — do not blindly retry a money-moving call. Read the resource back first, and if you do retry, reuse the same idempotency key.";
     default:
       return undefined;
   }

@@ -56,8 +56,6 @@ components:
         - destination
         - amount
         - customer_id
-        - description
-        - client_reference
       properties:
         source:
           type: object
@@ -72,6 +70,17 @@ components:
                 - internal_account
                 - internal_crypto_wallet
               description: source can be `internal_account` or `internal_crypto_wallet`
+            currency:
+              type: string
+              description: >-
+                ISO 4217 code the sender is paying in. Inferred from the
+                destination rail when omitted — SEPA settles EUR, FPS settles
+                GBP, everything else USD.
+              enum:
+                - USD
+                - EUR
+                - GBP
+              example: USD
             crypto_asset:
               type: string
               description: Optional crypto asset type
@@ -84,6 +93,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/ExternalAccountDestination'
             - $ref: '#/components/schemas/InternalAccountDestination'
+            - $ref: '#/components/schemas/InternalCryptoWalletDestination'
             - $ref: '#/components/schemas/CryptoWalletDestination'
             - $ref: '#/components/schemas/CardDestination'
         amount:
@@ -185,6 +195,7 @@ components:
           enum:
             - ach
             - wire
+            - rtp
             - sepa
             - swift
             - fps
@@ -206,6 +217,23 @@ components:
           enum:
             - internal_account
           example: internal_account
+    InternalCryptoWalletDestination:
+      title: Internal Crypto Wallet Destination
+      description: A wallet Gravv custodies for you, addressed by its wallet id.
+      type: object
+      required:
+        - id
+        - destination_type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal wallet ID
+        destination_type:
+          type: string
+          enum:
+            - internal_crypto_wallet
+          example: internal_crypto_wallet
     CryptoWalletDestination:
       title: Crypto Wallet Destination
       type: object
@@ -304,6 +332,20 @@ components:
                 - 'null'
               description: Three-letter ISO 4217 code for the recipient's local currency, if applicable.
               example: NGN
+            requires_approval:
+              type: boolean
+              description: >-
+                True when the transfer is held for a second person to approve in
+                the Gravv dashboard rather than executing now. Nothing moves
+                until they do, and API keys cannot approve it.
+              example: false
+            approval_id:
+              type: string
+              format: uuid
+              description: >-
+                Present when requires_approval is true — the approval record a
+                dashboard user acts on.
+              example: 0f1b3a5c-9d4e-4f2b-8a7c-1d2e3f4a5b6c
         error:
           type:
             - string

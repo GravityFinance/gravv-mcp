@@ -43,6 +43,12 @@ before(async () => {
         res.end(JSON.stringify({ data: { items: [{ id: "acc_1", currency: "USD", balance: "100.00" }] } }));
       } else if (req.url?.startsWith("/v1/transfer")) {
         res.end(JSON.stringify({ data: { transfer_id: "trf_1", status: "pending" } }));
+      } else if (req.url?.startsWith("/v1/wallets")) {
+        res.end(JSON.stringify({ data: { address: "0xabc", network: "polygon", assets: [] } }));
+      } else if (req.url?.startsWith("/v1/feature-access")) {
+        res.end(JSON.stringify({ data: { items: [{ feature: "card_acquiring", enabled: false }] } }));
+      } else if (req.url?.startsWith("/v1/collections")) {
+        res.end(JSON.stringify({ data: { transaction_id: "txn_1", status: "refunded" } }));
       } else if (req.url?.startsWith("/v1/cards")) {
         // Includes a sensitive field to prove redaction runs on the way out.
         res.end(JSON.stringify({ data: { id: "card_1", card_number: "4111111111111111", last4: "1111" } }));
@@ -154,6 +160,85 @@ describe("end-to-end over MCP stdio", () => {
         !names.includes("getCardSensitiveDetails"),
         "cardholder-data endpoints must never be advertised",
       );
+
+      // The hand-authored half ships by default too — it is where balances, refunds and
+      // the feature-access gate live.
+      for (const name of ["getWalletBalance", "refundCollection", "listFeatureAccess"]) {
+        assert.ok(names.includes(name), `${name} should be advertised by default`);
+      }
+      for (const name of ["approveTransfer", "approveFxOrder", "searchWebhookIngestion"]) {
+        assert.ok(!names.includes(name), `${name} is dashboard-only and must not be advertised`);
+      }
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a hand-authored read tool round-trips against the gateway", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", {
+        name: "getWalletBalance",
+        arguments: { id: "wal_1" },
+      });
+      assert.equal(res.result.isError, undefined);
+      assert.equal(received.length, 1);
+      assert.equal(received[0]!.url, "/v1/wallets/wal_1/balance");
+      assert.equal(received[0]!.method, "GET");
+      assert.match(textOf(res), /0xabc/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a hand-authored refund confirms before it reaches the gateway", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+
+      const first = JSON.parse(
+        textOf(
+          await mcp.request("tools/call", {
+            name: "refundCollection",
+            arguments: { id: "txn_1", amount_cents: 1050, currency: "USD" },
+          }),
+        ),
+      );
+      assert.equal(first.status, "confirmation_required");
+      assert.equal(received.length, 0, "an unconfirmed refund must not reach the API");
+
+      await mcp.request("tools/call", {
+        name: "refundCollection",
+        arguments: { id: "txn_1", amount_cents: 1050, currency: "USD", confirm: true },
+      });
+      assert.equal(received.length, 1);
+      assert.equal(received[0]!.url, "/v1/collections/txn_1/refund");
+      assert.ok(received[0]!.headers["idempotency-key"], "the POST must carry a generated key");
+      assert.equal(received[0]!.body.confirm, undefined);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("an approval name explains itself instead of failing as unknown", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=all"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", {
+        name: "approveTransfer",
+        arguments: { id: "trf_1", confirm: true },
+      });
+      assert.equal(res.result.isError, true);
+      assert.match(textOf(res), /dashboard/i, "should say where approval actually happens");
     } finally {
       mcp.kill();
     }

@@ -14,7 +14,6 @@ const VALID_TOOLSETS: Toolset[] = [
   "customers",
   "accounts",
   "account-applications",
-  "approvals",
   "transfers",
   "transactions",
   "external-accounts",
@@ -44,13 +43,16 @@ OPTIONS
 ENVIRONMENT
   GRAVV_API_KEY              Sandbox or live key; the key selects the environment.
   GRAVV_ALLOW_LIVE_WRITES    Set to "true" to permit money movement on a live key.
-  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 10.
+  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 15, matching the gateway.
   GRAVV_BASE_URL             Same as --base-url.
 
 NOTES
   Sandbox and live share one base URL — the key decides which. Money-moving tools
   always require an explicit confirm: true, and on a live key additionally require
   GRAVV_ALLOW_LIVE_WRITES=true.
+
+  Approving a held transfer, recipient or FX order is not possible with an API key:
+  those routes accept dashboard sessions only. Ask a dashboard user to approve.
 `;
 }
 

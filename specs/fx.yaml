@@ -160,76 +160,66 @@ components:
           example: null
     FxQuoteRequest:
       type: object
+      description: >-
+        A corridor and an amount. The corridor is named either exactly
+        (`currency_pair`) or by direction (`direction`, where the service picks
+        the best market for the pair). Supply one of the two; `amount` is always
+        required and is denominated in the FROM currency.
       required:
-        - from_currency
-        - to_currency
         - amount
-        - direction
       properties:
-        from_currency:
+        currency_pair:
           type: string
-          description: Source currency code (ISO 4217).
-          example: USD
-        to_currency:
-          type: string
-          description: Target currency code (ISO 4217).
-          example: ZAR
-        amount:
-          type: number
-          description: Amount in the source currency to convert. Must be greater than zero.
-          example: 10
+          description: >-
+            Exact market corridor, `FROM_FROMCOUNTRY_TO_TOCOUNTRY`. Takes
+            precedence over `direction` when both are sent.
+          example: USD_US_XAF_CM
         direction:
           type: string
-          description: Direction of the trade.
-          enum:
-            - BUY
-            - SELL
-          example: BUY
+          description: >-
+            Currency exchange direction, `FROM_TO`. The service selects the best
+            market for that pair. This is a corridor, NOT a buy/sell side.
+          example: USD_XAF
+        amount:
+          type: string
+          description: Amount of the FROM currency being sold, as a decimal string.
+          example: '100.00'
     FxQuoteResponse:
       type: object
+      description: >-
+        A locked price. `quote_id` is the only thing createFxOrder accepts — an
+        order cannot be placed without first taking a quote here.
       properties:
         data:
           type: object
           properties:
-            amount:
-              type: number
-              example: 10
-            direction:
+            quote_id:
               type: string
-              enum:
-                - BUY
-                - SELL
-              example: BUY
-            expires_at:
-              type: string
-              format: date-time
-              example: '2026-03-23T12:45:28.424260688+01:00'
+              description: Pass this to createFxOrder before it expires.
+              example: QT-M2hPM9qt
             from_currency:
               type: string
               example: USD
-            quote_id:
-              type: string
-              example: QT-M2hPM9qt
-            rate:
-              type: number
-              example: 17.715
-            display_rate:
-              type: number
-              description: Human-readable display rate for the quote.
-              example: 1666.67
-            display_rate_label:
-              type: string
-              description: Formatted label expressing the rate in plain language.
-              example: 1 USDT = 1666.67 NGN
-            to_currency_amount:
-              type: number
-              description: >-
-                The amount received in the target currency after applying the
-                rate.
-              example: 177.15
             to_currency:
               type: string
-              example: ZAR
+              example: XAF
+            from_amount:
+              type: string
+              description: Amount of from_currency being sold, as a decimal string.
+              example: '100.00'
+            to_amount:
+              type: string
+              description: Amount of to_currency received, as a decimal string.
+              example: '60750.00'
+            rate:
+              type: string
+              description: Rate applied, as a decimal string.
+              example: '607.50'
+            expires_at:
+              type: string
+              format: date-time
+              description: After this instant the quote is refused by createFxOrder.
+              example: '2026-03-23T12:45:28.424260688+01:00'
         error:
           type:
             - string
@@ -296,79 +286,69 @@ components:
           type: string
           description: Quote currency code (ISO 4217 or crypto ticker).
           example: ZAR
-    CreateFxOrderRequest:
+    FxOrderEndpoint:
       type: object
+      description: One leg of the order — where the funds come from, or where the proceeds settle.
       required:
-        - customer_id
-        - order_type
-        - pair
-        - amount
+        - type
+        - id
       properties:
-        customer_id:
-          type: string
-          format: uuid
-          description: ID of the customer the order is created for.
-          example: 85034797-3ea1-4ad8-a952-becd67d74acc
-        order_type:
+        type:
           type: string
           description: >-
-            A `market` order executes at the current rate once approved. A
-            `limit` order waits until the rate reaches `target_rate`, then
-            executes once approved.
-          enum:
-            - market
-            - limit
-          example: market
-        pair:
-          $ref: '#/components/schemas/CurrencyPair'
-        amount:
-          type: string
-          description: >-
-            Amount of the base currency to exchange. Must be greater than
-            zero.
-          example: '1000'
-        target_rate:
-          type: string
-          description: >-
-            Required for `limit` orders. The rate at which the order should
-            execute.
-          example: '17.50'
-        side:
-          type: string
-          description: Side of the order. Defaults to `sell`.
-          enum:
-            - buy
-            - sell
-          default: sell
-          example: sell
-        source_type:
-          type: string
-          description: >-
-            Where the funds come from. Fiat base currencies are funded from an
-            `account`; crypto base currencies from a `wallet`.
-          enum:
-            - account
-            - wallet
-          example: account
-        source_id:
-          type: string
-          description: ID of the source account or wallet.
-          example: 74653c7b-ae84-45ab-8085-2d2493f86d81
-        destination_type:
-          type: string
-          description: >-
-            Where the proceeds settle. Use `ssi` to settle to a saved
-            settlement instruction.
+            Kind of endpoint. Fiat legs are an `account`, crypto legs a
+            `wallet`, and `ssi` settles to a saved settlement instruction.
           enum:
             - account
             - wallet
             - ssi
-          example: ssi
-        destination_id:
+          example: account
+        id:
+          type: string
+          description: ID of the account, wallet, or settlement instruction.
+          example: 74653c7b-ae84-45ab-8085-2d2493f86d81
+    CreateFxOrderRequest:
+      type: object
+      description: >-
+        An order is placed against a quote, never against a currency pair and an
+        amount: `quote_id` carries the corridor, the rate and both amounts, and
+        the order is refused outright if it is missing or expired. Take the quote
+        with getFxQuote first.
+      required:
+        - quote_id
+        - source
+        - destination
+      properties:
+        quote_id:
           type: string
           description: >-
-            ID of the destination account, wallet, or settlement instruction.
-          example: b23ffd0e-d0fc-432e-acc9-c396194121b3
+            Quote from getFxQuote. It fixes the pair, the rate and the amounts,
+            and it must still be valid — an expired quote is refused.
+          example: QT-M2hPM9qt
+        source:
+          $ref: '#/components/schemas/FxOrderEndpoint'
+        destination:
+          $ref: '#/components/schemas/FxOrderEndpoint'
+        amount:
+          type: string
+          description: >-
+            Optional. The quote already carries the amount; send this only where
+            the corridor allows a partial fill.
+          example: '1000'
+        client_reference:
+          type: string
+          description: Your own reference, echoed back on the order.
+          example: order-abc-123
+        transaction_id:
+          type: string
+          format: uuid
+          description: >-
+            Optional. The id the order is created under. Generated when absent.
+          example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Arbitrary key/value pairs stored with the order.
     FxOrder:
       type: object
       properties:
@@ -536,6 +516,36 @@ components:
             - 'null'
           format: date-time
           description: When the order was last updated. `null` if never updated.
+    CreateFxOrderResponse:
+      type: object
+      description: >-
+        What createFxOrder returns. It is NOT the full order — read that back
+        with getFxOrder using `order_id`.
+      properties:
+        data:
+          type: object
+          properties:
+            order_id:
+              type: string
+              description: Order reference, used as the `order_id` path parameter.
+              example: OTC-0VA89I
+            quote_id:
+              type: string
+              example: QT-M2hPM9qt
+            status:
+              type: string
+              description: >-
+                `pending` for an API-key caller (the order proceeds);
+                `waiting_approval` when a second dashboard user must release it.
+              enum:
+                - pending
+                - waiting_approval
+              example: pending
+        error:
+          type:
+            - string
+            - 'null'
+          example: null
     FxOrderResponse:
       type: object
       properties:
@@ -943,18 +953,18 @@ paths:
       summary: Create order
       operationId: post_v1-fx-orders
       description: >
-        Creates an OTC order. The order is created in `waiting_approval` and
-        doesn't execute until a second user approves it.
+        Places an OTC order against a quote taken with getFxQuote. The quote
+        carries the corridor, the rate and the amounts; `source` and
+        `destination` say which account, wallet or settlement instruction each
+        leg uses.
 
 
-        A `market` order executes at the current rate once approved. A `limit`
-        order waits until the rate reaches `target_rate`, then executes once
-        approved.
-
-
-        Set `destination_type` to control where the converted funds settle: an
-        internal `account`, a crypto `wallet`, or a saved settlement
-        instruction (`ssi`).
+        WHO PLACES IT DECIDES WHETHER IT EXECUTES. An order placed with an API
+        key is created in `pending` and proceeds — there is no second approval
+        step for API callers, and the approve/reject endpoints refuse API keys.
+        Dashboard users without the FX approval permission create
+        `waiting_approval` orders instead, which a second user releases in the
+        dashboard.
 
 
         The `Idempotency-Key` header is required; requests without it are
@@ -968,76 +978,51 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateFxOrderRequest'
             examples:
-              market_order:
-                summary: Market order
+              settle_to_account:
+                summary: Order against a quote, settling to an internal account
                 value:
-                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
-                  order_type: market
-                  pair:
-                    base: USD
-                    quote: ZAR
-                  amount: '1000'
-                  source_type: account
-                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
-                  destination_type: ssi
-                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
-              limit_order:
-                summary: Limit order
+                  quote_id: QT-M2hPM9qt
+                  source:
+                    type: account
+                    id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination:
+                    type: account
+                    id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                  client_reference: order-abc-123
+              settle_to_ssi:
+                summary: Order settling to a saved settlement instruction
                 value:
-                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
-                  order_type: limit
-                  pair:
-                    base: USD
-                    quote: ZAR
-                  amount: '1000'
-                  target_rate: '17.50'
-                  source_type: account
-                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
-                  destination_type: ssi
-                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
+                  quote_id: QT-M2hPM9qt
+                  source:
+                    type: wallet
+                    id: 74653c7b-ae84-45ab-8085-2d2493f86d81
+                  destination:
+                    type: ssi
+                    id: b23ffd0e-d0fc-432e-acc9-c396194121b3
       responses:
         '200':
-          description: Order created and awaiting approval
+          description: Order created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FxOrderResponse'
-              example:
-                data:
-                  id: 4994339f-4a19-47ef-a86b-1005eff0a4d0
-                  order_id: OTC-0VA89I
-                  order_type: market
-                  side: sell
-                  pair:
-                    base: USD
-                    quote: ZAR
-                  amount: '1000.00000000'
-                  amount_currency: USD
-                  converted_amount: '16242.50000000'
-                  converted_currency: ZAR
-                  rate: '16.24250000'
-                  target_rate: null
-                  fee: null
-                  status: waiting_approval
-                  customer_id: 85034797-3ea1-4ad8-a952-becd67d74acc
-                  tenant_id: dfa96ede-fc13-43cf-8328-8b910d1cd1d2
-                  source_type: account
-                  source_id: 74653c7b-ae84-45ab-8085-2d2493f86d81
-                  destination_type: ssi
-                  destination_id: b23ffd0e-d0fc-432e-acc9-c396194121b3
-                  created_by_user_id: 804201c6-2760-4da1-9c5e-0ff09ebc3b5e
-                  created_by_role: developer
-                  approved_by_user_id: null
-                  approved_at: null
-                  rejected_by_user_id: null
-                  rejected_at: null
-                  rejection_reason: null
-                  executed_at: null
-                  settled_at: null
-                  expires_at: null
-                  created_at: '2026-07-03T15:32:37.878676Z'
-                  updated_at: null
-                error: null
+                $ref: '#/components/schemas/CreateFxOrderResponse'
+              examples:
+                api_key_caller:
+                  summary: Placed with an API key — pending, and proceeding
+                  value:
+                    data:
+                      order_id: OTC-0VA89I
+                      quote_id: QT-M2hPM9qt
+                      status: pending
+                    error: null
+                dashboard_caller:
+                  summary: Placed in the dashboard without approval rights
+                  value:
+                    data:
+                      order_id: OTC-0VA89I
+                      quote_id: QT-M2hPM9qt
+                      status: waiting_approval
+                    error: null
         '400':
           description: Invalid request
           content:
