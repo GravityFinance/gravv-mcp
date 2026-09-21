@@ -148,7 +148,7 @@ then paste a JSON-RPC frame on stdin:
 the Gravv documentation. They need **no API key**, so you can explore Gravv before you
 have credentials.
 
-**API tools** — 87 tools covering customers, KYC, accounts, transfers, cards, wallets,
+**API tools** — 86 tools covering customers, KYC, accounts, transfers, cards, wallets,
 FX, collections, payment links, webhooks, and approvals.
 
 Both matter. The API tools execute calls, but they can't tell you what has to happen
@@ -170,9 +170,11 @@ Gravv moves real money, and **sandbox and live share one base URL** — only you
 differs. Nothing in a request visually signals danger, so the server signals it.
 
 **Money-moving tools take two calls.** `createTransfer`, `withdrawFromCard`,
-`createFxOrder`, `createCollection`, `chargeSavedCard`, `approveTransfer`, and
-`approveFxOrder` return a preview on the first call and execute only when called again
-with `confirm: true`. The unconfirmed call never reaches the API.
+`createFxOrder`, `chargeSavedCard`, `approveTransfer`, and `approveFxOrder` return a
+preview on the first call and execute only when called again with `confirm: true`. The
+unconfirmed call never reaches the API. `createCardPaymentIntent` joins them only when
+you pass a `card_token`, because that charges the stored card immediately — without one
+it just mints a checkout link and needs no confirmation.
 
 Approving is included because releasing a held instruction has the same consequence as
 initiating one. Rejecting is not gated — it only prevents execution.
@@ -230,7 +232,7 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | `cards` | ✓ | issue, balance, status, withdraw, applications |
 | `wallets` | ✓ | blockchain wallet creation and lookup |
 | `fx` | ✓ | quotes, rates, OTC orders |
-| `collections` | ✓ | card payment intents, saved cards, and pix / mobile money / bank transfer collections |
+| `collections` | ✓ | card payment intents, saved cards, payment status |
 | `payment-links` | ✓ | stablecoin payment links |
 | `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
@@ -280,13 +282,20 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 
 **collections** — taking money in
 
-Card payments go through `createCardPaymentIntent`. It returns the same hosted payment
-link as a collection, plus the intent id and the card token that recurring and
-merchant-initiated charges need. `createCollection` covers the rails a payment intent
-cannot express — pix, mobile money, and bank transfer.
+Every card payment starts at `createCardPaymentIntent`, which returns a hosted payment
+link for the payer plus the intent id, the expiry, and — once checkout completes, via
+webhook — the card token that recurring and merchant-initiated charges need. Charge that
+token again with `chargeSavedCard`, and check where a payment got to with `getCollection`
+using the `transaction_id` either one returns. Passing a `card_token` to
+`createCardPaymentIntent` charges that card straight away, so that form — and only that
+form — takes `confirm: true`.
 
-`createCardPaymentIntent` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
-`deleteSavedCard` · `createCollection*` · `getCollection`
+The generic `createCollection` tool is gone. For a card it returned the same payment link
+with none of the rest, and two tools for one job is how an assistant ends up on the weaker
+one. Rails other than card are not currently exposed over MCP.
+
+`createCardPaymentIntent*` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
+`deleteSavedCard` · `getCollection`
 
 **payment-links**
 `createPaymentLink` · `getPaymentLink` · `listPaymentLinks` · `updatePaymentLink` ·

@@ -125,7 +125,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents/charge",
-    "description": "Charge card — Charges a saved card token. Use this for server-to-server charges when you already hold a card token — for example, for recurring or merchant-initiated transactions. Billing fields are optional. Any field you omit falls back to the customer record on file. Fields you provide take precedence and are saved to the resulting charge record.\n\nMOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
+    "description": "Charge card — Charges a saved card token. Use this for server-to-server charges when you already hold a card token — for example, for recurring or merchant-initiated transactions. Billing fields are optional. Any field you omit falls back to the customer record on file. Fields you provide take precedence and are saved to the resulting charge record.\n\nPREREQUISITE: a payment intent and a card token from an earlier completed checkout — create the intent with createCardPaymentIntent and take the token from the webhook. MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1598,7 +1598,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents",
-    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_",
+    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_\n\nTHE CARD COLLECTION PATH — every card payment starts here. Returns a hosted `payment_link` for the payer, plus the `intent_id` and `expires_at`. The reusable `card_token` arrives on the webhook once the payer completes checkout; store it to charge the same card again with chargeSavedCard. MOVES MONEY when `card_token` is supplied — the API charges that card immediately, so that form requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1709,6 +1709,10 @@ export const TOOLS: GeneratedTool[] = [
           "example": {
             "order_id": "ord_123"
           }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true. Required only when you pass `card_token`: that charges the stored card immediately. Creating an intent without a token just returns a checkout link and needs no confirmation."
         }
       },
       "required": [
@@ -1738,193 +1742,6 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
-    "needsIdempotency": true,
-    "spec": "collections.yaml"
-  },
-  {
-    "name": "createCollection",
-    "toolset": "collections",
-    "method": "post",
-    "path": "/v1/collections",
-    "description": "Initiate a collection — Initiates a collection request using a specified collection method (card, bank transfer, and mobile money). If the collection method is card, a payment link will be generated for the customer to complete the payment. For mobile money and bank transfer methods, payment instructions will be provided.\n\nMOVES MONEY: initiates a collection from a payer. Requires confirm: true.\n\nNOT FOR CARD PAYMENTS. Card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token this endpoint cannot provide.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "amount": {
-          "type": "string",
-          "description": "Amount to collect",
-          "example": "50"
-        },
-        "currency": {
-          "type": "string",
-          "minLength": 3,
-          "maxLength": 3,
-          "pattern": "^[A-Z]{3}$",
-          "description": "Three-letter uppercase ISO 4217 currency code",
-          "example": "USD"
-        },
-        "country": {
-          "type": "string",
-          "description": "Alpha-2 country code",
-          "example": "ET"
-        },
-        "customer_id": {
-          "type": "string",
-          "description": "Unique customer identifier",
-          "format": "uuid",
-          "example": "04dfb2e5-1274-4214-b5fd-3415fde7dc17"
-        },
-        "client_customer_id": {
-          "type": "string",
-          "description": "A unique identifier assigned by the client to reference the customer when storing payment details",
-          "example": "checkers_user"
-        },
-        "client_reference": {
-          "type": "string",
-          "description": "Client unique reference",
-          "example": "9d8184a1-4a19-b74d-4797-9896aed01332"
-        },
-        "metadata": {
-          "type": "object",
-          "description": "Custom JSON data that will be returned in webhook notifications for this transaction",
-          "additionalProperties": true,
-          "example": {
-            "order_id": "12345",
-            "customer_notes": "Express delivery requested"
-          }
-        },
-        "source": {
-          "oneOf": [
-            {
-              "title": "Card",
-              "type": "object",
-              "required": [
-                "source_type",
-                "methods"
-              ],
-              "properties": {
-                "source_type": {
-                  "type": "string",
-                  "enum": [
-                    "external"
-                  ],
-                  "example": "external"
-                },
-                "methods": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": [
-                      "pix",
-                      "mobile_money",
-                      "bank_transfer"
-                    ]
-                  },
-                  "example": [
-                    "pix"
-                  ]
-                }
-              }
-            }
-          ]
-        },
-        "destination": {
-          "oneOf": [
-            {
-              "title": "Internal destination",
-              "type": "object",
-              "required": [
-                "destination_type",
-                "id"
-              ],
-              "properties": {
-                "destination_type": {
-                  "type": "string",
-                  "description": "Type of internal destination",
-                  "enum": [
-                    "internal_account",
-                    "internal_crypto_wallet"
-                  ],
-                  "example": "internal_account"
-                },
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Provide an account ID if destination_type is internal_account, or a wallet ID if destination_type is internal_crypto_wallet",
-                  "example": "88d645b6-6d27-4d20-ae1b-9469343156fa"
-                }
-              }
-            },
-            {
-              "title": "External crypto wallet",
-              "type": "object",
-              "required": [
-                "destination_type",
-                "wallet_address",
-                "network"
-              ],
-              "properties": {
-                "destination_type": {
-                  "type": "string",
-                  "enum": [
-                    "external_crypto_wallet"
-                  ],
-                  "example": "external_crypto_wallet"
-                },
-                "wallet_address": {
-                  "type": "string",
-                  "description": "Wallet address for the external crypto wallet",
-                  "example": 3.901967180566737e+47
-                },
-                "network": {
-                  "type": "string",
-                  "description": "Blockchain network for the crypto wallet",
-                  "enum": [
-                    "polygon",
-                    "stellar",
-                    "ethereum",
-                    "solana",
-                    "avalanche"
-                  ],
-                  "example": "polygon"
-                }
-              }
-            }
-          ]
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
-        }
-      },
-      "required": [
-        "amount",
-        "currency",
-        "country",
-        "customer_id",
-        "client_customer_id",
-        "client_reference",
-        "source",
-        "destination"
-      ],
-      "additionalProperties": true
-    },
-    "pathParams": [],
-    "queryParams": [],
-    "bodyMode": "inline",
-    "bodyProps": [
-      "amount",
-      "currency",
-      "country",
-      "customer_id",
-      "client_customer_id",
-      "client_reference",
-      "metadata",
-      "source",
-      "destination"
-    ],
-    "alsoInBody": [],
-    "movesMoney": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },
@@ -3745,7 +3562,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of an onramp transaction. This endpoint is public — no API key is required.",
+    "description": "Get transaction by ID — Returns the status and details of an onramp transaction. This endpoint is public — no API key is required.\n\nStatus lookup for a collection transaction, including one started by a payment intent — pass the `transaction_id` from createCardPaymentIntent or chargeSavedCard. The status field is named `transaction_status` here, not `status`.",
     "inputSchema": {
       "type": "object",
       "properties": {

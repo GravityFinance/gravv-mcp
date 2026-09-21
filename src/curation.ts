@@ -165,7 +165,7 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/fx/orders/{order_id}/cancel": { name: "cancelFxOrder", toolset: "fx" },
 
   // ---- collections / onramp ------------------------------------------------
-  "POST /v1/collections": { name: "createCollection", toolset: "collections" },
+  // Taking money in is a card payment intent. `POST /v1/collections` is blocked below.
   "GET /v1/collections/{id}": { name: "getCollection", toolset: "collections" },
   "POST /v1/collections/cards/payment-intents": { name: "createCardPaymentIntent", toolset: "collections" },
   "POST /v1/collections/cards/payment-intents/charge": { name: "chargeSavedCard", toolset: "collections" },
@@ -195,7 +195,7 @@ export const NAMES: Record<string, Op> = {
 };
 
 /**
- * Never exposed as tools, with the reason. Two categories:
+ * Never exposed as tools, with the reason. Three categories:
  *
  *  - Cardholder data. These return PAN, CVV, and PIN. That must not enter a model's
  *    context under any configuration, so there is no flag to enable them. Merchants
@@ -205,6 +205,13 @@ export const NAMES: Record<string, Op> = {
  *  - Superseded KYC. /v1/risk/* is replaced by /v1/customers/kyc/*. Exposing both
  *    gives the model two plausible paths for the same job and it will sometimes pick
  *    the deprecated one.
+ *
+ *  - Generic collections. POST /v1/collections took money in over any rail, cards
+ *    included, and for a card it returned the same hosted payment link the payment
+ *    intent does — minus the intent id, the expiry, `requires_action`, and the
+ *    `card_token` that recurring and merchant-initiated charges need. Restricting its
+ *    card enum left two tools for one job and a model that sometimes picked the weaker
+ *    one, so the endpoint is gone and card collection is createCardPaymentIntent.
  */
 export const BLOCKED: Record<string, string> = {
   "GET /v1/cards/{card_id}/sensitive-details":
@@ -213,34 +220,12 @@ export const BLOCKED: Record<string, string> = {
     "Returns the encrypted card PIN. Use the client-side decryption flow instead.",
   "PUT /v1/cards/{card_id}/pin":
     "Sets a card PIN, which requires handling cardholder data. Not exposed over MCP.",
+  "POST /v1/collections":
+    "Superseded by createCardPaymentIntent (POST /v1/collections/cards/payment-intents), which returns the same hosted payment link plus the intent id and the card token recurring charges need.",
   "POST /v1/risk/start-kyc": "Superseded by startCustomerKyc (POST /v1/customers/kyc/start).",
   "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
   "POST /v1/risk/upload-document":
     "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
-};
-
-/**
- * Enum values stripped from a generated schema, so a tool cannot offer a path that a
- * better tool already owns.
- *
- * `POST /v1/collections` accepts card, apple_pay and google_pay alongside pix,
- * mobile_money and bank_transfer, and for cards it returns the same hosted
- * `payment_link` that `POST /v1/collections/cards/payment-intents` does. The payment
- * intent is strictly more capable on that rail: it also returns an `intent_id`,
- * `expires_at` and `requires_action`, and it is the only route to the `card_token` that
- * recurring and merchant-initiated charges need.
- *
- * Two tools offering the same job is how a model ends up on the weaker one. So the card
- * family is removed from createCollection, leaving it responsible for the rails payment
- * intents cannot express.
- */
-export const ENUM_RESTRICTIONS: Record<string, { remove: string[]; because: string }> = {
-  createCollection: {
-    remove: ["card", "apple_pay", "google_pay"],
-    because:
-      "Card payments go through createCardPaymentIntent, which returns the same hosted " +
-      "payment link plus the intent id and card token this endpoint cannot provide.",
-  },
 };
 
 /**
@@ -256,6 +241,8 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardPin:
     "Not available over MCP: returns the encrypted card PIN. Use the client-side decryption flow.",
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
+  createCollection:
+    "Removed: card collection goes through createCardPaymentIntent, which returns the hosted payment link plus the intent id and the card token recurring charges need. Check a payment's status with getCollection using the transaction_id it returns.",
   startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
   startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
   uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
@@ -273,13 +260,33 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/transfer",
   "POST /v1/cards/withdraw",
   "POST /v1/fx/orders",
-  "POST /v1/collections",
   "POST /v1/collections/cards/payment-intents/charge",
   // Approving releases a held instruction for execution, so it moves money just as
   // surely as initiating one. Rejecting does not, and is not gated.
   "POST /v1/transfer/{id}/approve",
   "POST /v1/fx/orders/{order_id}/approve",
 ]);
+
+/**
+ * Operations that move money only for certain payloads.
+ *
+ * createCardPaymentIntent is two operations behind one path. Without a `card_token` it
+ * mints a hosted checkout link and moves nothing — the payer decides later, at the
+ * hosted UI. With one, the API charges that stored card as soon as the intent exists,
+ * which is a merchant-initiated debit and belongs behind the same confirmation as any
+ * other. Gating the path outright would put a confirmation step in front of every
+ * checkout link, so the test is on the body; it runs in safety.ts, which is the only
+ * layer that sees one. Listing the path here is what puts `confirm` in the schema.
+ */
+export const CONDITIONAL_MONEY_OPS: Record<string, string> = {
+  "POST /v1/collections/cards/payment-intents":
+    "Required only when you pass `card_token`: that charges the stored card immediately. " +
+    "Creating an intent without a token just returns a checkout link and needs no confirmation.",
+};
+
+export function conditionalMoneyNote(method: string, path: string): string | undefined {
+  return CONDITIONAL_MONEY_OPS[opKey(method, path)];
+}
 
 /**
  * The API requires an Idempotency-Key on every POST and returns 400 without one. These
@@ -326,11 +333,14 @@ export const PREREQUISITES: Record<string, string> = {
 
   withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
 
-  createCollection:
-    "MOVES MONEY: initiates a collection from a payer. Requires confirm: true.",
+  createCardPaymentIntent:
+    "THE CARD COLLECTION PATH — every card payment starts here. Returns a hosted `payment_link` for the payer, plus the `intent_id` and `expires_at`. The reusable `card_token` arrives on the webhook once the payer completes checkout; store it to charge the same card again with chargeSavedCard. MOVES MONEY when `card_token` is supplied — the API charges that card immediately, so that form requires confirm: true.",
+
+  getCollection:
+    "Status lookup for a collection transaction, including one started by a payment intent — pass the `transaction_id` from createCardPaymentIntent or chargeSavedCard. The status field is named `transaction_status` here, not `status`.",
 
   chargeSavedCard:
-    "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
+    "PREREQUISITE: a payment intent and a card token from an earlier completed checkout — create the intent with createCardPaymentIntent and take the token from the webhook. MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
     "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",

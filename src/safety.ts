@@ -76,31 +76,25 @@ export function redact(value: unknown, depth = 0): unknown {
 }
 
 /**
- * Card-family methods removed from createCollection's schema.
+ * Payload tests for tools that move money only in one of their forms.
  *
- * `additionalProperties: true` means a model can still send `methods: ["card"]` even
- * though the enum no longer lists it, and the API would accept it — producing a card
- * collection through the weaker path with no error to learn from. Checked here so the
- * redirect is explicit rather than silent.
+ * createCardPaymentIntent without a `card_token` mints a hosted checkout link: nothing
+ * moves until the payer acts, so a confirmation step there would be noise on the most
+ * common call in the collections flow. With a token the API charges that stored card
+ * straight away — a merchant-initiated debit, and gated accordingly. `movesMoney` on
+ * the generated tool cannot express that, because it is decided before any arguments
+ * exist; these run against the assembled body.
  */
-const CARD_METHODS = new Set(["card", "apple_pay", "google_pay"]);
+const CONDITIONAL_MONEY_CHECKS: Record<string, (body: Record<string, unknown>) => boolean> = {
+  createCardPaymentIntent: (body) => typeof body.card_token === "string" && body.card_token.trim() !== "",
+};
 
-/** Returns a redirect message when a collection request smuggles a card method through. */
-export function checkCollectionMethods(toolName: string, body: unknown): string | null {
-  if (toolName !== "createCollection") return null;
-
-  const methods = (body as { source?: { methods?: unknown } })?.source?.methods;
-  if (!Array.isArray(methods)) return null;
-
-  const card = methods.filter((m) => typeof m === "string" && CARD_METHODS.has(m));
-  if (card.length === 0) return null;
-
-  return (
-    `createCollection does not handle card payments (received: ${card.join(", ")}). ` +
-    `Use createCardPaymentIntent instead — it returns the same hosted payment link, plus ` +
-    `an intent id and the card token needed for recurring charges. ` +
-    `createCollection covers pix, mobile_money and bank_transfer.`
-  );
+/** True when this specific call moves money, whether or not the tool always does. */
+export function movesMoney(toolName: string, alwaysMoves: boolean, body: unknown): boolean {
+  if (alwaysMoves) return true;
+  const check = CONDITIONAL_MONEY_CHECKS[toolName];
+  if (!check || body === null || typeof body !== "object") return false;
+  return check(body as Record<string, unknown>);
 }
 
 export class SafetyGate {
@@ -149,7 +143,7 @@ export class SafetyGate {
       );
     }
 
-    if (!tool.movesMoney) return null;
+    if (!movesMoney(tool.name, tool.movesMoney, preview.body)) return null;
 
     // "unknown" fails closed — an unrecognised key is treated as live.
     const isLive = this.config.environment !== "sandbox";
@@ -196,8 +190,8 @@ function summarise(tool: GeneratedTool, body: unknown): string {
       return `Withdraw ${money} from card ${b.card_id ?? "(unspecified)"}.`;
     case "createFxOrder":
       return `Place an FX ${b.side ?? ""} order for ${money}${b.pair ? ` on ${b.pair}` : ""}. It will sit in waiting_approval until a second user approves it in the dashboard.`;
-    case "createCollection":
-      return `Initiate a collection of ${money} from the payer via ${b.collection_method ?? "the specified method"}.`;
+    case "createCardPaymentIntent":
+      return `Create a card payment intent for ${money} and immediately charge saved card token ${b.card_token ?? "(unspecified)"}. Omit card_token to get a checkout link the payer completes themselves, which charges nothing now.`;
     case "chargeSavedCard":
       return `Charge ${money} to saved card ${b.card_id ?? b.card_token ?? "(unspecified)"}.`;
     default:

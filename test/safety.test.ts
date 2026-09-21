@@ -1,8 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "../src/safety.ts";
+import { SafetyGate, SafetyError, redact, movesMoney } from "../src/safety.ts";
 import { detectEnvironment } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
+import { BLOCKED_TOOL_NAMES } from "../src/curation.ts";
 
 const transfer = TOOLS_BY_NAME.get("createTransfer")!;
 const listAccounts = TOOLS_BY_NAME.get("listAccounts")!;
@@ -106,61 +107,77 @@ describe("redaction", () => {
   });
 });
 
-describe("collections routes card payments to payment intents", () => {
-  // createCollection and createCardPaymentIntent both return a hosted payment link for
-  // cards, but only the intent yields an intent id and the card token recurring charges
-  // need. Two tools offering the same job is how a model lands on the weaker one.
-  test("the schema no longer offers card methods", () => {
-    const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
-    for (const m of ["card", "apple_pay", "google_pay"]) {
-      assert.doesNotMatch(schema, new RegExp(`"${m}"`), `${m} should not be offered`);
+describe("card collection goes through payment intents", () => {
+  // The generic POST /v1/collections tool is gone: for a card it returned the same
+  // hosted payment link the intent does, minus the intent id and the card token
+  // recurring charges need, and two tools for one job is how a model lands on the
+  // weaker one.
+  test("createCollection is no longer a tool", () => {
+    assert.equal(TOOLS_BY_NAME.get("createCollection"), undefined);
+  });
+
+  test("the name a model will still reach for names its replacement", () => {
+    const msg = BLOCKED_TOOL_NAMES.createCollection;
+    assert.ok(msg, "createCollection must resolve to an explanation, not 'unknown tool'");
+    assert.match(msg, /createCardPaymentIntent/);
+  });
+
+  test("createCardPaymentIntent is the card path", () => {
+    const tool = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    assert.match(JSON.stringify(tool.inputSchema), /"card"/);
+    assert.match(tool.description, /CARD COLLECTION PATH/);
+  });
+
+  test("status lookup survives the removal", () => {
+    // A payment intent charge returns a transaction_id and nothing else reports on it.
+    const tool = TOOLS_BY_NAME.get("getCollection")!;
+    assert.match(tool.description, /transaction_id/);
+  });
+});
+
+describe("a payment intent moves money only when it carries a card token", () => {
+  const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+  const withToken = {
+    method: "POST",
+    path: "/v1/collections/cards/payment-intents",
+    body: { amount: "3.50", currency: "USD", card_token: "tokn_abc" },
+  };
+  const linkOnly = { ...withToken, body: { amount: "3.50", currency: "USD" } };
+
+  test("no token: a checkout link charges nothing now, so nothing is gated", () => {
+    assert.equal(movesMoney(intent.name, intent.movesMoney, linkOnly.body), false);
+    assert.equal(gate().check(intent, {}, linkOnly), null);
+  });
+
+  test("a card token charges immediately, so confirmation is required", () => {
+    const result = gate().check(intent, {}, withToken);
+    assert.ok(result, "expected a confirmation object, not null");
+    assert.match(result.willDo, /3.50 USD/);
+    assert.match(result.willDo, /tokn_abc/);
+    assert.equal(gate().check(intent, { confirm: true }, withToken), null);
+  });
+
+  test("the token form is blocked on a live key without GRAVV_ALLOW_LIVE_WRITES", () => {
+    assert.throws(
+      () => gate({ environment: "live" }).check(intent, { confirm: true }, withToken),
+      (e: Error) => e instanceof SafetyError && /GRAVV_ALLOW_LIVE_WRITES/.test(e.message),
+    );
+  });
+
+  test("an empty or non-string token is not a charge", () => {
+    for (const card_token of ["", "   ", 42, null, undefined]) {
+      assert.equal(movesMoney(intent.name, intent.movesMoney, { card_token }), false);
     }
+    assert.equal(movesMoney(intent.name, intent.movesMoney, undefined), false);
   });
 
-  test("the rails payment intents cannot express are still offered", () => {
-    const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.match(schema, new RegExp(`"${m}"`), `${m} must remain available`);
-    }
+  test("an always-money tool stays gated whatever its body", () => {
+    assert.equal(movesMoney(transfer.name, transfer.movesMoney, {}), true);
   });
 
-  test("the description says where card payments go", () => {
-    const d = TOOLS_BY_NAME.get("createCollection")!.description;
-    assert.match(d, /NOT FOR CARD PAYMENTS/);
-    assert.match(d, /createCardPaymentIntent/);
-  });
-
-  test("createCardPaymentIntent still handles cards", () => {
-    assert.match(JSON.stringify(TOOLS_BY_NAME.get("createCardPaymentIntent")!.inputSchema), /"card"/);
-  });
-
-  test("a card method smuggled past the schema is redirected", () => {
-    // additionalProperties is true, so the model can still send methods the enum omits
-    // and the API would accept them — succeeding through the weaker path with no error.
-    for (const m of ["card", "apple_pay", "google_pay"]) {
-      const msg = checkCollectionMethods("createCollection", { source: { methods: [m] } });
-      assert.ok(msg, `${m} should be redirected`);
-      assert.match(msg, /createCardPaymentIntent/);
-    }
-  });
-
-  test("the remaining rails pass through untouched", () => {
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.equal(checkCollectionMethods("createCollection", { source: { methods: [m] } }), null);
-    }
-  });
-
-  test("a mixed request is caught on the card element", () => {
-    const msg = checkCollectionMethods("createCollection", {
-      source: { methods: ["bank_transfer", "card"] },
-    });
-    assert.match(msg!, /card/);
-  });
-
-  test("other tools and malformed bodies are ignored", () => {
-    assert.equal(checkCollectionMethods("createTransfer", { source: { methods: ["card"] } }), null);
-    assert.equal(checkCollectionMethods("createCollection", {}), null);
-    assert.equal(checkCollectionMethods("createCollection", { source: { methods: "card" } }), null);
-    assert.equal(checkCollectionMethods("createCollection", undefined), null);
+  test("the schema offers confirm and says when it is needed", () => {
+    const confirm = (intent.inputSchema as any).properties.confirm;
+    assert.ok(confirm, "the model cannot confirm an argument the schema omits");
+    assert.match(confirm.description, /card_token/);
   });
 });

@@ -168,7 +168,13 @@ describe("end-to-end over MCP stdio", () => {
       const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
 
       assert.ok(names.length > 70, `expected the full surface, got ${names.length}`);
-      for (const blocked of ["getCardSensitiveDetails", "getCardPin", "updateCardPin", "startRiskKyc"]) {
+      for (const blocked of [
+        "getCardSensitiveDetails",
+        "getCardPin",
+        "updateCardPin",
+        "startRiskKyc",
+        "createCollection",
+      ]) {
         assert.ok(!names.includes(blocked), `${blocked} must never appear, even with --toolsets=all`);
       }
     } finally {
@@ -293,6 +299,60 @@ describe("end-to-end over MCP stdio", () => {
       });
       assert.equal(res.result.isError, true);
       assert.match(textOf(res), /client-side/, "should point at the supported alternative");
+
+      // Same mechanism for the removed collections endpoint: a model that reaches for
+      // it is sent to the payment intent rather than left guessing at variations.
+      const collection = await mcp.request("tools/call", {
+        name: "createCollection",
+        arguments: { amount: "50", currency: "USD" },
+      });
+      assert.equal(collection.result.isError, true);
+      assert.match(textOf(collection), /createCardPaymentIntent/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a payment intent is gated only when it carries a card token", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+
+      // No token: this only mints a checkout link, so it executes on the first call.
+      const link = JSON.parse(
+        textOf(
+          await mcp.request("tools/call", {
+            name: "createCardPaymentIntent",
+            arguments: { amount: "3.50", currency: "USD", source: { methods: ["card"] } },
+          }),
+        ),
+      );
+      assert.equal(link.status, undefined, "a checkout link must not ask for confirmation");
+      assert.equal(received.length, 1);
+
+      // With a token the API charges immediately, so the same tool now confirms first.
+      received = [];
+      const charge = JSON.parse(
+        textOf(
+          await mcp.request("tools/call", {
+            name: "createCardPaymentIntent",
+            arguments: { amount: "3.50", currency: "USD", card_token: "tokn_abc" },
+          }),
+        ),
+      );
+      assert.equal(charge.status, "confirmation_required");
+      assert.equal(received.length, 0, "an unconfirmed charge must not reach the API at all");
+
+      await mcp.request("tools/call", {
+        name: "createCardPaymentIntent",
+        arguments: { amount: "3.50", currency: "USD", card_token: "tokn_abc", confirm: true },
+      });
+      assert.equal(received.length, 1);
+      assert.equal(received[0]!.body.confirm, undefined, "confirm must not be forwarded to the API");
+      assert.equal(received[0]!.body.card_token, "tokn_abc");
     } finally {
       mcp.kill();
     }

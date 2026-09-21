@@ -20,48 +20,12 @@ import {
   NAMES,
   BLOCKED,
   PREREQUISITES,
-  ENUM_RESTRICTIONS,
   opKey,
   isMoneyOp,
+  conditionalMoneyNote,
   needsIdempotencyKey,
   type Toolset,
 } from "../src/curation.ts";
-
-/**
- * Remove values from every `enum` in a schema, wherever they appear.
- *
- * Walking the whole schema rather than addressing a fixed path — the enum in question
- * sits inside a `oneOf` branch, and pinning an index would break silently the next time
- * the specification is restructured. Returns how many enums were touched so the caller
- * can fail the build if a restriction stops matching anything.
- */
-function restrictEnums(node: any, remove: string[], depth = 0): number {
-  if (node === null || typeof node !== "object" || depth > 30) return 0;
-  if (Array.isArray(node)) return node.reduce((n, x) => n + restrictEnums(x, remove, depth + 1), 0);
-
-  let touched = 0;
-  if (Array.isArray(node.enum) && node.enum.some((v: unknown) => remove.includes(v as string))) {
-    node.enum = node.enum.filter((v: unknown) => !remove.includes(v as string));
-    touched++;
-  }
-
-  // Examples are shown to the model verbatim, and they do not live on the same node as
-  // the enum — `methods.example` sits a level above `methods.items.enum`. Cleaning only
-  // alongside the enum left the removed values on display, so sweep examples separately
-  // wherever they appear.
-  if (Array.isArray(node.example)) {
-    const kept = node.example.filter((v: unknown) => !remove.includes(v as string));
-    if (kept.length !== node.example.length) {
-      if (kept.length > 0) node.example = kept;
-      else delete node.example;
-    }
-  } else if (typeof node.example === "string" && remove.includes(node.example)) {
-    delete node.example;
-  }
-
-  for (const v of Object.values(node)) touched += restrictEnums(v, remove, depth + 1);
-  return touched;
-}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -270,28 +234,19 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         }
       }
 
-      // Strip any enum values this tool must not offer, before the schema is emitted.
-      const restriction = ENUM_RESTRICTIONS[curated.name];
-      if (restriction) {
-        const touched = restrictEnums(properties, restriction.remove);
-        if (touched === 0) {
-          problems.push(
-            `${curated.name}: ENUM_RESTRICTIONS removes [${restriction.remove.join(", ")}] but no enum ` +
-              `in the generated schema contains any of them. The specification likely changed — ` +
-              `re-check the restriction in curation.ts rather than leaving it silently inert.`,
-          );
-        }
-        description += `\n\nNOT FOR CARD PAYMENTS. ${restriction.because}`;
-      }
-
       // Money-moving tools carry an explicit confirmation argument. Declared here so it
-      // appears in the schema the model sees; enforced in safety.ts.
+      // appears in the schema the model sees; enforced in safety.ts. A conditionally
+      // money-moving tool carries the same argument with the condition spelled out —
+      // the schema cannot express "required only when card_token is present", so the
+      // description says it and safety.ts decides per call.
       const movesMoney = isMoneyOp(method, path);
-      if (movesMoney) {
+      const conditional = conditionalMoneyNote(method, path);
+      if (movesMoney || conditional) {
         properties.confirm = {
           type: "boolean",
           description:
-            "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true.",
+            "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true." +
+            (conditional && !movesMoney ? ` ${conditional}` : ""),
         };
       }
 
