@@ -7,6 +7,7 @@ import {
   canonicalJson,
   extractErrorMessage,
   hintFor,
+  isOutcomeUnknown,
   retryAfterMs,
 } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
@@ -306,6 +307,93 @@ describe("errors keep the idempotency key", () => {
       client(fetchImpl).call(getAccount, { account_id: "a" }),
       (e: GravvApiError) => e.status === 408 && e.idempotencyKey === undefined,
     );
+  });
+});
+
+describe("an unknown outcome says so and names the lookup", () => {
+  const transfer = TOOLS_BY_NAME.get("createTransfer")!;
+  const s2 =
+    'unexpected HTTP status code received from server: 502 (Bad Gateway); transport: received unexpected content-type "text/html"\ndata: "<html>\r\n<head><title>502 Bad Gateway</title></head>\r\n<body>\r\n<center><h1>502 Bad Gateway</h1></center>\r\n</body>\r\n</html>\r\n"';
+
+  test("a timeout on a transfer", async () => {
+    const { calls, fetchImpl } = failing(abortError());
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.equal(e.status, 408);
+      assert.equal(e.outcomeUnknown, true);
+      assert.equal(e.idempotencyKey, calls[0]!.headers["Idempotency-Key"]);
+      assert.match(e.hint ?? "", /listTransactions/);
+      assert.match(e.hint ?? "", /same arguments/);
+      assert.ok((e.hint ?? "").includes(e.idempotencyKey!), "the hint quotes the key to resend under");
+      assert.doesNotMatch(e.hint ?? "", /filtered by client_reference/);
+      return true;
+    });
+    assert.equal(calls.length, 1, "a timeout is never retried automatically");
+  });
+
+  test("a network error on a transfer", async () => {
+    const { fetchImpl } = failing(new TypeError("fetch failed"));
+    await assert.rejects(
+      client(fetchImpl).call(transfer, { amount: 5 }),
+      (e: GravvApiError) => e.status === 0 && e.outcomeUnknown && /listTransactions/.test(e.hint ?? ""),
+    );
+  });
+
+  test("a timeout on a read is safe to repeat", async () => {
+    for (const [tool, args] of [
+      [getAccount, { account_id: "a" }],
+      [TOOLS_BY_NAME.get("getFxQuote")!, { pair: "USDC/NGN" }],
+    ] as const) {
+      const { fetchImpl } = failing(abortError());
+      await assert.rejects(
+        client(fetchImpl).call(tool, args),
+        (e: GravvApiError) => !e.outcomeUnknown && /safe to call again/.test(e.hint ?? ""),
+        tool.name,
+      );
+    }
+  });
+
+  test("a 5xx on a POST is not retried and says the answer is not kept", async () => {
+    for (const status of [500, 502, 504]) {
+      const { calls, fetchImpl } = stub([{ status, body: { data: null, error: "internal error" } }]);
+      await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+        assert.equal(e.outcomeUnknown, true, String(status));
+        assert.match(e.hint ?? "", /does not keep 5xx answers/);
+        assert.match(e.hint ?? "", /listTransactions/);
+        return true;
+      });
+      assert.equal(calls.length, 1, `${status} must not be resent blindly`);
+    }
+  });
+
+  test("a 5xx on a read is a temporary fault", () => {
+    assert.match(hintFor(503, getAccount, "unavailable") ?? "", /temporary fault/i);
+  });
+
+  test("a server fault answered as a 400 says to look it up and use a new key", async () => {
+    const { fetchImpl } = stub([{ status: 400, body: { data: null, error: s2 } }]);
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.equal(e.outcomeUnknown, true);
+      assert.match(e.hint ?? "", /server-side fault/);
+      assert.match(e.hint ?? "", /kept for 24 hours/);
+      assert.match(e.hint ?? "", /new key/);
+      assert.match(e.hint ?? "", /same client_reference/);
+      assert.doesNotMatch(e.hint ?? "", /state precondition/);
+      return true;
+    });
+  });
+
+  test("each server-fault wording is caught, and an ordinary 400 is not", () => {
+    for (const msg of [
+      "circuit breaker is open",
+      "Internal Server Error",
+      "service busy, please try again shortly",
+      "failed to create payee",
+    ]) {
+      assert.equal(isOutcomeUnknown(400, transfer, msg), true, msg);
+      assert.match(hintFor(400, transfer, msg) ?? "", /server-side fault/, msg);
+    }
+    assert.equal(isOutcomeUnknown(400, transfer, "missing field `amount`"), false);
+    assert.equal(isOutcomeUnknown(422, transfer, "unprocessable"), false);
   });
 });
 

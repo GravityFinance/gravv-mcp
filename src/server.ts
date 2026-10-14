@@ -120,7 +120,7 @@ export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): Gene
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
 
-function instructions(
+export function instructions(
   environment: Environment,
   gate: SafetyGate,
   tools: GeneratedTool[],
@@ -152,7 +152,8 @@ function instructions(
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
       "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
-      "- Idempotency keys are generated automatically for POSTs, a new one for every call. The key is returned with each successful result for tracing. This server cannot resend a call with an old key yet, so after a timeout check the state (getTransaction, or a list filtered by client_reference) before calling again.",
+      "- Idempotency keys are generated automatically for POSTs, a new one for every call. The key is returned with each result for tracing.",
+      "- After a timeout, a network error or a 5xx, the outcome is unknown: the call may have taken effect. Look the result up before calling again; the error's hint names the tool that shows it.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );

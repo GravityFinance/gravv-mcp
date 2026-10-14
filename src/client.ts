@@ -8,6 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
+import { OUTCOME_LOOKUPS } from "./curation.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
 
@@ -261,13 +262,17 @@ export class GravvClient {
         });
       } catch (err) {
         clearTimeout(timer);
-        if ((err as Error)?.name === "AbortError") {
-          throw new GravvApiError(`Request to ${tool.name} timed out after ${this.timeoutMs}ms`, 408, null, undefined, {
-            idempotencyKey,
-          });
-        }
-        throw new GravvApiError(`Network error calling ${tool.name}: ${(err as Error).message}`, 0, null, undefined, {
+        // The status stays 408 or 0, as before; the hint and the outcome flag say what
+        // the model must do about it.
+        const timedOut = (err as Error)?.name === "AbortError";
+        const status = timedOut ? 408 : 0;
+        const message = timedOut
+          ? `Request to ${tool.name} timed out after ${this.timeoutMs}ms`
+          : `Network error calling ${tool.name}: ${(err as Error).message}`;
+        const hint = hintFor(status, tool, message, null, { keySupplied, idempotencyKey });
+        throw new GravvApiError(message, status, null, hint, {
           idempotencyKey,
+          outcomeUnknown: isOutcomeUnknown(status, tool, message),
         });
       }
       clearTimeout(timer);
@@ -317,11 +322,14 @@ export class GravvClient {
         continue;
       }
 
-      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied });
+      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied, idempotencyKey });
       if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
         hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
       }
-      throw new GravvApiError(apiMessage, res.status, parsed, hint, { idempotencyKey });
+      throw new GravvApiError(apiMessage, res.status, parsed, hint, {
+        idempotencyKey,
+        outcomeUnknown: isOutcomeUnknown(res.status, tool, apiMessage),
+      });
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
@@ -432,16 +440,82 @@ function isGatewayRateLimit(message: string): boolean {
 
 /**
  * Where to look to learn whether a call took effect, for hints that say "look it up
- * first".
+ * first". The per-tool text lives in curation.ts.
  */
-function lookupFor(_tool: GeneratedTool): string {
-  return "the matching get or list tool";
+function lookupFor(tool: GeneratedTool): string {
+  const entry = OUTCOME_LOOKUPS[tool.name];
+  return entry && "lookup" in entry ? entry.lookup : "the matching get or list tool";
+}
+
+/** The sentence for a call that cannot have changed anything, or undefined for a write. */
+function safeToRepeat(tool: GeneratedTool): string | undefined {
+  if (tool.method.toLowerCase() === "get") return "Nothing was changed by this read; it is safe to call again.";
+  const entry = OUTCOME_LOOKUPS[tool.name];
+  if (entry && "readOnly" in entry) return "This call changes nothing; it is safe to call again.";
+  return undefined;
+}
+
+/**
+ * A server fault that the gateway answered as a 400. It is stored under its key for 24
+ * hours like any 400, and replayed, so a same-key resend only gets the fault back.
+ */
+const SERVER_FAULT_400 =
+  /unexpected HTTP status code received from server: 5\d\d|<html|HTML error page omitted|circuit breaker|internal server error|please try again shortly|retry shortly|^failed to /i;
+
+function isServerFault400(message: string): boolean {
+  return SERVER_FAULT_400.test(message);
+}
+
+/**
+ * Whether a failed call may still have taken effect: a timeout or network error (0 or
+ * 408), a 5xx other than 501, or a server fault sent as a 400. Never for a call that
+ * changes nothing.
+ */
+export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = ""): boolean {
+  if (safeToRepeat(tool)) return false;
+  if (status === 0 || status === 408) return true;
+  if (status === 400) return isServerFault400(message);
+  return status >= 500 && status !== 501;
 }
 
 /** Extra facts about the call that change what a hint should say. */
 export interface HintContext {
   /** The caller passed the idempotency key; this server did not make it. */
   keySupplied?: boolean;
+  /** The key the call sent, quoted in a resend instruction. */
+  idempotencyKey?: string;
+}
+
+/** After a timeout or a network error. */
+function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return safe;
+  if (!tool.needsIdempotency) {
+    return "The outcome is unknown: the change may have been applied. Read the resource again before calling again.";
+  }
+  const key = ctx.idempotencyKey ? ` "${ctx.idempotencyKey}"` : " from this result";
+  return `The outcome is unknown: the call may have taken effect. Look it up first: ${lookupFor(tool)}. If it is not there, call ${tool.name} again with exactly the same arguments plus idempotency_key${key}. The gateway then returns the first call's answer if it landed in the meantime, instead of running it twice.`;
+}
+
+/** A 5xx: not stored by the gateway, so the same key runs the call again. */
+function hint5xx(tool: GeneratedTool): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return "A temporary fault. Try again shortly.";
+  if (!tool.needsIdempotency) {
+    return "The outcome is unknown: the change may have been applied. Read the resource again before calling again.";
+  }
+  return `The outcome is unknown: the call may have taken effect. The gateway does not keep 5xx answers, so calling again with the same idempotency_key runs the call again. Look the result up first: ${lookupFor(tool)}. If nothing landed, call again.`;
+}
+
+/** A server fault answered as a 400, and so stored for 24 hours under its key. */
+function hintServerFault400(tool: GeneratedTool): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return `This is a server-side fault, not a bad request. ${safe}`;
+  if (!tool.needsIdempotency) {
+    return "This is a server-side fault, not a bad request, and the change may have been applied. Read the resource again before calling again.";
+  }
+  const reference = "client_reference" in ((tool.inputSchema.properties as Record<string, unknown>) ?? {});
+  return `This is a server-side fault, not a bad request, but it was answered as a 400, and a 400 is kept for 24 hours under its key. Look the result up first: ${lookupFor(tool)}. If nothing landed, call again without idempotency_key (a new key)${reference ? " and the same client_reference" : ""}.`;
 }
 
 const RATE_LIMITED =
@@ -449,7 +523,9 @@ const RATE_LIMITED =
 
 function hint429(tool: GeneratedTool, message: string, ctx: HintContext): string {
   if (!tool.needsIdempotency) return RATE_LIMITED;
-  const lookUp = `Look the result up first (${lookupFor(tool)}); if nothing landed, call again without idempotency_key.`;
+  const lookUp = safeToRepeat(tool)
+    ? "This call changes nothing; call again without idempotency_key."
+    : `Look the result up first (${lookupFor(tool)}); if nothing landed, call again without idempotency_key.`;
   if (!isGatewayRateLimit(message)) {
     return `The service refused this call with a 429 after it reached it, and that answer is kept for 24 hours under its key. ${lookUp}`;
   }
@@ -526,7 +602,13 @@ export function hintFor(
     );
 
   switch (status) {
+    case 0:
+    case 408:
+      return hintNoAnswer(tool, ctx);
     case 400:
+      // A server fault dressed as a 400 first: it can mention a limit or a pending state,
+      // and it is no precondition and no bad field.
+      if (isServerFault400(message)) return hintServerFault400(tool);
       if (isStatePrecondition) {
         return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomer: the basic kyc status must be `completed`), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
       }
@@ -552,6 +634,6 @@ export function hintFor(
     case 429:
       return hint429(tool, message, ctx);
     default:
-      return undefined;
+      return status >= 500 && status !== 501 ? hint5xx(tool) : undefined;
   }
 }

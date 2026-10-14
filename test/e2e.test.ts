@@ -307,6 +307,7 @@ describe("end-to-end over MCP stdio", () => {
       const payload = JSON.parse(textOf(res));
       assert.equal(payload.status, 502);
       assert.equal(payload.environment, "sandbox");
+      assert.equal(payload.outcome_unknown, true, "a 5xx on a write may have taken effect");
       assert.ok(payload.idempotency_key);
       assert.equal(payload.idempotency_key, received[0]!.headers["idempotency-key"]);
       assert.deepEqual(payload.details, { data: null, error: "bad gateway" }, "details stays the raw body");
