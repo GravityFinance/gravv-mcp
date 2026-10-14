@@ -112,6 +112,8 @@ export interface ServerConfig {
   ratePerMinute?: number;
   docsOrigin?: string;
   fetchImpl?: typeof fetch;
+  /** Clock for the docs cache; tests replace it, as they replace fetch. */
+  now?: () => number;
 }
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
@@ -189,7 +191,7 @@ export function createServer(config: ServerConfig) {
       })
     : null;
 
-  const docs = new DocsIndex({ origin: config.docsOrigin, fetchImpl: config.fetchImpl });
+  const docs = new DocsIndex({ origin: config.docsOrigin, fetchImpl: config.fetchImpl, now: config.now });
 
   // Docs tools are unconditional; API tools require credentials.
   const active = hasApiKey ? selectTools(config.toolsets, gate) : [];
@@ -222,12 +224,14 @@ export function createServer(config: ServerConfig) {
           typeof args.limit === "number" ? args.limit : 6,
           typeof args.section === "string" ? args.section : undefined,
         );
+        const note = staleDocsNote(docs);
         if (hits.length === 0) {
           return okResult(
             JSON.stringify(
               {
                 results: [],
                 hint: `No documentation matched "${args.query}". Try fewer or more general terms, or drop the section filter.`,
+                ...(note ? { note } : {}),
               },
               null,
               2,
@@ -239,6 +243,7 @@ export function createServer(config: ServerConfig) {
             {
               results: hits,
               next: "Call getGravvDocPage with a slug from these results for the full page.",
+              ...(note ? { note } : {}),
             },
             null,
             2,
@@ -257,8 +262,9 @@ export function createServer(config: ServerConfig) {
             `No documentation page with slug "${args.slug}". Use searchGravvDocs to find the correct slug.`,
           );
         }
+        const note = staleDocsNote(docs);
         return okResult(
-          `# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
+          `${note ? `Note: ${note}\n\n` : ""}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
         );
       } catch (err) {
         return errorResult(`Could not fetch documentation page: ${(err as Error).message}`);
@@ -362,6 +368,16 @@ export function createServer(config: ServerConfig) {
   });
 
   return { server, environment, tools: active, gate };
+}
+
+/** Said with doc results while a refresh has failed and the last good index is served. */
+function staleDocsNote(docs: DocsIndex): string | null {
+  const f = docs.freshness();
+  if (!f.stale) return null;
+  return (
+    `The documentation index could not be refreshed (${f.error}). This comes from the copy loaded at ` +
+    `${f.loadedAt}, which may miss recent changes.`
+  );
 }
 
 function okResult(text: string) {

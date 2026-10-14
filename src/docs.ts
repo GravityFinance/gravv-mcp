@@ -26,6 +26,12 @@ const DOCS_ORIGIN = "https://gravv-docs.syntext.dev";
 /** Refetch interval. Docs change on their own cadence; an hour keeps a long-running server current. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
+/**
+ * After a refresh fails, the pages already loaded keep being served, and the next attempt
+ * waits this long, so a docs outage does not add a failing download to every call.
+ */
+const RETRY_AFTER_FAILURE_MS = 5 * 60 * 1000;
+
 export interface DocPage {
   title: string;
   /** Path without the .md suffix, e.g. "platform/wallets/create-a-wallet". */
@@ -35,6 +41,15 @@ export interface DocPage {
   section: string;
   description: string;
   content: string;
+}
+
+export interface DocsFreshness {
+  /** When the pages being served were downloaded (ISO 8601), or null before the first load. */
+  loadedAt: string | null;
+  /** True while a refresh has failed and older pages are being served. */
+  stale: boolean;
+  /** Why the last refresh failed, while stale. */
+  error?: string;
 }
 
 export interface DocsStats {
@@ -177,22 +192,52 @@ export class DocsIndex {
   private df = new Map<string, number>();
   private counts: DocsStats = { pages: 0, unmatchedEntries: 0, unmatchedPages: 0 };
   private fetchedAt = 0;
+  private refreshError: string | null = null;
+  private retryAt = 0;
   private inflight: Promise<void> | null = null;
   private readonly origin: string;
   private readonly doFetch: typeof fetch;
+  private readonly now: () => number;
 
-  constructor(opts: { origin?: string; fetchImpl?: typeof fetch } = {}) {
+  constructor(opts: { origin?: string; fetchImpl?: typeof fetch; now?: () => number } = {}) {
     this.origin = (opts.origin ?? DOCS_ORIGIN).replace(/\/+$/, "");
     this.doFetch = opts.fetchImpl ?? fetch;
+    this.now = opts.now ?? Date.now;
   }
 
   private async ensureLoaded(): Promise<void> {
-    if (this.pages.length > 0 && Date.now() - this.fetchedAt < CACHE_TTL_MS) return;
+    if (this.pages.length > 0) {
+      const t = this.now();
+      if (t - this.fetchedAt < CACHE_TTL_MS) return;
+      if (this.refreshError !== null && t < this.retryAt) return;
+    }
     // Collapse concurrent first-calls into one download rather than N.
-    this.inflight ??= this.load().finally(() => {
-      this.inflight = null;
-    });
+    this.inflight ??= this.load()
+      .then(
+        () => {
+          this.refreshError = null;
+        },
+        (err: unknown) => {
+          // A failed refresh used to fail the call although the pages were still there.
+          // Keep serving them, say so through freshness(), and try again later. With
+          // nothing loaded yet there is nothing to serve, so the error stands.
+          if (this.pages.length === 0) throw err;
+          this.refreshError = err instanceof Error ? err.message : String(err);
+          this.retryAt = this.now() + RETRY_AFTER_FAILURE_MS;
+        },
+      )
+      .finally(() => {
+        this.inflight = null;
+      });
     await this.inflight;
+  }
+
+  /** Whether the pages being served are current. Reads state only; it never downloads. */
+  freshness(): DocsFreshness {
+    const loadedAt = this.pages.length > 0 ? new Date(this.fetchedAt).toISOString() : null;
+    return this.refreshError === null
+      ? { loadedAt, stale: false }
+      : { loadedAt, stale: true, error: this.refreshError };
   }
 
   private async load(): Promise<void> {
@@ -211,6 +256,8 @@ export class DocsIndex {
     const corpus = await corpusRes.text();
 
     const entries = parseIndex(index, this.origin);
+    // A 200 that is not the index (an error page, a parked domain) must not replace good pages.
+    if (entries.length === 0) throw new Error(`${this.origin}/llms.txt lists no pages.`);
     const { pages, unmatchedEntries, unmatchedPages } = pairPages(entries, parseCorpus(corpus, entries), (url) =>
       slugFromUrl(url, this.origin),
     );
@@ -226,7 +273,7 @@ export class DocsIndex {
     this.pages = pages;
     this.df = df;
     this.counts = { pages: pages.length, unmatchedEntries, unmatchedPages };
-    this.fetchedAt = Date.now();
+    this.fetchedAt = this.now();
   }
 
   async search(query: string, limit = 6, section?: string): Promise<SearchHit[]> {

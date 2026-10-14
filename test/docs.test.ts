@@ -1,6 +1,9 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { DocsIndex, slugFromUrl } from "../src/docs.ts";
+import { createServer } from "../src/server.ts";
 
 /**
  * Fixture in the shape of the live docs site: an llms.txt index grouped by `## Section`,
@@ -274,6 +277,111 @@ describe("failure handling", () => {
   test("tolerates a leading slash and a .md suffix on the slug", async () => {
     const a = await index().getPage("/platform/wallets/overview.md");
     assert.equal(a?.title, "Wallets");
+  });
+});
+
+describe("stale index", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  /** An index whose site can be switched off, on a clock the test moves. */
+  function flaky() {
+    const state = { up: true, fetches: 0, clock: 0, index: INDEX };
+    const docs = new DocsIndex({
+      origin: "https://docs.test",
+      now: () => state.clock,
+      fetchImpl: (async (url: any) => {
+        state.fetches++;
+        if (!state.up) return new Response("unavailable", { status: 503 });
+        return new Response(String(url).endsWith("/llms.txt") ? state.index : CORPUS, { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    return { docs, state };
+  }
+
+  test("a failed refresh serves the pages already loaded", async () => {
+    const { docs, state } = flaky();
+    await docs.search("wallet");
+    assert.equal(docs.freshness().stale, false);
+
+    state.up = false;
+    state.clock = HOUR + 1;
+    const hits = await docs.search("422 unprocessable");
+    assert.equal(hits[0]!.slug, "getting-started/idempotent-requests");
+    const f = docs.freshness();
+    assert.equal(f.stale, true);
+    assert.match(f.error!, /503/);
+    assert.equal(f.loadedAt, new Date(0).toISOString());
+  });
+
+  test("waits five minutes before trying again, then recovers", async () => {
+    const { docs, state } = flaky();
+    await docs.search("wallet");
+    state.up = false;
+    state.clock = HOUR + 1;
+    await docs.search("wallet");
+    const afterFailure = state.fetches;
+
+    state.clock += 60_000;
+    await docs.search("wallet");
+    assert.equal(state.fetches, afterFailure, "no download within five minutes of a failure");
+
+    state.up = true;
+    state.clock += 5 * 60_000;
+    await docs.search("wallet");
+    assert.equal(state.fetches, afterFailure + 2);
+    assert.deepEqual(docs.freshness(), { loadedAt: new Date(state.clock).toISOString(), stale: false });
+  });
+
+  test("an index that lists no pages does not replace good pages", async () => {
+    const { docs, state } = flaky();
+    await docs.search("wallet");
+    state.index = "<html>Parked</html>";
+    state.clock = HOUR + 1;
+    assert.ok((await docs.search("wallet")).length > 0);
+    assert.match(docs.freshness().error!, /lists no pages/);
+  });
+
+  test("doc tool results say when they come from the old copy", async () => {
+    const state = { up: true, clock: 0 };
+    const { server } = createServer({
+      toolsets: "all",
+      readOnly: false,
+      allowLiveWrites: false,
+      docsOrigin: "https://docs.test",
+      now: () => state.clock,
+      fetchImpl: (async (url: any) => {
+        if (!state.up) return new Response("unavailable", { status: 503 });
+        return new Response(String(url).endsWith("/llms.txt") ? INDEX : CORPUS, { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "docs-test", version: "1.0.0" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const call = async (name: string, args: Record<string, unknown>) =>
+      ((await client.callTool({ name, arguments: args })) as any).content[0].text as string;
+
+    try {
+      assert.doesNotMatch(await call("searchGravvDocs", { query: "wallet" }), /could not be refreshed/);
+
+      state.up = false;
+      state.clock = HOUR + 1;
+      const search = JSON.parse(await call("searchGravvDocs", { query: "wallet" }));
+      assert.ok(search.results.length > 0);
+      assert.match(search.note, /could not be refreshed \(.*503.*\)\. This comes from the copy loaded at 1970-01-01T00:00:00\.000Z/);
+
+      const page = await call("getGravvDocPage", { slug: "platform/wallets/create-a-wallet" });
+      assert.match(page, /^Note: The documentation index could not be refreshed/);
+      assert.match(page, /# Create a wallet/);
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("with nothing loaded yet, a failure is still an error", async () => {
+    const { docs, state } = flaky();
+    state.index = "# Gravv\n";
+    await assert.rejects(docs.search("wallet"), /lists no pages/);
+    assert.deepEqual(docs.freshness(), { loadedAt: null, stale: false });
   });
 });
 
