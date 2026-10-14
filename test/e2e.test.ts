@@ -168,7 +168,16 @@ describe("end-to-end over MCP stdio", () => {
       const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
 
       assert.ok(names.length > 70, `expected the full surface, got ${names.length}`);
-      for (const blocked of ["getCardSensitiveDetails", "getCardPin", "updateCardPin", "startRiskKyc"]) {
+      for (const blocked of [
+        "getCardSensitiveDetails",
+        "getCardPin",
+        "updateCardPin",
+        "startRiskKyc",
+        "approveTransfer",
+        "searchWebhookIngestion",
+        "createPaymentLink",
+        "deleteSavedCard",
+      ]) {
         assert.ok(!names.includes(blocked), `${blocked} must never appear, even with --toolsets=all`);
       }
     } finally {
@@ -298,6 +307,51 @@ describe("end-to-end over MCP stdio", () => {
     }
   });
 
+  test("a removed approval tool names the Dashboard instead of 'unknown tool'", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=all"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", { name: "approveTransfer", arguments: { id: "trf_1" } });
+      assert.equal(res.result.isError, true);
+      assert.match(textOf(res), /Dashboard/);
+      assert.doesNotMatch(textOf(res), /Unknown tool/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a saved config naming a retired toolset still starts, with a warning", async () => {
+    const mcp = new McpProcess(
+      [`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=approvals,customers"],
+      { GRAVV_API_KEY: "grvSec_sandbox_e2e" },
+    );
+    try {
+      await mcp.initialize();
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.ok(names.includes("createCustomer"));
+      assert.ok(!names.includes("createTransfer"), "only the toolsets named are loaded");
+      assert.match(mcp.stderr, /warning: toolset "approvals" was removed/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("only retired toolsets start the documentation tools alone", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=approvals"], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      const init = await mcp.initialize();
+      assert.match(init.result.instructions, /No API tools loaded/);
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.deepEqual(names.sort(), ["getGravvDocPage", "searchGravvDocs"]);
+    } finally {
+      mcp.kill();
+    }
+  });
+
   test("a tool from an unloaded toolset says how to enable it", async () => {
     const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
       GRAVV_API_KEY: "grvSec_sandbox_e2e",
@@ -307,6 +361,17 @@ describe("end-to-end over MCP stdio", () => {
       const res = await mcp.request("tools/call", { name: "createAccountApplication", arguments: {} });
       assert.equal(res.result.isError, true);
       assert.match(textOf(res), /--toolsets=account-applications/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a publishable key is explained instead of silently failing", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], { GRAVV_API_KEY: "grvPub_e2e" });
+    try {
+      const init = await mcp.initialize();
+      assert.match(init.result.instructions, /publishable key/);
+      assert.match(mcp.stderr, /warning: This is a publishable key/);
     } finally {
       mcp.kill();
     }

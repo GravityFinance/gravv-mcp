@@ -1,12 +1,16 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "../src/safety.ts";
-import { detectEnvironment } from "../src/client.ts";
+import { detectEnvironment, isPublishableKey } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 const transfer = TOOLS_BY_NAME.get("createTransfer")!;
 const listAccounts = TOOLS_BY_NAME.get("listAccounts")!;
-const preview = { method: "POST", path: "/v1/transfer", body: { amount: 50, currency: "USD" } };
+const preview = {
+  method: "POST",
+  path: "/v1/transfer",
+  body: { amount: 50, source: { id: "acc_1", currency: "USD" } },
+};
 
 const gate = (over: Partial<ConstructorParameters<typeof SafetyGate>[0]> = {}) =>
   new SafetyGate({ environment: "sandbox", allowLiveWrites: false, readOnly: false, ...over });
@@ -21,6 +25,22 @@ describe("environment detection", () => {
     // Failing closed matters: sandbox and live share a base URL, so a key we cannot
     // classify must be treated as potentially live.
     assert.equal(detectEnvironment("some-opaque-token"), "unknown");
+  });
+
+  test("prefixes match exactly and case-sensitively, as the gateway does", () => {
+    // The gateway sends anything not starting grvSec_sandbox_ to live, so a loose match
+    // could call a live key sandbox and lift the live-write gate.
+    assert.equal(detectEnvironment("grvsec_sandbox_abc123"), "unknown");
+    assert.equal(detectEnvironment("GRVSEC_LIVE_abc123"), "unknown");
+    assert.equal(detectEnvironment("grvSec_live_sandbox123"), "live");
+    assert.equal(detectEnvironment("my_sandbox_token"), "unknown");
+    assert.equal(detectEnvironment("x_live_token"), "unknown");
+  });
+
+  test("a publishable key is recognised so it can be explained, and is never sandbox", () => {
+    assert.equal(isPublishableKey("grvPub_abc123"), true);
+    assert.equal(isPublishableKey("grvSec_sandbox_abc123"), false);
+    assert.equal(detectEnvironment("grvPub_abc123"), "unknown");
   });
 });
 
@@ -61,6 +81,70 @@ describe("money-movement gating", () => {
 
   test("read operations are never gated", () => {
     assert.equal(gate().check(listAccounts, {}, { method: "GET", path: "/v1/accounts", body: undefined }), null);
+  });
+});
+
+describe("previews read the fields the schemas really have", () => {
+  const willDo = (name: string, body: Record<string, unknown>) => {
+    const tool = TOOLS_BY_NAME.get(name)!;
+    return gate().check(tool, body, { method: "POST", path: tool.path, body })!.willDo;
+  };
+
+  test("a transfer reads source.currency, not a top-level currency", () => {
+    assert.match(willDo("createTransfer", { amount: 50, source: { id: "acc_1", currency: "EUR" } }), /Transfer 50 EUR/);
+    assert.match(
+      willDo("createTransfer", { amount: 50, currency: "USD", source: { id: "acc_1" } }),
+      /Transfer 50 in the source account's currency/,
+    );
+  });
+
+  test("an FX order never prints [object Object] or an approval step", () => {
+    const d = willDo("createFxOrder", { amount: "1000", pair: { base: "USD", quote: "EUR" }, side: "sell" });
+    assert.doesNotMatch(d, /\[object Object\]/);
+    assert.doesNotMatch(d, /waiting_approval|second user/);
+    assert.match(d, /USD\/EUR/);
+    assert.match(d, /debited when it is placed/);
+    assert.match(willDo("createFxOrder", { quote_id: "Q1" }), /for quote Q1/);
+  });
+
+  test("a collection names its method from source.methods", () => {
+    const d = willDo("createCollection", {
+      amount: "20000",
+      currency: "NGN",
+      source: { source_type: "external", methods: ["bank_transfer"] },
+    });
+    assert.match(d, /bank_transfer collection of 20000 NGN/);
+  });
+
+  test("a saved-card charge names the token and the intent, not a missing amount", () => {
+    const d = willDo("chargeSavedCard", { payment_intent_id: "pi_1", card_token: "tokn_1" });
+    assert.match(d, /tokn_1/);
+    assert.match(d, /pi_1/);
+    assert.doesNotMatch(d, /unspecified amount/);
+  });
+});
+
+describe("previews for the newly gated tools", () => {
+  test("a payment intent with a card token says it charges now", () => {
+    const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    const body = { amount: "50", currency: "USD", card_token: "tokn_1" };
+    const result = gate().check(intent, body, { method: "POST", path: intent.path, body });
+    assert.match(result!.willDo, /Charge 50 USD to saved card token tokn_1 now/);
+  });
+
+  test("a payment intent without a token says no money moves yet", () => {
+    const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    const body = { amount: "50", currency: "USD" };
+    const result = gate().check(intent, body, { method: "POST", path: intent.path, body });
+    assert.match(result!.willDo, /payment link for 50 USD/);
+    assert.match(result!.willDo, /No money moves/);
+  });
+
+  test("an FX cancel names the order and the lost refund", () => {
+    const cancel = TOOLS_BY_NAME.get("cancelFxOrder")!;
+    const result = gate().check(cancel, { order_id: "ord_1" }, { method: "POST", path: cancel.path, body: undefined });
+    assert.match(result!.willDo, /Cancel FX order ord_1/);
+    assert.match(result!.willDo, /does not return funds/);
   });
 });
 
@@ -117,10 +201,11 @@ describe("collections routes card payments to payment intents", () => {
     }
   });
 
-  test("the rails payment intents cannot express are still offered", () => {
+  test("only bank_transfer is offered: pix and mobile_money always fail", () => {
     const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.match(schema, new RegExp(`"${m}"`), `${m} must remain available`);
+    assert.match(schema, /"bank_transfer"/, "bank_transfer must remain available");
+    for (const m of ["pix", "mobile_money"]) {
+      assert.doesNotMatch(schema, new RegExp(`"${m}"`), `${m} should not be offered`);
     }
   });
 
@@ -144,9 +229,15 @@ describe("collections routes card payments to payment intents", () => {
     }
   });
 
-  test("the remaining rails pass through untouched", () => {
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.equal(checkCollectionMethods("createCollection", { source: { methods: [m] } }), null);
+  test("bank_transfer passes through untouched", () => {
+    assert.equal(checkCollectionMethods("createCollection", { source: { methods: ["bank_transfer"] } }), null);
+  });
+
+  test("pix and mobile_money are refused with the reason", () => {
+    for (const m of ["pix", "mobile_money"]) {
+      const msg = checkCollectionMethods("createCollection", { source: { methods: [m] } });
+      assert.ok(msg, `${m} should be refused`);
+      assert.match(msg, /only bank_transfer/);
     }
   });
 

@@ -8,25 +8,10 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
-import { DEFAULT_TOOLSETS, type Toolset } from "../curation.ts";
+import { PUBLISHABLE_KEY_MESSAGE, isPublishableKey } from "../client.ts";
+import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 
-const VALID_TOOLSETS: Toolset[] = [
-  "customers",
-  "accounts",
-  "account-applications",
-  "approvals",
-  "transfers",
-  "transactions",
-  "external-accounts",
-  "cards",
-  "wallets",
-  "fx",
-  "collections",
-  "payment-links",
-  "kyc",
-  "features",
-  "webhooks",
-];
+const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
 
 function usage(): string {
   return `gravv-mcp — MCP server for the Gravv payments API
@@ -44,7 +29,8 @@ OPTIONS
 ENVIRONMENT
   GRAVV_API_KEY              Sandbox or live key; the key selects the environment.
   GRAVV_ALLOW_LIVE_WRITES    Set to "true" to permit money movement on a live key.
-  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 10.
+  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 60 (burst 15). The gateway
+                             allows 600/min, burst 50, per tenant.
   GRAVV_BASE_URL             Same as --base-url.
 
 NOTES
@@ -69,22 +55,15 @@ async function main() {
   // so an agent can learn the API during evaluation before credentials exist.
   const apiKey = process.env.GRAVV_API_KEY || undefined;
 
-  const raw = arg("toolsets") ?? process.env.GRAVV_TOOLSETS;
   let toolsets: Toolset[] | "all";
-  if (!raw) {
-    toolsets = DEFAULT_TOOLSETS;
-  } else if (raw === "all") {
-    toolsets = "all";
-  } else {
-    const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    const bad = requested.filter((t) => !VALID_TOOLSETS.includes(t as Toolset));
-    if (bad.length) {
-      process.stderr.write(
-        `error: unknown toolset(s): ${bad.join(", ")}\nAvailable: ${VALID_TOOLSETS.join(", ")}\n`,
-      );
-      process.exit(1);
-    }
-    toolsets = requested as Toolset[];
+  try {
+    toolsets = parseToolsets(arg("toolsets") ?? process.env.GRAVV_TOOLSETS, (message) =>
+      process.stderr.write(`warning: ${message}\n`),
+    );
+  } catch (err) {
+    if (!(err instanceof UnknownToolsetError)) throw err;
+    process.stderr.write(`error: ${err.message}\n`);
+    process.exit(1);
   }
 
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");
@@ -109,6 +88,8 @@ async function main() {
           "\n"
       : "gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available\n",
   );
+
+  if (apiKey && isPublishableKey(apiKey)) process.stderr.write(`warning: ${PUBLISHABLE_KEY_MESSAGE}\n`);
 
   await server.connect(new StdioServerTransport());
 }

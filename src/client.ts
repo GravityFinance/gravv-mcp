@@ -17,14 +17,28 @@ export type Environment = "sandbox" | "live" | "unknown";
  * Sandbox and live share one base URL — the API key alone decides which database a
  * request reaches, via its `grvSec_sandbox_` / `grvSec_live_` prefix.
  *
+ * The prefixes are matched exactly and case-sensitively, as the gateway matches them: it
+ * sends every key that does not start `grvSec_sandbox_` to live. A looser test (a
+ * "sandbox" substring, or ignoring case) could call a live key sandbox and lift the
+ * live-write gate.
+ *
  * Returning "unknown" rather than guessing matters: the safety layer treats unknown as
  * potentially-live, so an unrecognised key format fails closed.
  */
 export function detectEnvironment(apiKey: string): Environment {
-  if (/^grvSec_sandbox_/i.test(apiKey) || /sandbox/i.test(apiKey.slice(0, 20))) return "sandbox";
-  if (/^grvSec_live_/i.test(apiKey) || /(^|_)live_/i.test(apiKey.slice(0, 20))) return "live";
+  if (/^grvSec_live_/.test(apiKey)) return "live";
+  if (/^grvSec_sandbox_/.test(apiKey)) return "sandbox";
   return "unknown";
 }
+
+/** Publishable keys (`grvPub_`) are for client-side use and cannot call the API. */
+export function isPublishableKey(apiKey: string): boolean {
+  return /^grvPub_/.test(apiKey);
+}
+
+export const PUBLISHABLE_KEY_MESSAGE =
+  "This is a publishable key (grvPub_). Publishable keys cannot call the Gravv API. " +
+  "Set GRAVV_API_KEY to a secret key starting grvSec_sandbox_ or grvSec_live_.";
 
 export class GravvApiError extends Error {
   readonly status: number;
@@ -41,14 +55,12 @@ export class GravvApiError extends Error {
 }
 
 /**
- * Token bucket matching the server-side limiter so we queue locally instead of
- * generating 429s.
+ * Token bucket so we queue locally instead of generating 429s.
  *
- * NOTE: the enforced ceiling is not clearly documented. The published limit is 10/min,
- * but 40 consecutive sandbox requests measured zero 429s, so throttling that hard would
- * make the server feel broken for no reason. The default is a courtesy 60/min; if a
- * given environment is stricter the 429 handler backs off, and GRAVV_RATE_PER_MINUTE
- * lowers the ceiling.
+ * The gateway allows 600 requests a minute, burst 50, per tenant: every key and every
+ * process of one business shares that bucket, and a 429 carries no Retry-After. The
+ * default here is a courtesy 60/min, burst 15, well below it, so one agent leaves room
+ * for the merchant's own traffic. GRAVV_RATE_PER_MINUTE changes the ceiling.
  */
 export class RateLimiter {
   private tokens: number;
@@ -90,7 +102,7 @@ export interface ClientOptions {
 
 export interface CallResult {
   data: unknown;
-  /** Present on POSTs; echoed back so a retry can reuse the same key deliberately. */
+  /** Present on POSTs; returned for tracing. Every call gets a new key. */
   idempotencyKey?: string;
   /** True when the gateway replayed a stored response rather than re-executing. */
   replayed: boolean;
@@ -237,7 +249,11 @@ export class GravvClient {
         continue;
       }
 
-      throw new GravvApiError(apiMessage, res.status, parsed, hintFor(res.status, tool, apiMessage));
+      let hint = hintFor(res.status, tool, apiMessage, parsed);
+      if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
+        hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
+      }
+      throw new GravvApiError(apiMessage, res.status, parsed, hint);
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
@@ -278,13 +294,60 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
 }
 
 /**
+ * The machine-readable code of an error body, wherever the gateway put it: inside the
+ * error object (`{"error":{"code":"idempotency_key_reused",…}}`) or at the top level
+ * beside a string error (`{"error":"…","code":"ERROR_CODE_DAILY_LIMIT_EXCEEDED"}`).
+ */
+function errorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as Record<string, unknown>;
+  const inner = b.error && typeof b.error === "object" ? (b.error as Record<string, unknown>).code : undefined;
+  if (typeof inner === "string" && inner) return inner;
+  return typeof b.code === "string" && b.code ? b.code : undefined;
+}
+
+/** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
+const LIMIT_CODES = new Set([
+  "ERROR_CODE_LIMIT_EXCEEDED",
+  "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
+  "ERROR_CODE_PER_TRANSFER_LIMIT_EXCEEDED",
+  "ERROR_CODE_MONTHLY_LIMIT_EXCEEDED",
+  "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED",
+]);
+
+/** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
+function hint422(code: string | undefined): string {
+  if (code === "idempotency_key_reused") {
+    return "The gateway saw this Idempotency-Key before with a different body. This server makes a new key for every call, so calling the tool again sends a fresh one.";
+  }
+  if (code && LIMIT_CODES.has(code)) {
+    return "Not an idempotency problem. The transfer is over a sender limit (see window and details). Reduce the amount or wait for the window to reset. Retrying the same call will not help.";
+  }
+  switch (code) {
+    case "ERROR_CODE_SUBJECT_BLOCKED":
+      return "Transfers are not permitted for this sender. Contact Gravv compliance; do not retry.";
+    case "ERROR_CODE_REMITTER_INFORMATION_REQUIRED":
+      return "More sender information is needed. Add the remitter details in additional_information and call again.";
+    case "ERROR_CODE_SUPPORTING_DOCUMENT_REQUIRED":
+      return "This transfer needs a supporting document. Upload one and pass its id in supporting_document_ids. Search the docs for 'transfer supporting documents'.";
+    default:
+      return "The API could not process the request. Read the error and its code; this is not an idempotency problem.";
+  }
+}
+
+/**
  * Turn the statuses merchants actually hit into something actionable.
  *
- * `message` is consulted so the hint does not contradict the API. A 400 saying
- * "missing field `client_reference`" needs no speculation about idempotency headers —
- * guessing there sends the model chasing the wrong thing.
+ * `message` and the body's error code are consulted so the hint does not contradict the
+ * API. A 400 saying "missing field `client_reference`" needs no speculation about
+ * idempotency headers — guessing there sends the model chasing the wrong thing.
  */
-function hintFor(status: number, tool: GeneratedTool, message = ""): string | undefined {
+export function hintFor(
+  status: number,
+  tool: GeneratedTool,
+  message = "",
+  body: unknown = null,
+): string | undefined {
   const mentionsIdempotency = /idempotenc/i.test(message);
 
   // Not every 400 is a malformed request. Several are business preconditions — the
@@ -299,7 +362,7 @@ function hintFor(status: number, tool: GeneratedTool, message = ""): string | un
   switch (status) {
     case 400:
       if (isStatePrecondition) {
-        return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomerKycStatus), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
+        return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomer: the basic kyc status must be `completed`), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
       }
       // The API names the offending field in most 400s. When it has, repeating that is
       // more useful than a generic theory about what else might be wrong.
@@ -317,9 +380,9 @@ function hintFor(status: number, tool: GeneratedTool, message = ""): string | un
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
     case 422:
-      return "This idempotency key was already used with a different payload. Retrying the same operation must reuse the key with an identical body; a genuinely new operation needs a new key.";
+      return hint422(errorCode(body));
     case 429:
-      return "Rate limited. The client throttles locally, so repeated 429s suggest the configured ceiling is above the real one — lower GRAVV_RATE_PER_MINUTE.";
+      return "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
     default:
       return undefined;
   }

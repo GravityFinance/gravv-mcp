@@ -19,22 +19,41 @@ export type Method = "get" | "post" | "put" | "patch" | "delete";
 /** `GET /v1/accounts` — the key format used throughout this file. */
 export const opKey = (method: string, path: string) => `${method.toUpperCase()} ${path}`;
 
-export type Toolset =
-  | "customers"
-  | "accounts"
-  | "account-applications"
-  | "approvals"
-  | "transfers"
-  | "transactions"
-  | "external-accounts"
-  | "cards"
-  | "wallets"
-  | "fx"
-  | "collections"
-  | "payment-links"
-  | "kyc"
-  | "features"
-  | "webhooks";
+/**
+ * Every toolset name, in the order the CLI help lists them. The `Toolset` type, the CLI's
+ * list of valid names and the default set are all derived from this one list, so a name
+ * cannot be added or retired in one place and forgotten in another.
+ */
+export const TOOLSETS = [
+  "customers",
+  "accounts",
+  "account-applications",
+  "transfers",
+  "transactions",
+  "external-accounts",
+  "cards",
+  "wallets",
+  "fx",
+  "collections",
+  "kyc",
+  "features",
+  "webhooks",
+] as const;
+
+export type Toolset = (typeof TOOLSETS)[number];
+
+/**
+ * Toolset names that existed in earlier releases. Saved configurations still name them
+ * (`--toolsets=approvals`, `GRAVV_TOOLSETS=...`), so they are accepted with a warning and
+ * ignored rather than refused: refusing them would stop those servers from starting.
+ */
+export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
+  approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
+  "payment-links": "payment links are retired from the Gravv API",
+};
+
+/** Toolsets that load only when named, or with --toolsets=all. */
+export const OPT_IN_TOOLSETS: ReadonlySet<Toolset> = new Set<Toolset>(["account-applications"]);
 
 /**
  * Loaded when the operator passes no --toolsets flag: everything except
@@ -49,22 +68,51 @@ export type Toolset =
  * Account onboarding is a deliberate, infrequent flow; `--toolsets=all` or
  * `--toolsets=account-applications` turns it on when it is actually needed.
  */
-export const DEFAULT_TOOLSETS: Toolset[] = [
-  "customers",
-  "accounts",
-  "transfers",
-  "transactions",
-  "external-accounts",
-  "kyc",
-  "cards",
-  "wallets",
-  "fx",
-  "collections",
-  "payment-links",
-  "features",
-  "webhooks",
-  "approvals",
-];
+export const DEFAULT_TOOLSETS: Toolset[] = TOOLSETS.filter((t) => !OPT_IN_TOOLSETS.has(t));
+
+/** Raised for a --toolsets / GRAVV_TOOLSETS name that is not a toolset. */
+export class UnknownToolsetError extends Error {
+  constructor(names: string[]) {
+    super(`unknown toolset(s): ${names.join(", ")}\nAvailable: ${TOOLSETS.join(", ")}`);
+    this.name = "UnknownToolsetError";
+  }
+}
+
+/**
+ * Parse a --toolsets / GRAVV_TOOLSETS value. No value means the default set; "all" means
+ * every toolset. A retired name is dropped with a warning. An unknown name throws, so a
+ * typo fails loudly instead of silently loading less than was asked for.
+ *
+ * When only retired names were given, the result is empty: the server starts with the
+ * documentation tools alone. Falling back to the default set would load tools, money
+ * movement among them, that the operator never asked for.
+ */
+export function parseToolsets(
+  raw: string | undefined,
+  warn: (message: string) => void = () => {},
+): Toolset[] | "all" {
+  if (!raw) return DEFAULT_TOOLSETS;
+  if (raw === "all") return "all";
+
+  const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const bad = requested.filter(
+    (t) => !(TOOLSETS as readonly string[]).includes(t) && !Object.hasOwn(RETIRED_TOOLSETS, t),
+  );
+  if (bad.length) throw new UnknownToolsetError(bad);
+
+  const kept: Toolset[] = [];
+  for (const t of requested) {
+    if (Object.hasOwn(RETIRED_TOOLSETS, t)) {
+      warn(`toolset "${t}" was removed in 0.3.2 (${RETIRED_TOOLSETS[t]}); ignoring it.`);
+      continue;
+    }
+    kept.push(t as Toolset);
+  }
+  if (kept.length === 0 && requested.length > 0) {
+    warn("no API toolsets left to load; starting with the documentation tools only.");
+  }
+  return kept;
+}
 
 interface Op {
   name: string;
@@ -171,16 +219,6 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/collections/cards/payment-intents/charge": { name: "chargeSavedCard", toolset: "collections" },
   "GET /v1/collections/cards": { name: "listSavedCards", toolset: "collections" },
   "GET /v1/collections/cards/{card_id}": { name: "getSavedCard", toolset: "collections" },
-  "DELETE /v1/collections/cards/{card_id}": { name: "deleteSavedCard", toolset: "collections" },
-
-  // ---- payment links -------------------------------------------------------
-  "POST /v1/payment-links": { name: "createPaymentLink", toolset: "payment-links" },
-  "GET /v1/payment-links": { name: "listPaymentLinks", toolset: "payment-links" },
-  "GET /v1/payment-links/{id}": { name: "getPaymentLink", toolset: "payment-links" },
-  "PUT /v1/payment-links/{id}": { name: "updatePaymentLink", toolset: "payment-links" },
-  "DELETE /v1/payment-links/{id}": { name: "deletePaymentLink", toolset: "payment-links" },
-  "PATCH /v1/payment-links/{id}/status": { name: "updatePaymentLinkStatus", toolset: "payment-links" },
-  "GET /v1/payment-links/public/{id}": { name: "getPublicPaymentLink", toolset: "payment-links" },
 
   // ---- features ------------------------------------------------------------
   "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
@@ -195,7 +233,7 @@ export const NAMES: Record<string, Op> = {
 };
 
 /**
- * Never exposed as tools, with the reason. Two categories:
+ * Never exposed as tools, with the reason. The categories:
  *
  *  - Cardholder data. These return PAN, CVV, and PIN. That must not enter a model's
  *    context under any configuration, so there is no flag to enable them. Merchants
@@ -205,6 +243,18 @@ export const NAMES: Record<string, Op> = {
  *  - Superseded KYC. /v1/risk/* is replaced by /v1/customers/kyc/*. Exposing both
  *    gives the model two plausible paths for the same job and it will sometimes pick
  *    the deprecated one.
+ *
+ *  - Retired. Payment links are no longer part of the Gravv API. Their specification is
+ *    still vendored until the next spec sync removes it, so the routes must be listed
+ *    here or the generator reports them as unmapped.
+ *
+ *  - Broken until the specification is fixed. The vendored spec omits a request body the
+ *    API requires, so a generated tool would fail on every call. These return when the
+ *    spec sync brings the body in.
+ *
+ *  - Dashboard-only. These routes refuse API keys, so a tool for them fails on every
+ *    call. They are in no specification, so the generator never meets them; the
+ *    entries are the written record of why they are absent.
  */
 export const BLOCKED: Record<string, string> = {
   "GET /v1/cards/{card_id}/sensitive-details":
@@ -217,6 +267,29 @@ export const BLOCKED: Record<string, string> = {
   "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
   "POST /v1/risk/upload-document":
     "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
+  "POST /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "PUT /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "DELETE /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "PATCH /v1/payment-links/{id}/status": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links/public/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "DELETE /v1/collections/cards/{card_id}":
+    "The API needs customer_id and card_token in a JSON body, and the vendored spec declares none, so every call would fail with EOF.",
+  "POST /v1/transfer/{id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
+  "POST /v1/transfer/{id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
+  "POST /v1/external-accounts/{id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject recipients in the Gravv Dashboard.",
+  "POST /v1/external-accounts/{id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject recipients in the Gravv Dashboard.",
+  "POST /v1/fx/orders/{order_id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
+  "POST /v1/fx/orders/{order_id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
+  "GET /v1/webhooks/ingestion/search":
+    "Dashboard only: an internal route that API keys cannot call. Check your own deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
 };
 
 /**
@@ -231,15 +304,141 @@ export const BLOCKED: Record<string, string> = {
  * recurring and merchant-initiated charges need.
  *
  * Two tools offering the same job is how a model ends up on the weaker one. So the card
- * family is removed from createCollection, leaving it responsible for the rails payment
- * intents cannot express.
+ * family is removed from createCollection.
+ *
+ * pix and mobile_money are removed too: the API rejects both on every call today, so
+ * offering them only teaches the model a path that cannot succeed. That leaves
+ * bank_transfer, which works in 16 countries.
  */
 export const ENUM_RESTRICTIONS: Record<string, { remove: string[]; because: string }> = {
   createCollection: {
-    remove: ["card", "apple_pay", "google_pay"],
+    remove: ["card", "apple_pay", "google_pay", "pix", "mobile_money"],
     because:
-      "Card payments go through createCardPaymentIntent, which returns the same hosted " +
-      "payment link plus the intent id and card token this endpoint cannot provide.",
+      "Bank transfer only: pix and mobile_money are always rejected, and card payments go through " +
+      "createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
+  },
+};
+
+/**
+ * Replacement text for descriptions that come from the vendored specs.
+ *
+ * A tool's description is the spec's summary and description followed by curation text,
+ * so a curation fix alone leaves a false spec sentence in front of the corrected one, and
+ * the model reads both. The specs are byte copies of client-docs (scripts/sync-specs.ts),
+ * so editing them here would be undone by the next sync. The correction lives here until
+ * the docs fix the spec text at its source.
+ *
+ * `whileSpecSays` is the false text the spec still carries. Generation fails once it is
+ * gone, so an override cannot outlive the reason it exists: when the spec is fixed and
+ * synced, the override is deleted.
+ */
+export interface DescriptionOverride {
+  /** Text the vendored spec still carries (in the operation or a parameter description). */
+  whileSpecSays: string;
+  /** Replaces the spec `description`, the part after the summary. */
+  description?: string;
+  /** Replaces the description of the named input properties. */
+  params?: Record<string, string>;
+}
+
+export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
+  // ---- customers -----------------------------------------------------------
+  updateCustomer: {
+    whileSpecSays: "Cosmetic path parameter",
+    description:
+      "Update details of a customer. The customer is taken from the path customer_id; a customer_id in the " +
+      "body is overwritten by the path value. Only provided fields are updated.",
+    params: { customer_id: "Customer to update. Taken from the path; any body value is overwritten." },
+  },
+
+  // ---- external accounts ---------------------------------------------------
+  createExternalAccount: {
+    whileSpecSays: "is idempotent and returns the existing",
+    description:
+      "Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and " +
+      "fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and " +
+      "mobile_money payees return HTTP 200 with status `active`. Track a pending payee with " +
+      "getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A " +
+      "duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in " +
+      "data.payee_id.",
+  },
+  getExternalAccount: {
+    whileSpecSays: "calling it until the status changes to",
+    description:
+      "Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is " +
+      "`active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with " +
+      "code ERROR_CODE_NOT_FOUND.",
+  },
+
+  // ---- transactions --------------------------------------------------------
+  exportTransactions: {
+    whileSpecSays: "Maximum 50,000 records per export",
+    description:
+      "Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 " +
+      "newest matching rows (a known bug).",
+  },
+
+  // ---- collections ---------------------------------------------------------
+  createCollection: {
+    whileSpecSays: "(card, bank transfer, and mobile money)",
+    description:
+      "Initiates a bank-transfer collection. The response carries the payment instructions for the payer.",
+  },
+  getCollection: {
+    whileSpecSays: "no API key is required",
+    description:
+      "Returns the status and details of a collection. It needs an API key like every other call. Pass the " +
+      "transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier " +
+      "getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
+  },
+  createCardPaymentIntent: {
+    whileSpecSays: "token you got from the webhook",
+    params: {
+      card_token: "Saved card token from listSavedCards. When set, the card is charged at once.",
+    },
+  },
+
+  // ---- cards ---------------------------------------------------------------
+  updateCardStatus: {
+    whileSpecSays: "Optional spending limit",
+    params: {
+      limit: "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
+    },
+  },
+
+  // ---- fx ------------------------------------------------------------------
+  // The fx spec predates the current API: its request fields and the approval and
+  // rate-lock claims are all out of date. The schemas stay as generated until the spec
+  // is fixed, so the descriptions say which fields the API actually reads.
+  getFxQuote: {
+    whileSpecSays: "lock in the quoted rate",
+    description:
+      "The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and " +
+      "`amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is " +
+      "sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The " +
+      "response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with " +
+      "createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this " +
+      "server sends one.",
+    params: {
+      amount:
+        "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON " +
+        "number is rejected with `invalid request encoding`.",
+      direction:
+        "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair " +
+        "(for example USD_XAF) instead.",
+    },
+  },
+  createFxOrder: {
+    whileSpecSays: "doesn't execute until a second user approves it",
+    description:
+      "Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is " +
+      "debited at once: there is no approval step and no second user (`waiting_approval` is only for orders " +
+      "placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: " +
+      "internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement " +
+      "instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and " +
+      "`metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes " +
+      "from an older spec and still asks for some of them, so any value passes. The amount is the quote's. " +
+      "The `Idempotency-Key` header is required; this server sends one.",
   },
 };
 
@@ -259,6 +458,36 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
   startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
   uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
+  createPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  listPaymentLinks:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  getPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  updatePaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  deletePaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  updatePaymentLinkStatus:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  getPublicPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  deleteSavedCard:
+    "Not available in this release: the API needs customer_id and card_token in a JSON request body, and the current spec sends no body, so every call fails with EOF. The tool returns when the spec is fixed. Until then, call DELETE /v1/collections/cards/{card_id} directly with a body of {customer_id, card_token}.",
+  approveTransfer:
+    "Not available over MCP: approving a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  rejectTransfer:
+    "Not available over MCP: rejecting a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  approveExternalAccount:
+    "Not available over MCP: approving a recipient is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  rejectExternalAccount:
+    "Not available over MCP: rejecting a recipient is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  approveFxOrder:
+    "Not available over MCP: approving an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard. Orders placed with an API key need no approval: they run at once.",
+  rejectFxOrder:
+    "Not available over MCP: rejecting an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  searchWebhookIngestion:
+    "Not available over MCP: this is an internal Dashboard route that API keys cannot call. Check your own webhook deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
 };
 
 /**
@@ -275,10 +504,12 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/fx/orders",
   "POST /v1/collections",
   "POST /v1/collections/cards/payment-intents/charge",
-  // Approving releases a held instruction for execution, so it moves money just as
-  // surely as initiating one. Rejecting does not, and is not gated.
-  "POST /v1/transfer/{id}/approve",
-  "POST /v1/fx/orders/{order_id}/approve",
+  // With a card_token the intent charges the saved card at once, with no payer step.
+  // Without one it only makes a payment link, but the gate is per route, so both ask.
+  "POST /v1/collections/cards/payment-intents",
+  // Cancelling does not return funds already debited, and API-key orders are debited
+  // when they are placed, so a cancel cannot be undone.
+  "POST /v1/fx/orders/{order_id}/cancel",
 ]);
 
 /**
@@ -298,42 +529,55 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have completed KYC. Check getCustomerKycStatus first — an account cannot be opened for an unverified customer.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
 
   createExternalAccount:
-    "RETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
+    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
 
   submitAccountApplication:
-    "ORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
+    "ORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
 
   processAccountApplication:
-    "ASYNC: processing may be handed to a background worker rather than completing inline. Do not assume the response is terminal — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "ASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
 
   submitAndProcessAccountApplication:
-    "ASYNC: combines submit and process. May still complete in the background — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
-    "ASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
+    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
 
   getFxQuote:
-    "Quotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
 
   createFxOrder:
-    "Orders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
 
-  withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
+  listFxPendingApprovals:
+    "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+
+  withdrawFromCard:
+    "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+
+  updateCardStatus:
+    "ALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
+
+  cancelFxOrder:
+    "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
+
+  createCardPaymentIntent:
+    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
 
   createCollection:
-    "MOVES MONEY: initiates a collection from a payer. Requires confirm: true.",
+    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.",
 
   chargeSavedCard:
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
 
   uploadCustomerKycDocument:
     "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
@@ -341,7 +585,8 @@ export const PREREQUISITES: Record<string, string> = {
   startCustomerKycS2S:
     "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
 
-  exportTransactions: "Capped at 50,000 records per export. Narrow the filters for larger ranges.",
+  exportTransactions:
+    "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
 };
 
 /** Tool names that must carry a `confirm` argument, derived from MONEY_OPS. */

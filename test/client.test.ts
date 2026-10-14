@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GravvClient, GravvApiError, RateLimiter, extractErrorMessage } from "../src/client.ts";
+import { GravvClient, GravvApiError, RateLimiter, extractErrorMessage, hintFor } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 /** Records what the client sent and replays canned responses. */
@@ -61,7 +61,7 @@ describe("request building", () => {
 
   test("writes an identifier declared in both path and body to both places", () => {
     // PUT /v1/customers/{customer_id} declares customer_id in the path AND requires it
-    // in the body; the docs note the path value is cosmetic. One argument, two homes.
+    // in the body; the gateway uses the path value. One argument, two homes.
     const { fetchImpl } = stub([{ status: 200 }]);
     const { url, body } = client(fetchImpl).buildRequest(updateCustomer, {
       customer_id: "cus_1",
@@ -94,7 +94,7 @@ describe("auth and idempotency", () => {
     const res = await client(fetchImpl).call(createCustomer, { body: { email: "a@b.c" } });
     const sent = calls[0]!.headers["Idempotency-Key"];
     assert.ok(sent, "POST must carry an Idempotency-Key — the gateway 400s without one");
-    assert.equal(res.idempotencyKey, sent, "the key used must be returned so a retry can reuse it");
+    assert.equal(res.idempotencyKey, sent, "the key used is returned for tracing");
   });
 
   test("does not send an Idempotency-Key on GETs", async () => {
@@ -140,10 +140,28 @@ describe("response handling", () => {
   });
 
   test("attaches an actionable hint for 422 idempotency conflicts", async () => {
-    const { fetchImpl } = stub([{ status: 422, body: { error: "idempotency key reused" } }]);
+    const { fetchImpl } = stub([
+      {
+        status: 422,
+        body: { data: null, error: { code: "idempotency_key_reused", message: "Key reused with a different payload" } },
+      },
+    ]);
     await assert.rejects(
       client(fetchImpl).call(createCustomer, { body: {} }),
-      (e: GravvApiError) => /different payload/.test(e.hint ?? ""),
+      (e: GravvApiError) => /different body/.test(e.hint ?? "") && /fresh one/.test(e.hint ?? ""),
+    );
+  });
+
+  test("a 422 limit breach is not blamed on idempotency", async () => {
+    const { fetchImpl } = stub([
+      {
+        status: 422,
+        body: { data: null, error: "daily limit exceeded", code: "ERROR_CODE_DAILY_LIMIT_EXCEEDED", window: "daily" },
+      },
+    ]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: GravvApiError) => /sender limit/.test(e.hint ?? "") && !/idempotency key/i.test(e.hint ?? ""),
     );
   });
 
@@ -264,6 +282,8 @@ describe("hints distinguish malformed requests from state preconditions", () => 
     for (const msg of ["Customer has no KYC", "insufficient balance", "account is inactive"]) {
       const h = await hintFor(400, msg);
       assert.match(h, /state precondition/i, `wrong hint for "${msg}"`);
+      assert.match(h, /getCustomer\b/, `the KYC pointer must be getCustomer for "${msg}"`);
+      assert.doesNotMatch(h, /getCustomerKycStatus/);
       assert.doesNotMatch(h, /Idempotency-Key/, `must not blame idempotency for "${msg}"`);
     }
   });
@@ -276,5 +296,35 @@ describe("hints distinguish malformed requests from state preconditions", () => 
 
   test("an idempotency 400 still blames idempotency", async () => {
     assert.match(await hintFor(400, "missing idempotency key in request headers"), /Idempotency-Key/);
+  });
+});
+
+describe("422 hints follow the error code", () => {
+  const transfer = TOOLS_BY_NAME.get("createTransfer")!;
+  const hint = (body: unknown) => hintFor(422, transfer, "", body) ?? "";
+
+  test("each transfer code gets its own next step", () => {
+    assert.match(hint({ error: "blocked", code: "ERROR_CODE_SUBJECT_BLOCKED" }), /not permitted for this sender/);
+    assert.match(hint({ error: "info", code: "ERROR_CODE_REMITTER_INFORMATION_REQUIRED" }), /additional_information/);
+    assert.match(
+      hint({ error: "doc", code: "ERROR_CODE_SUPPORTING_DOCUMENT_REQUIRED" }),
+      /supporting_document_ids/,
+    );
+    for (const code of ["ERROR_CODE_LIMIT_EXCEEDED", "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED"]) {
+      assert.match(hint({ error: "limit", code }), /sender limit/);
+    }
+  });
+
+  test("a 422 with no known code is not blamed on idempotency", () => {
+    const h = hint({ error: "unprocessable" });
+    assert.match(h, /not an idempotency problem/);
+  });
+});
+
+describe("429 hint", () => {
+  test("states the gateway limit instead of blaming the local ceiling", () => {
+    const h = hintFor(429, TOOLS_BY_NAME.get("listTransactions")!, "Too many request") ?? "";
+    assert.match(h, /600 requests a minute/);
+    assert.doesNotMatch(h, /lower GRAVV_RATE_PER_MINUTE/);
   });
 });

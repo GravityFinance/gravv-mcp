@@ -21,6 +21,7 @@ import {
   BLOCKED,
   PREREQUISITES,
   ENUM_RESTRICTIONS,
+  DESCRIPTION_OVERRIDES,
   opKey,
   isMoneyOp,
   needsIdempotencyKey,
@@ -62,6 +63,16 @@ function restrictEnums(node: any, remove: string[], depth = 0): number {
   for (const v of Object.values(node)) touched += restrictEnums(v, remove, depth + 1);
   return touched;
 }
+
+/** Every `description` string in a schema, for checking what text the model would see. */
+function descriptions(node: any, depth = 0): string[] {
+  if (node === null || typeof node !== "object" || depth > 30) return [];
+  if (Array.isArray(node)) return node.flatMap((x) => descriptions(x, depth + 1));
+  const own = typeof node.description === "string" ? [node.description] : [];
+  return [...own, ...Object.values(node).flatMap((v) => descriptions(v, depth + 1))];
+}
+
+const squash = (text: string) => text.trim().replace(/\s+/g, " ");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -153,8 +164,8 @@ interface Generated {
   /**
    * Path parameters that must ALSO appear in the body. The specs occasionally declare
    * the same identifier in both places — see PUT /v1/customers/{customer_id}, where the
-   * docs state the path value is cosmetic and the service reads the body one. We expose
-   * a single argument and write it to both.
+   * spec marks the body value required (the gateway overwrites it with the path value).
+   * We expose a single argument and write it to both.
    */
   alsoInBody: string[];
   movesMoney: boolean;
@@ -166,6 +177,7 @@ const tools: Generated[] = [];
 const problems: string[] = [];
 const unmapped: string[] = [];
 const blockedSeen: string[] = [];
+const overridesUsed = new Set<string>();
 let operationCount = 0;
 
 for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort()) {
@@ -193,7 +205,9 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
 
       // ---- description --------------------------------------------------------
       const summary = (op.summary ?? "").trim();
-      const detail = (op.description ?? "").trim().replace(/\s+/g, " ");
+      const specDetail = squash(op.description ?? "");
+      const override = DESCRIPTION_OVERRIDES[curated.name];
+      const detail = override?.description !== undefined ? squash(override.description) : specDetail;
       const prereq = PREREQUISITES[curated.name];
       const parts = [summary, detail].filter(Boolean);
       let description = parts.join(" — ");
@@ -270,6 +284,25 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         }
       }
 
+      // Replace false spec text, and fail once the spec no longer carries it.
+      if (override) {
+        overridesUsed.add(curated.name);
+        const specText = squash([specDetail, ...descriptions(properties)].join(" "));
+        if (!specText.includes(squash(override.whileSpecSays))) {
+          problems.push(
+            `${curated.name}: DESCRIPTION_OVERRIDES expects the spec to say "${override.whileSpecSays}", but it ` +
+              `no longer does. The spec was likely fixed — delete the override in curation.ts.`,
+          );
+        }
+        for (const [prop, text] of Object.entries(override.params ?? {})) {
+          if (!(prop in properties)) {
+            problems.push(`${curated.name}: DESCRIPTION_OVERRIDES names property "${prop}", which the tool does not have`);
+            continue;
+          }
+          properties[prop] = { ...(properties[prop] as Json), description: squash(text) };
+        }
+      }
+
       // Strip any enum values this tool must not offer, before the schema is emitted.
       const restriction = ENUM_RESTRICTIONS[curated.name];
       if (restriction) {
@@ -336,6 +369,10 @@ for (const k of curatedKeys) {
   if (!generatedKeys.has(k) && !BLOCKED[k]) {
     problems.push(`curation.ts names "${k}" but no such operation exists in the specs`);
   }
+}
+
+for (const name of Object.keys(DESCRIPTION_OVERRIDES)) {
+  if (!overridesUsed.has(name)) problems.push(`DESCRIPTION_OVERRIDES names "${name}", which is not a generated tool`);
 }
 
 console.log(`specs:      ${readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).length} files`);

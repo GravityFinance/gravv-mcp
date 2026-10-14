@@ -95,13 +95,17 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders/{order_id}/cancel",
-    "description": "Cancel order — Cancels an order that hasn't executed yet. Orders that are already in a final state, or in a state that doesn't allow cancellation, can't be cancelled. The `Idempotency-Key` header is required; requests without it are rejected.",
+    "description": "Cancel order — Cancels an order that hasn't executed yet. Orders that are already in a final state, or in a state that doesn't allow cancellation, can't be cancelled. The `Idempotency-Key` header is required; requests without it are rejected.\n\nOnly an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "order_id": {
           "type": "string",
           "description": "The order reference returned when the order was created."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -116,7 +120,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
-    "movesMoney": false,
+    "movesMoney": true,
     "needsIdempotency": true,
     "spec": "fx.yaml"
   },
@@ -304,7 +308,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Create a new internal account for a customer. For sandbox and testing integrations, we recommend using `polygon` as the `blockchain_network`.\n\nPREREQUISITE: the customer must exist and have completed KYC. Check getCustomerKycStatus first — an account cannot be opened for an unverified customer.",
+    "description": "Create an account — Create a new internal account for a customer. For sandbox and testing integrations, we recommend using `polygon` as the `blockchain_network`.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1598,7 +1602,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents",
-    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_",
+    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_\n\nWithout card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1700,7 +1704,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "card_token": {
           "type": "string",
-          "description": "To auto-charge a customer, use the token you got from the webhook response in your first call of this endpoint.",
+          "description": "Saved card token from listSavedCards. When set, the card is charged at once.",
           "example": "tokn_80aebb6ea2594a74bc215a64"
         },
         "metadata": {
@@ -1709,6 +1713,10 @@ export const TOOLS: GeneratedTool[] = [
           "example": {
             "order_id": "ord_123"
           }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -1737,7 +1745,7 @@ export const TOOLS: GeneratedTool[] = [
       "metadata"
     ],
     "alsoInBody": [],
-    "movesMoney": false,
+    "movesMoney": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },
@@ -1746,7 +1754,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections",
-    "description": "Initiate a collection — Initiates a collection request using a specified collection method (card, bank transfer, and mobile money). If the collection method is card, a payment link will be generated for the customer to complete the payment. For mobile money and bank transfer methods, payment instructions will be provided.\n\nMOVES MONEY: initiates a collection from a payer. Requires confirm: true.\n\nNOT FOR CARD PAYMENTS. Card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token this endpoint cannot provide.",
+    "description": "Initiate a collection — Initiates a bank-transfer collection. The response carries the payment instructions for the payer.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1815,14 +1823,9 @@ export const TOOLS: GeneratedTool[] = [
                   "items": {
                     "type": "string",
                     "enum": [
-                      "pix",
-                      "mobile_money",
                       "bank_transfer"
                     ]
-                  },
-                  "example": [
-                    "pix"
-                  ]
+                  }
                 }
               }
             }
@@ -2250,7 +2253,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts",
-    "description": "Add an external account — Adds a new external account for transfers to accounts that are not created with Gravv. ## Async setup contract Registering an external account with our payment partners runs asynchronously. The response status code tells you the outcome: - **`200 OK`:** The external account is fully registered with at least one partner. The `status` field is `active`. You can initiate transfers immediately. - **`202 Accepted`:** the external account record is created and a background worker calls our partners. The `status` field is `pending`. To learn when it changes to `active`, either check the status by calling `GET /v1/external-accounts/{external_account_id}` until it is `active`, or subscribe to the `payee.setup.*` webhook events. - **`400 Bad Request`:** Input validation failed. Fix the input and retry. A duplicate POST with the same `account_number` (or `iban`), `currency`, and `payee_type` for the same customer is idempotent and returns the existing record.\n\nRETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
+    "description": "Add an external account — Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and mobile_money payees return HTTP 200 with status `active`. Track a pending payee with getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in data.payee_id.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2786,7 +2789,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders",
-    "description": "Create order — Creates an OTC order. The order is created in `waiting_approval` and doesn't execute until a second user approves it. A `market` order executes at the current rate once approved. A `limit` order waits until the rate reaches `target_rate`, then executes once approved. Set `destination_type` to control where the converted funds settle: an internal `account`, a crypto `wallet`, or a saved settlement instruction (`ssi`). The `Idempotency-Key` header is required; requests without it are rejected.\n\nOrders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "description": "Create order — Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is debited at once: there is no approval step and no second user (`waiting_approval` is only for orders placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and `metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes from an older spec and still asks for some of them, so any value passes. The amount is the quote's. The `Idempotency-Key` header is required; this server sends one.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2907,89 +2910,11 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "fx.yaml"
   },
   {
-    "name": "createPaymentLink",
-    "toolset": "payment-links",
-    "method": "post",
-    "path": "/v1/payment-links",
-    "description": "Create a payment link — Creates a new payment link that can be shared with a payer to collect a crypto payment. On success, the API returns a shareable `link_url` along with wallet addresses for each network specified in `supported_networks`. The payer visits the link and completes the payment on their preferred network. ## Supported networks Pass one or more of the following values in `supported_networks`: - stellar - ethereum - polygon - avalanche - solana A wallet address is automatically provisioned for each requested network and returned in the `wallet_addresses` field of the response.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "payer_name": {
-          "type": "string",
-          "description": "Name of the person who will make the payment.",
-          "example": "payer2"
-        },
-        "payer_email": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "email",
-          "description": "Email address of the person who will make the payment.",
-          "example": "payer@example.com"
-        },
-        "settlement_account_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "ID of the account where settled funds will be deposited after a successful payment.",
-          "example": "b3e3c9fd-77ed-4d14-9c45-68db60d17d3a"
-        },
-        "supported_networks": {
-          "type": "array",
-          "description": "List of blockchain networks to accept payments on. Wallet addresses for each specified network are automatically provisioned and included in the response.",
-          "items": {
-            "type": "string",
-            "enum": [
-              "stellar",
-              "ethereum",
-              "polygon",
-              "avalanche",
-              "solana"
-            ]
-          },
-          "minItems": 1,
-          "example": [
-            "stellar",
-            "ethereum"
-          ]
-        },
-        "customer_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "ID of the customer this payment link is created for.",
-          "example": "5e713759-3416-44f5-b797-efd0299aefc1"
-        }
-      },
-      "required": [
-        "payer_name",
-        "settlement_account_id",
-        "supported_networks",
-        "customer_id"
-      ],
-      "additionalProperties": true
-    },
-    "pathParams": [],
-    "queryParams": [],
-    "bodyMode": "inline",
-    "bodyProps": [
-      "payer_name",
-      "payer_email",
-      "settlement_account_id",
-      "supported_networks",
-      "customer_id"
-    ],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": true,
-    "spec": "payment-links.yaml"
-  },
-  {
     "name": "createTransfer",
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3279,7 +3204,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Create a new blockchain wallet for a customer on the specified network.\n\nASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
+    "description": "Create a wallet — Create a new blockchain wallet for a customer on the specified network.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3360,73 +3285,11 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
-    "name": "deletePaymentLink",
-    "toolset": "payment-links",
-    "method": "delete",
-    "path": "/v1/payment-links/{id}",
-    "description": "Delete a payment link — Permanently deletes a payment link.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique identifier of the payment link."
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
-  },
-  {
-    "name": "deleteSavedCard",
-    "toolset": "collections",
-    "method": "delete",
-    "path": "/v1/collections/cards/{card_id}",
-    "description": "Delete saved card — This operation is idempotent. It returns success even if the card doesn't exist.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "card_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Saved card ID"
-        }
-      },
-      "required": [
-        "card_id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "card_id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "collections.yaml"
-  },
-  {
     "name": "exportTransactions",
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions/export",
-    "description": "Export transactions — Exports matching transactions as a downloadable file. Supports CSV and JSON formats. Maximum 50,000 records per export.\n\nCapped at 50,000 records per export. Narrow the filters for larger ranges.",
+    "description": "Export transactions — Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 newest matching rows (a known bug).\n\nReturns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3745,7 +3608,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of an onramp transaction. This endpoint is public — no API key is required.",
+    "description": "Get transaction by ID — Returns the status and details of a collection. It needs an API key like every other call. Pass the transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3867,7 +3730,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Get a single external account — Retrieve details of a specific external account. Use this endpoint to check the `status` after a `202 Accepted` from `POST /v1/external-accounts`, calling it until the status changes to `active`.",
+    "description": "Get a single external account — Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is `active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with code ERROR_CODE_NOT_FOUND.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3926,7 +3789,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/quote",
-    "description": "Create an FX quote — Returns a foreign exchange rate quote for a given currency pair and amount. The quote includes a `quote_id` and an expiry time. Use the `quote_id` when submitting a transfer to lock in the quoted rate. The `Idempotency-Key` header is required; requests without it are rejected.\n\nQuotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "description": "Create an FX quote — The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and `amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this server sends one.\n\nQuotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3942,12 +3805,12 @@ export const TOOLS: GeneratedTool[] = [
         },
         "amount": {
           "type": "number",
-          "description": "Amount in the source currency to convert. Must be greater than zero.",
+          "description": "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON number is rejected with `invalid request encoding`.",
           "example": 10
         },
         "direction": {
           "type": "string",
-          "description": "Direction of the trade.",
+          "description": "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair (for example USD_XAF) instead.",
           "enum": [
             "BUY",
             "SELL"
@@ -3976,68 +3839,6 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsIdempotency": true,
     "spec": "fx.yaml"
-  },
-  {
-    "name": "getPaymentLink",
-    "toolset": "payment-links",
-    "method": "get",
-    "path": "/v1/payment-links/{id}",
-    "description": "Get a payment link — Retrieves a single payment link by its ID.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique identifier of the payment link."
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
-  },
-  {
-    "name": "getPublicPaymentLink",
-    "toolset": "payment-links",
-    "method": "get",
-    "path": "/v1/payment-links/public/{id}",
-    "description": "Get a payment link (public) — Retrieves a payment link by its ID without requiring authentication. This endpoint is intended for the payer-facing checkout experience. Only active payment links are returned.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique identifier of the payment link."
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
   },
   {
     "name": "getSavedCard",
@@ -4915,7 +4716,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/pending-approvals",
-    "description": "List pending approvals — Lists the orders in `waiting_approval` that are waiting on an approve or reject decision.",
+    "description": "List pending approvals — Lists the orders in `waiting_approval` that are waiting on an approve or reject decision.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4990,53 +4791,6 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
-  },
-  {
-    "name": "listPaymentLinks",
-    "toolset": "payment-links",
-    "method": "get",
-    "path": "/v1/payment-links",
-    "description": "List payment links — Returns a paginated list of all payment links created under your tenant. Use the `page` and `per_page` query parameters to navigate through results. Optionally filter by `status`.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 1,
-          "description": "Page number for paginated results."
-        },
-        "per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100,
-          "default": 20,
-          "description": "Number of items to return per page."
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "active",
-            "paused"
-          ],
-          "description": "Filter payment links by status."
-        }
-      },
-      "required": [],
-      "additionalProperties": false
-    },
-    "pathParams": [],
-    "queryParams": [
-      "page",
-      "per_page",
-      "status"
-    ],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
   },
   {
     "name": "listPendingAccountApplications",
@@ -5403,7 +5157,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/process",
-    "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: processing may be handed to a background worker rather than completing inline. Do not assume the response is terminal — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5464,7 +5218,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5527,7 +5281,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit",
-    "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
+    "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5557,7 +5311,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit-and-process",
-    "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: combines submit and process. May still complete in the background — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6650,7 +6404,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "patch",
     "path": "/v1/cards/{card_id}/update",
-    "description": "Update card status — Update the status of a card. You can freeze a card temporarily or block it permanently. **Status Options:** - `active`: Card is active, and you can use it for transactions - `freeze`: Card is temporarily frozen, and you can't use it until you reactivate it by updating the status to active - `blocked`: Card is permanently blocked, and you can't reactivate it",
+    "description": "Update card status — Update the status of a card. You can freeze a card temporarily or block it permanently. **Status Options:** - `active`: Card is active, and you can use it for transactions - `freeze`: Card is temporarily frozen, and you can't use it until you reactivate it by updating the status to active - `blocked`: Card is permanently blocked, and you can't reactivate it\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6671,7 +6425,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "limit": {
           "type": "integer",
-          "description": "Optional spending limit for the card",
+          "description": "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
           "example": 1000
         }
       },
@@ -6700,14 +6454,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "put",
     "path": "/v1/customers/{customer_id}",
-    "description": "Update a customer — Update details of a specific customer. The path `customer_id` parameter is cosmetic — the service reads `customer_id` from the request body (marked required there). Only provided fields are updated.",
+    "description": "Update a customer — Update details of a customer. The customer is taken from the path customer_id; a customer_id in the body is overwritten by the path value. Only provided fields are updated.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Cosmetic path parameter — the service resolves the customer from `customer_id` in the request body, not this value."
+          "description": "Customer to update. Taken from the path; any body value is overwritten."
         },
         "first_name": {
           "type": "string",
@@ -6925,130 +6679,6 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsIdempotency": false,
     "spec": "customers.yaml"
-  },
-  {
-    "name": "updatePaymentLink",
-    "toolset": "payment-links",
-    "method": "put",
-    "path": "/v1/payment-links/{id}",
-    "description": "Update a payment link — Updates an existing payment link. All fields are optional — only supplied fields are updated.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique identifier of the payment link."
-        },
-        "payee_name": {
-          "type": "string",
-          "description": "Updated name of the person or business receiving the payment.",
-          "example": "Rose"
-        },
-        "payer_name": {
-          "type": "string",
-          "description": "Updated name of the person making the payment.",
-          "example": "payer2"
-        },
-        "payer_email": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "email",
-          "description": "Updated email address of the person making the payment.",
-          "example": "payer@example.com"
-        },
-        "settlement_account_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Updated ID of the account where settled funds will be deposited.",
-          "example": "b3e3c9fd-77ed-4d14-9c45-68db60d17d3a"
-        },
-        "supported_networks": {
-          "type": "array",
-          "description": "Updated list of blockchain networks to accept payments on.",
-          "items": {
-            "type": "string",
-            "enum": [
-              "stellar",
-              "ethereum",
-              "polygon",
-              "avalanche",
-              "solana"
-            ]
-          },
-          "minItems": 1,
-          "example": [
-            "stellar",
-            "ethereum"
-          ]
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": true
-    },
-    "pathParams": [
-      "id"
-    ],
-    "queryParams": [],
-    "bodyMode": "inline",
-    "bodyProps": [
-      "payee_name",
-      "payer_name",
-      "payer_email",
-      "settlement_account_id",
-      "supported_networks"
-    ],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
-  },
-  {
-    "name": "updatePaymentLinkStatus",
-    "toolset": "payment-links",
-    "method": "patch",
-    "path": "/v1/payment-links/{id}/status",
-    "description": "Toggle payment link status — Sets the status of a payment link to `active` or `paused`. A paused link cannot be used by payers to complete payments.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique identifier of the payment link."
-        },
-        "status": {
-          "type": "string",
-          "description": "The desired status to set on the payment link.",
-          "enum": [
-            "active",
-            "paused"
-          ],
-          "example": "paused"
-        }
-      },
-      "required": [
-        "id",
-        "status"
-      ],
-      "additionalProperties": true
-    },
-    "pathParams": [
-      "id"
-    ],
-    "queryParams": [],
-    "bodyMode": "inline",
-    "bodyProps": [
-      "status"
-    ],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "payment-links.yaml"
   },
   {
     "name": "uploadCustomerKycDocument",
@@ -8301,7 +7931,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from card — Withdraw funds from a customer's card balance.\n\nMOVES MONEY: moves funds off a card balance. Requires confirm: true.",
+    "description": "Withdraw from card — Withdraw funds from a customer's card balance.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
     "inputSchema": {
       "type": "object",
       "properties": {

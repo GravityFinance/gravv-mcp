@@ -3,7 +3,14 @@
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { GravvClient, GravvApiError, detectEnvironment, type Environment } from "./client.ts";
+import {
+  GravvClient,
+  GravvApiError,
+  PUBLISHABLE_KEY_MESSAGE,
+  detectEnvironment,
+  isPublishableKey,
+  type Environment,
+} from "./client.ts";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
@@ -106,8 +113,8 @@ export interface ServerConfig {
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
   const wanted = toolsets === "all" ? null : new Set(toolsets);
-  // Approval tools have no OpenAPI specification, so they are hand-authored and merged
-  // in here rather than generated.
+  // Tools for routes no OpenAPI specification covers are hand-authored and merged in
+  // here rather than generated.
   const candidates: GeneratedTool[] = [...TOOLS, ...MANUAL_TOOLS];
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
@@ -117,6 +124,7 @@ function instructions(
   gate: SafetyGate,
   tools: GeneratedTool[],
   hasApiKey: boolean,
+  publishableKey: boolean,
 ): string {
   const sets = [...new Set(tools.map((t) => t.toolset))].sort();
 
@@ -126,6 +134,7 @@ function instructions(
     hasApiKey
       ? `ENVIRONMENT: ${gate.describeEnvironment()}`
       : "ENVIRONMENT: no API key configured. Documentation tools work; API tools are unavailable until GRAVV_API_KEY is set.",
+    ...(publishableKey ? [`WARNING: ${PUBLISHABLE_KEY_MESSAGE}`] : []),
     "",
     "START WITH THE DOCS. Call searchGravvDocs before implementing anything. The API tool",
     "schemas describe individual calls; they do not describe how the flows fit together.",
@@ -135,12 +144,14 @@ function instructions(
 
   if (hasApiKey) {
     lines.push(
-      `${tools.length} API tools loaded across: ${sets.join(", ")}.`,
+      tools.length > 0
+        ? `${tools.length} API tools loaded across: ${sets.join(", ")}.`
+        : "No API tools loaded: the --toolsets selection matched none. Restart with --toolsets=all, or name the toolsets you need.",
       "",
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
       "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
-      "- Idempotency keys are generated automatically for POSTs. The key used is returned with each result, so a deliberate retry can reuse it.",
+      "- Idempotency keys are generated automatically for POSTs, a new one for every call. The key is returned with each successful result for tracing. This server cannot resend a call with an old key yet, so after a timeout check the state (getTransaction, or a list filtered by client_reference) before calling again.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -183,7 +194,7 @@ export function createServer(config: ServerConfig) {
     { name: "gravv", version: VERSION },
     {
       capabilities: { tools: {} },
-      instructions: instructions(environment, gate, active, hasApiKey),
+      instructions: instructions(environment, gate, active, hasApiKey, isPublishableKey(config.apiKey ?? "")),
     },
   );
 
