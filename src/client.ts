@@ -17,14 +17,28 @@ export type Environment = "sandbox" | "live" | "unknown";
  * Sandbox and live share one base URL — the API key alone decides which database a
  * request reaches, via its `grvSec_sandbox_` / `grvSec_live_` prefix.
  *
+ * The prefixes are matched exactly and case-sensitively, as the gateway matches them: it
+ * sends every key that does not start `grvSec_sandbox_` to live. A looser test (a
+ * "sandbox" substring, or ignoring case) could call a live key sandbox and lift the
+ * live-write gate.
+ *
  * Returning "unknown" rather than guessing matters: the safety layer treats unknown as
  * potentially-live, so an unrecognised key format fails closed.
  */
 export function detectEnvironment(apiKey: string): Environment {
-  if (/^grvSec_sandbox_/i.test(apiKey) || /sandbox/i.test(apiKey.slice(0, 20))) return "sandbox";
-  if (/^grvSec_live_/i.test(apiKey) || /(^|_)live_/i.test(apiKey.slice(0, 20))) return "live";
+  if (/^grvSec_live_/.test(apiKey)) return "live";
+  if (/^grvSec_sandbox_/.test(apiKey)) return "sandbox";
   return "unknown";
 }
+
+/** Publishable keys (`grvPub_`) are for client-side use and cannot call the API. */
+export function isPublishableKey(apiKey: string): boolean {
+  return /^grvPub_/.test(apiKey);
+}
+
+export const PUBLISHABLE_KEY_MESSAGE =
+  "This is a publishable key (grvPub_). Publishable keys cannot call the Gravv API. " +
+  "Set GRAVV_API_KEY to a secret key starting grvSec_sandbox_ or grvSec_live_.";
 
 export class GravvApiError extends Error {
   readonly status: number;
@@ -235,7 +249,11 @@ export class GravvClient {
         continue;
       }
 
-      throw new GravvApiError(apiMessage, res.status, parsed, hintFor(res.status, tool, apiMessage, parsed));
+      let hint = hintFor(res.status, tool, apiMessage, parsed);
+      if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
+        hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
+      }
+      throw new GravvApiError(apiMessage, res.status, parsed, hint);
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);

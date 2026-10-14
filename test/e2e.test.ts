@@ -366,6 +366,17 @@ describe("end-to-end over MCP stdio", () => {
     }
   });
 
+  test("a publishable key is explained instead of silently failing", async () => {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], { GRAVV_API_KEY: "grvPub_e2e" });
+    try {
+      const init = await mcp.initialize();
+      assert.match(init.result.instructions, /publishable key/);
+      assert.match(mcp.stderr, /warning: This is a publishable key/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
   test("runs docs-only without an API key", async () => {
     // Docs are public, so an agent can learn the API before the merchant has credentials.
     const mcp = new McpProcess([], { GRAVV_API_KEY: "" });

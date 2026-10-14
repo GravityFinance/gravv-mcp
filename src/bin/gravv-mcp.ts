@@ -8,6 +8,7 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
+import { PUBLISHABLE_KEY_MESSAGE, isPublishableKey } from "../client.ts";
 import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 
 const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
@@ -87,6 +88,8 @@ async function main() {
           "\n"
       : "gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available\n",
   );
+
+  if (apiKey && isPublishableKey(apiKey)) process.stderr.write(`warning: ${PUBLISHABLE_KEY_MESSAGE}\n`);
 
   await server.connect(new StdioServerTransport());
 }

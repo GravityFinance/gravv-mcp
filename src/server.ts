@@ -3,7 +3,14 @@
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { GravvClient, GravvApiError, detectEnvironment, type Environment } from "./client.ts";
+import {
+  GravvClient,
+  GravvApiError,
+  PUBLISHABLE_KEY_MESSAGE,
+  detectEnvironment,
+  isPublishableKey,
+  type Environment,
+} from "./client.ts";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
@@ -117,6 +124,7 @@ function instructions(
   gate: SafetyGate,
   tools: GeneratedTool[],
   hasApiKey: boolean,
+  publishableKey: boolean,
 ): string {
   const sets = [...new Set(tools.map((t) => t.toolset))].sort();
 
@@ -126,6 +134,7 @@ function instructions(
     hasApiKey
       ? `ENVIRONMENT: ${gate.describeEnvironment()}`
       : "ENVIRONMENT: no API key configured. Documentation tools work; API tools are unavailable until GRAVV_API_KEY is set.",
+    ...(publishableKey ? [`WARNING: ${PUBLISHABLE_KEY_MESSAGE}`] : []),
     "",
     "START WITH THE DOCS. Call searchGravvDocs before implementing anything. The API tool",
     "schemas describe individual calls; they do not describe how the flows fit together.",
@@ -185,7 +194,7 @@ export function createServer(config: ServerConfig) {
     { name: "gravv", version: VERSION },
     {
       capabilities: { tools: {} },
-      instructions: instructions(environment, gate, active, hasApiKey),
+      instructions: instructions(environment, gate, active, hasApiKey, isPublishableKey(config.apiKey ?? "")),
     },
   );
 

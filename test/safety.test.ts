@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "../src/safety.ts";
-import { detectEnvironment } from "../src/client.ts";
+import { detectEnvironment, isPublishableKey } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 const transfer = TOOLS_BY_NAME.get("createTransfer")!;
@@ -25,6 +25,22 @@ describe("environment detection", () => {
     // Failing closed matters: sandbox and live share a base URL, so a key we cannot
     // classify must be treated as potentially live.
     assert.equal(detectEnvironment("some-opaque-token"), "unknown");
+  });
+
+  test("prefixes match exactly and case-sensitively, as the gateway does", () => {
+    // The gateway sends anything not starting grvSec_sandbox_ to live, so a loose match
+    // could call a live key sandbox and lift the live-write gate.
+    assert.equal(detectEnvironment("grvsec_sandbox_abc123"), "unknown");
+    assert.equal(detectEnvironment("GRVSEC_LIVE_abc123"), "unknown");
+    assert.equal(detectEnvironment("grvSec_live_sandbox123"), "live");
+    assert.equal(detectEnvironment("my_sandbox_token"), "unknown");
+    assert.equal(detectEnvironment("x_live_token"), "unknown");
+  });
+
+  test("a publishable key is recognised so it can be explained, and is never sandbox", () => {
+    assert.equal(isPublishableKey("grvPub_abc123"), true);
+    assert.equal(isPublishableKey("grvSec_sandbox_abc123"), false);
+    assert.equal(detectEnvironment("grvPub_abc123"), "unknown");
   });
 });
 
