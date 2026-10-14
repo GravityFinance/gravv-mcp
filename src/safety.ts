@@ -178,35 +178,73 @@ export class SafetyGate {
   }
 }
 
+/** A value fit to print in a sentence: strings and numbers only, never "[object Object]". */
+function text(v: unknown): string | undefined {
+  if (typeof v === "string" && v.trim()) return v;
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return undefined;
+}
+
+/** An FX pair as the schema sends it (`{ base, quote }`) or as a pair code (`USD_EUR`). */
+function pairText(pair: unknown): string | undefined {
+  if (pair && typeof pair === "object") {
+    const { base, quote } = pair as Record<string, unknown>;
+    const parts = [text(base), text(quote)].filter(Boolean);
+    return parts.length === 2 ? parts.join("/") : undefined;
+  }
+  return text(pair);
+}
+
 /** Plain-language summary of what a money-moving call will do, for the confirmation step. */
 function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unknown>): string {
   const b = (body ?? {}) as Record<string, any>;
-  const amount = b.amount ?? b.value ?? b.source_amount;
-  const currency = b.currency ?? b.source_currency ?? b.from_currency ?? "";
-  const money = amount !== undefined ? `${amount}${currency ? ` ${currency}` : ""}` : "an unspecified amount";
+  const amount = text(b.amount ?? b.value ?? b.source_amount);
+  // The currency lives in a different field per route, so each case names its own.
+  const money = (currency: unknown) => {
+    if (amount === undefined) return "an unspecified amount";
+    const c = text(currency);
+    return c ? `${amount} ${c}` : amount;
+  };
 
   switch (tool.name) {
     case "createTransfer": {
-      const from = b.source?.id ?? "the source account";
-      const to = b.destination?.id ?? "the destination";
-      const kind = b.destination?.destination_type ?? "account";
-      return `Transfer ${money} from ${from} to ${kind} ${to}. Once submitted this cannot be reversed from the API.`;
+      const from = text(b.source?.id) ?? "the source account";
+      const to = text(b.destination?.id) ?? "the destination";
+      const kind = text(b.destination?.destination_type) ?? "account";
+      // The API debits in the source account's own currency; source.currency is only checked.
+      const sent = text(b.source?.currency)
+        ? money(b.source.currency)
+        : `${money(undefined)} in the source account's currency`;
+      return `Transfer ${sent} from ${from} to ${kind} ${to}. Once submitted this cannot be reversed from the API.`;
     }
     case "withdrawFromCard":
-      return `Withdraw ${money} from card ${b.card_id ?? "(unspecified)"}.`;
-    case "createFxOrder":
-      return `Place an FX ${b.side ?? ""} order for ${money}${b.pair ? ` on ${b.pair}` : ""}. It will sit in waiting_approval until a second user approves it in the dashboard.`;
-    case "createCollection":
-      return `Initiate a collection of ${money} from the payer via ${b.collection_method ?? "the specified method"}.`;
+      return `Withdraw ${money(b.currency)} from card ${text(b.card_id) ?? "(unspecified)"}.`;
+    case "createFxOrder": {
+      const pair = pairText(b.pair ?? b.currency_pair);
+      const what = text(b.quote_id) ? `for quote ${b.quote_id}` : `for ${money(undefined)}`;
+      return (
+        `Place an FX order ${what}${pair ? ` on ${pair}` : ""}. Over an API key the order runs at once ` +
+        `and the source is debited when it is placed; there is no approval step.`
+      );
+    }
+    case "createCollection": {
+      const methods = Array.isArray(b.source?.methods)
+        ? b.source.methods.map(text).filter(Boolean).join(", ")
+        : "";
+      return `Initiate a ${methods ? `${methods} ` : ""}collection of ${money(b.currency)} from the payer.`;
+    }
     case "chargeSavedCard":
-      return `Charge ${money} to saved card ${b.card_id ?? b.card_token ?? "(unspecified)"}.`;
+      return (
+        `Charge saved card token ${text(b.card_token) ?? "(unspecified)"} for payment intent ` +
+        `${text(b.payment_intent_id) ?? "(unspecified)"}. The amount is the one set on the payment intent.`
+      );
     case "createCardPaymentIntent":
-      return b.card_token
-        ? `Charge ${money} to saved card token ${b.card_token} now. A decline still returns HTTP 200: check data.status.`
-        : `Create a hosted payment link for ${money}. No money moves until the payer pays.`;
+      return text(b.card_token)
+        ? `Charge ${money(b.currency)} to saved card token ${b.card_token} now. A decline still returns HTTP 200: check data.status.`
+        : `Create a hosted payment link for ${money(b.currency)}. No money moves until the payer pays.`;
     case "cancelFxOrder":
-      return `Cancel FX order ${args.order_id ?? "(unspecified)"}. Cancelling does not return funds already debited.`;
+      return `Cancel FX order ${text(args.order_id) ?? "(unspecified)"}. Cancelling does not return funds already debited.`;
     default:
-      return `Execute ${tool.method.toUpperCase()} ${tool.path} with ${money}.`;
+      return `Execute ${tool.method.toUpperCase()} ${tool.path} with ${money(b.currency ?? b.source_currency ?? b.from_currency)}.`;
   }
 }

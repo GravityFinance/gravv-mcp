@@ -6,7 +6,11 @@ import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 const transfer = TOOLS_BY_NAME.get("createTransfer")!;
 const listAccounts = TOOLS_BY_NAME.get("listAccounts")!;
-const preview = { method: "POST", path: "/v1/transfer", body: { amount: 50, currency: "USD" } };
+const preview = {
+  method: "POST",
+  path: "/v1/transfer",
+  body: { amount: 50, source: { id: "acc_1", currency: "USD" } },
+};
 
 const gate = (over: Partial<ConstructorParameters<typeof SafetyGate>[0]> = {}) =>
   new SafetyGate({ environment: "sandbox", allowLiveWrites: false, readOnly: false, ...over });
@@ -61,6 +65,46 @@ describe("money-movement gating", () => {
 
   test("read operations are never gated", () => {
     assert.equal(gate().check(listAccounts, {}, { method: "GET", path: "/v1/accounts", body: undefined }), null);
+  });
+});
+
+describe("previews read the fields the schemas really have", () => {
+  const willDo = (name: string, body: Record<string, unknown>) => {
+    const tool = TOOLS_BY_NAME.get(name)!;
+    return gate().check(tool, body, { method: "POST", path: tool.path, body })!.willDo;
+  };
+
+  test("a transfer reads source.currency, not a top-level currency", () => {
+    assert.match(willDo("createTransfer", { amount: 50, source: { id: "acc_1", currency: "EUR" } }), /Transfer 50 EUR/);
+    assert.match(
+      willDo("createTransfer", { amount: 50, currency: "USD", source: { id: "acc_1" } }),
+      /Transfer 50 in the source account's currency/,
+    );
+  });
+
+  test("an FX order never prints [object Object] or an approval step", () => {
+    const d = willDo("createFxOrder", { amount: "1000", pair: { base: "USD", quote: "EUR" }, side: "sell" });
+    assert.doesNotMatch(d, /\[object Object\]/);
+    assert.doesNotMatch(d, /waiting_approval|second user/);
+    assert.match(d, /USD\/EUR/);
+    assert.match(d, /debited when it is placed/);
+    assert.match(willDo("createFxOrder", { quote_id: "Q1" }), /for quote Q1/);
+  });
+
+  test("a collection names its method from source.methods", () => {
+    const d = willDo("createCollection", {
+      amount: "20000",
+      currency: "NGN",
+      source: { source_type: "external", methods: ["bank_transfer"] },
+    });
+    assert.match(d, /bank_transfer collection of 20000 NGN/);
+  });
+
+  test("a saved-card charge names the token and the intent, not a missing amount", () => {
+    const d = willDo("chargeSavedCard", { payment_intent_id: "pi_1", card_token: "tokn_1" });
+    assert.match(d, /tokn_1/);
+    assert.match(d, /pi_1/);
+    assert.doesNotMatch(d, /unspecified amount/);
   });
 });
 
