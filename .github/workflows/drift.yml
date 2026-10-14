@@ -5,6 +5,7 @@ name: Drift
 # whole workflow, so an unrelated PR never fails because client-docs moved on.
 #
 #   spec-drift  specs/ against client-docs main (nightly, manual, and PRs that touch specs/)
+#   docs-links  every docs link the server hands out still resolves (nightly and manual)
 #   report      on a failed nightly run, opens or updates one issue
 
 on:
@@ -59,9 +60,24 @@ jobs:
             exit 1
           fi
 
+  docs-links:
+    name: docs links the server hands out resolve
+    # The docs site, not this repository, is what changes, so a PR run would test nothing new.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check each link on the live docs site
+        run: npm run docs-links
+
   report:
     name: open an issue for a failed nightly run
-    needs: [spec-drift]
+    needs: [spec-drift, docs-links]
     if: failure() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
