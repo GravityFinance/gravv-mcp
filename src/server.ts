@@ -7,6 +7,8 @@ import {
   GravvClient,
   GravvApiError,
   PUBLISHABLE_KEY_MESSAGE,
+  bodyWithoutHtml,
+  errorFields,
   detectEnvironment,
   isPublishableKey,
   isValidIdempotencyKey,
@@ -339,14 +341,19 @@ export function createServer(config: ServerConfig) {
       if (err instanceof SafetyError) return errorResult(err.message);
       if (err instanceof GravvApiError) {
         // The key and environment come back on every error, as on success: after a
-        // timeout the key is what lets the model resend safely. details stays the raw body.
+        // timeout the key is what lets the model resend safely. The fields a model acts
+        // on are lifted beside the hint; details stays the raw body, less any HTML page.
         const payload: Record<string, unknown> = { error: err.message, status: err.status };
+        const fields = errorFields(err.body);
+        for (const k of ["code", "transfer_status", "window"]) {
+          if (fields[k] !== undefined) payload[k] = redact(fields[k]);
+        }
         if (err.outcomeUnknown) payload.outcome_unknown = true;
         if (err.replayed) payload.replayed = true;
         payload.environment = environment;
         if (err.idempotencyKey) payload.idempotency_key = err.idempotencyKey;
         payload.hint = err.hint;
-        payload.details = redact(err.body);
+        payload.details = redact(bodyWithoutHtml(err.body));
         return errorResult(JSON.stringify(payload, null, 2));
       }
       return errorResult(`Unexpected error calling ${name}: ${(err as Error).message}`);

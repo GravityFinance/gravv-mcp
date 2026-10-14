@@ -4,7 +4,9 @@ import {
   GravvClient,
   GravvApiError,
   RateLimiter,
+  bodyWithoutHtml,
   canonicalJson,
+  errorFields,
   extractErrorMessage,
   hintFor,
   isOutcomeUnknown,
@@ -397,6 +399,83 @@ describe("an unknown outcome says so and names the lookup", () => {
   });
 });
 
+describe("error fields", () => {
+  test("lifts code, window and transfer_status from a transfer error", () => {
+    assert.deepEqual(
+      errorFields({
+        data: null,
+        error: "daily limit exceeded",
+        code: "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
+        window: "daily",
+        transfer_status: "paused",
+        details: [{ field: "amount" }],
+      }),
+      {
+        code: "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
+        window: "daily",
+        transfer_status: "paused",
+        details: [{ field: "amount" }],
+      },
+    );
+  });
+
+  test("reads fields from inside the error object", () => {
+    assert.deepEqual(errorFields({ data: null, error: { reason: "forbidden", required_any: ["account:create"] } }), {
+      required_any: ["account:create"],
+    });
+    assert.deepEqual(
+      errorFields({ data: null, error: { code: "request_body_too_large", message: "too big", limit: 13997400 } }),
+      { code: "request_body_too_large", limit: 13997400 },
+    );
+  });
+
+  test("an empty or odd body has no fields", () => {
+    for (const body of [null, "text", {}, { error: "bad" }]) assert.deepEqual(errorFields(body), {});
+  });
+});
+
+describe("a replayed error is flagged", () => {
+  for (const [status, body] of [
+    [400, { data: null, error: "missing field `client_reference`" }],
+    [422, { data: null, error: { code: "idempotency_key_reused", message: "reused" } }],
+  ] as const) {
+    test(`a stored ${status}`, async () => {
+      const { fetchImpl } = stub([{ status, body, headers: { "Idempotency-Replayed": "true" } }]);
+      await assert.rejects(
+        client(fetchImpl).call(createCustomer, { body: {} }, { idempotencyKey: "old" }),
+        (e: GravvApiError) => e.replayed && /^This is the stored answer/.test(e.hint ?? ""),
+      );
+    });
+  }
+
+  test("a stored server fault still says to look the result up before any resend", async () => {
+    const { fetchImpl } = stub([
+      {
+        status: 400,
+        body: { data: null, error: "unexpected HTTP status code received from server: 502 (Bad Gateway)" },
+        headers: { "Idempotency-Replayed": "true" },
+      },
+    ]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }, { idempotencyKey: "old" }),
+      (e: GravvApiError) =>
+        e.replayed &&
+        e.outcomeUnknown &&
+        /^This is the stored answer/.test(e.hint ?? "") &&
+        !/Fix the request/.test(e.hint ?? "") &&
+        /Look the result up first/.test(e.hint ?? ""),
+    );
+  });
+
+  test("a fresh error is not", async () => {
+    const { fetchImpl } = stub([{ status: 400, body: { data: null, error: "bad" } }]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: GravvApiError) => !e.replayed && !/stored answer/.test(e.hint ?? ""),
+    );
+  });
+});
+
 describe("error message extraction", () => {
   // The gateway's `error` field is not one shape. Both of these are real sandbox
   // responses; stringifying the second naively produced "[object Object]", which told
@@ -430,6 +509,37 @@ describe("error message extraction", () => {
       assert.doesNotMatch(msg, /\[object Object\]/, `leaked for ${JSON.stringify(shape)}`);
       assert.ok(msg.length > 0);
     }
+  });
+
+  test("keeps the text of a service_unavailable answer", () => {
+    assert.equal(
+      extractErrorMessage({ error: "service_unavailable", message: "failed to read request body" }, "fallback"),
+      "failed to read request body (service_unavailable)",
+    );
+  });
+
+  test("names the permission a scoped key lacks", () => {
+    assert.equal(
+      extractErrorMessage(
+        { data: null, error: { reason: "forbidden", required_any: ["transfer:initiate", "transfer:admin"] } },
+        "Forbidden",
+      ),
+      "forbidden: this key needs one of transfer:initiate, transfer:admin",
+    );
+  });
+
+  test("cuts an HTML error page out of the message and the details", () => {
+    const raw =
+      'unexpected HTTP status code received from server: 502 (Bad Gateway); transport: received unexpected content-type "text/html"\ndata: "<html>\r\n<head><title>502 Bad Gateway</title></head></html>"';
+    const msg = extractErrorMessage({ data: null, error: raw }, "fallback");
+    assert.doesNotMatch(msg, /<html/i);
+    assert.match(msg, /^unexpected HTTP status code received from server: 502/);
+    assert.match(msg, /HTML error page omitted/);
+    assert.doesNotMatch(JSON.stringify(bodyWithoutHtml({ data: null, error: raw })), /<html/i);
+    assert.equal(
+      extractErrorMessage("<html><head><title>504 Gateway Time-out</title></head></html>", "x"),
+      "504 Gateway Time-out (HTML error page omitted)",
+    );
   });
 
   test("falls back to the HTTP status text when there is no error field", () => {

@@ -322,12 +322,13 @@ export class GravvClient {
         continue;
       }
 
-      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied, idempotencyKey });
+      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied, idempotencyKey, replayed });
       if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
         hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
       }
       throw new GravvApiError(apiMessage, res.status, parsed, hint, {
         idempotencyKey,
+        replayed,
         outcomeUnknown: isOutcomeUnknown(res.status, tool, apiMessage),
       });
     }
@@ -389,23 +390,36 @@ export function isValidIdempotencyKey(key: unknown): key is string {
  * The shape is not consistent across statuses — verified against sandbox:
  *   400 -> {"data":null,"error":"missing idempotency key in request headers"}
  *   422 -> {"data":null,"error":{"code":"idempotency_key_reused","message":"..."}}
+ *   403 -> {"data":null,"error":{"reason":"forbidden","required_any":["transfer:initiate"]}}
+ *   503 -> {"error":"service_unavailable","message":"failed to read request body"}
  *
- *
- * Naively stringifying the second form yields "[object Object]", which tells the model
- * nothing and sends it guessing.
+ * Naively stringifying the object forms yields "[object Object]", which tells the model
+ * nothing and sends it guessing. Reading only `error` from the last form kept the code
+ * and lost the text. An HTML error page inside a message is cut off: it says nothing the
+ * first line does not, and it is not for the model.
  */
 export function extractErrorMessage(parsed: unknown, fallback: string): string {
   if (parsed == null) return fallback;
-  if (typeof parsed === "string") return parsed || fallback;
+  if (typeof parsed === "string") return withoutHtml(parsed) || fallback;
   if (typeof parsed !== "object") return String(parsed);
 
-  const err = (parsed as Record<string, unknown>).error ?? (parsed as Record<string, unknown>).message;
+  const top = parsed as Record<string, unknown>;
+  const err = top.error ?? top.message;
 
-  if (typeof err === "string" && err) return err;
+  if (typeof err === "string" && err) {
+    // Family F: a bare code in `error` and the text in `message`.
+    if (typeof top.message === "string" && top.message && top.message !== err && /^[a-z0-9_]+$/i.test(err)) {
+      return `${withoutHtml(top.message)} (${err})`;
+    }
+    return withoutHtml(err);
+  }
 
   if (err && typeof err === "object") {
     const e = err as Record<string, unknown>;
-    const message = typeof e.message === "string" ? e.message : undefined;
+    if (Array.isArray(e.required_any) && e.required_any.length > 0) {
+      return `${typeof e.reason === "string" ? e.reason : "forbidden"}: this key needs one of ${e.required_any.join(", ")}`;
+    }
+    const message = typeof e.message === "string" ? withoutHtml(e.message) : undefined;
     const code = typeof e.code === "string" ? e.code : undefined;
     if (message && code) return `${message} (${code})`;
     if (message) return message;
@@ -414,6 +428,70 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+const HTML_START = /<html|<!doctype html/i;
+
+/**
+ * Text with any HTML error page cut off: what comes before the page, up to the first
+ * line break, plus a note. The 502 that comes back as a 400 carries the web server's page.
+ */
+export function withoutHtml(text: string): string {
+  const at = text.search(HTML_START);
+  if (at < 0) return text;
+  const newline = text.indexOf("\n");
+  let head = text.slice(0, newline >= 0 && newline < at ? newline : at).trim();
+  if (!head) head = text.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+  return `${head || "Server error"} (HTML error page omitted)`;
+}
+
+/**
+ * An error body with any HTML page cut out of its text, for the `details` the model sees.
+ * Everything else in the body is kept as it came.
+ */
+export function bodyWithoutHtml(body: unknown): unknown {
+  if (typeof body === "string") return withoutHtml(body);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const out: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  for (const k of ["error", "message"]) {
+    if (typeof out[k] === "string") out[k] = withoutHtml(out[k] as string);
+  }
+  return out;
+}
+
+/** Fields of an error body worth reading, at the top level or inside `error` (C.6 B, C, E). */
+const ERROR_FIELDS = [
+  "details",
+  "transfer_status",
+  "window",
+  "required_any",
+  "reason_detail",
+  "feature",
+  "access_status",
+  "request_access_url",
+  "documentation_url",
+  "request_id",
+  "reapply_after",
+  "limit",
+] as const;
+
+/**
+ * Whichever of the error's fields the body carries: its code, and the fields a hint or
+ * a model needs, such as a limit's window or a transfer's status. A field inside `error`
+ * wins over the same name at the top level.
+ */
+export function errorFields(body: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!body || typeof body !== "object") return out;
+  const top = body as Record<string, unknown>;
+  const inner = top.error && typeof top.error === "object" ? (top.error as Record<string, unknown>) : {};
+  const code = errorCode(body);
+  if (code) out.code = code;
+  for (const k of ERROR_FIELDS) {
+    const v = inner[k] ?? top[k];
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
 }
 
 /**
@@ -484,7 +562,13 @@ export interface HintContext {
   keySupplied?: boolean;
   /** The key the call sent, quoted in a resend instruction. */
   idempotencyKey?: string;
+  /** The gateway replayed a stored answer (Idempotency-Replayed: true). */
+  replayed?: boolean;
 }
+
+const REPLAYED_STORED =
+  "This is the stored answer to an earlier call with the same idempotency key (kept 24 hours); the request did not run again.";
+const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again without idempotency_key.`;
 
 /** After a timeout or a network error. */
 function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
@@ -589,6 +673,22 @@ export function hintFor(
   message = "",
   body: unknown = null,
   ctx: HintContext = {},
+): string | undefined {
+  const hint = statusHint(status, tool, message, body, ctx);
+  // A stored 4xx looked like a fresh failure, so a model kept resending under the key.
+  if (!ctx.replayed) return hint;
+  // A stored server fault may still have taken effect, so its own hint, which looks the
+  // result up before any resend, must not be preceded by "call again".
+  const prefix = hint && isOutcomeUnknown(status, tool, message) ? REPLAYED_STORED : REPLAYED;
+  return hint ? `${prefix} ${hint}` : prefix;
+}
+
+function statusHint(
+  status: number,
+  tool: GeneratedTool,
+  message: string,
+  body: unknown,
+  ctx: HintContext,
 ): string | undefined {
   const mentionsIdempotency = /idempotenc/i.test(message);
 
