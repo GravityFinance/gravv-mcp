@@ -3282,37 +3282,6 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
-    "name": "deleteSavedCard",
-    "toolset": "collections",
-    "method": "delete",
-    "path": "/v1/collections/cards/{card_id}",
-    "description": "Delete saved card — This operation is idempotent. It returns success even if the card doesn't exist.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "card_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Saved card ID"
-        }
-      },
-      "required": [
-        "card_id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "card_id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "collections.yaml"
-  },
-  {
     "name": "exportTransactions",
     "toolset": "transactions",
     "method": "get",

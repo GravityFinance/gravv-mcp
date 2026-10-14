@@ -219,7 +219,6 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/collections/cards/payment-intents/charge": { name: "chargeSavedCard", toolset: "collections" },
   "GET /v1/collections/cards": { name: "listSavedCards", toolset: "collections" },
   "GET /v1/collections/cards/{card_id}": { name: "getSavedCard", toolset: "collections" },
-  "DELETE /v1/collections/cards/{card_id}": { name: "deleteSavedCard", toolset: "collections" },
 
   // ---- features ------------------------------------------------------------
   "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
@@ -249,6 +248,10 @@ export const NAMES: Record<string, Op> = {
  *    still vendored until the next spec sync removes it, so the routes must be listed
  *    here or the generator reports them as unmapped.
  *
+ *  - Broken until the specification is fixed. The vendored spec omits a request body the
+ *    API requires, so a generated tool would fail on every call. These return when the
+ *    spec sync brings the body in.
+ *
  *  - Dashboard-only. These routes refuse API keys, so a tool for them fails on every
  *    call. They are in no specification, so the generator never meets them; the
  *    entries are the written record of why they are absent.
@@ -271,6 +274,8 @@ export const BLOCKED: Record<string, string> = {
   "DELETE /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
   "PATCH /v1/payment-links/{id}/status": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links/public/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "DELETE /v1/collections/cards/{card_id}":
+    "The API needs customer_id and card_token in a JSON body, and the vendored spec declares none, so every call would fail with EOF.",
   "POST /v1/transfer/{id}/approve":
     "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
   "POST /v1/transfer/{id}/reject":
@@ -341,6 +346,8 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
   getPublicPaymentLink:
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  deleteSavedCard:
+    "Not available in this release: the API needs customer_id and card_token in a JSON request body, and the current spec sends no body, so every call fails with EOF. The tool returns when the spec is fixed. Until then, call DELETE /v1/collections/cards/{card_id} directly with a body of {customer_id, card_token}.",
   approveTransfer:
     "Not available over MCP: approving a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
   rejectTransfer:

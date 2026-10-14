@@ -33,6 +33,7 @@ const REMOVED = [
   "deletePaymentLink",
   "updatePaymentLinkStatus",
   "getPublicPaymentLink",
+  "deleteSavedCard",
 ];
 
 describe("removed tools", () => {
