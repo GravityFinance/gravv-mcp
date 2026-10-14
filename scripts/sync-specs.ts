@@ -7,10 +7,10 @@
  *
  * Set GRAVV_OPENAPI_DIR to a local checkout of the specification source.
  *
- *   npm run sync-specs           copy and report changes
+ *   npm run sync-specs           copy, delete specs removed upstream, and report changes
  *   npm run sync-specs -- --check   exit non-zero if vendored specs are stale (CI)
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,8 +59,12 @@ for (const f of files) {
 for (const f of readdirSync(dest).filter((f) => f.endsWith(".yaml"))) {
   if (files.includes(f)) continue;
   changed++;
-  if (checkOnly) console.error(`STALE: specs/${f} no longer exists upstream`);
-  else console.log(`  (remove specs/${f} — no longer in the specification source)`);
+  if (checkOnly) {
+    console.error(`STALE: specs/${f} no longer exists upstream`);
+  } else {
+    rmSync(join(dest, f));
+    console.log(`  removed specs/${f} (no longer in the specification source)`);
+  }
 }
 
 if (checkOnly) {
