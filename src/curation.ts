@@ -583,21 +583,64 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
 /**
  * Call-ordering and preconditions, appended to the generated tool description.
  *
- * This is the knowledge that exists only in the guides — the OpenAPI specs describe 86
- * independent operations and say nothing about what must happen first. Without this an
- * agent will, for example, create an external account and immediately transfer to it,
- * skipping the poll-until-active step from
+ * This is the knowledge the spec descriptions do not carry: tool names where the specs
+ * name routes, the call order across tools, what this server does (file_path, saved
+ * downloads, the gates), and the caveats for behaviour that is not live yet. Without it
+ * an agent will, for example, create an external account and immediately transfer to
+ * it, skipping the poll-until-active step from
  * https://gravv-docs.syntext.dev/recipes/remit-funds-to-a-recipient
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. After a failed call, fix the request and leave idempotency_key out.",
+
+  updateAccountStatus:
+    "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
+
+  deleteAccountApplication:
+    "Only a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
+
+  getAccountCapabilities:
+    "Call first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+
+  createAccountV2:
+    "PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
+
+  getAccountRequirements:
+    "Build createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
+
+  getAccountV2:
+    "Poll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
+
+  listAccountApplicationsV2:
+    "Use getAccountApplicationV2 for the status reason and the required fields and documents.",
+
+  getAccountApplicationV2:
+    "Read before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
+
+  updateAccountApplicationV2:
+    "PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+
+  simulateDeposit:
+    "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
   createExternalAccount:
     "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised. MOVES MONEY: requires confirm: true.",
+
+  uploadTransferDocument:
+    "Upload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB): the server reads it and fills content, file_name and content_type.",
+
+  resumeTransfer:
+    "Only for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
+
+  getCustomerLimits:
+    "Use before a large payout, or to explain a pause: remaining_usd is what is left in each window. A null cap means no cap only when caps_basis is `tier`.",
+
+  getRemitterLimits:
+    "remitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
 
   submitAccountApplication:
     "ORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
@@ -609,7 +652,13 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
-    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
+    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
+
+  createSettlementInstruction:
+    "These are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
+
+  updateExternalAccount:
+    "Only for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
 
   getFxQuote:
     "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
@@ -619,6 +668,27 @@ export const PREREQUISITES: Record<string, string> = {
 
   listFxPendingApprovals:
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+
+  createCardApplication:
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+
+  createCard:
+    "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
+
+  checkFeatureEligibility:
+    "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
+
+  activateFeature:
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account) as well as annual_remuneration and estimated_monthly_limit as JSON numbers: without account_id the call fails with `cards service: internal server error`. Requires confirm: true.",
+
+  startCardholderKyc:
+    "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
+
+  uploadCardholderKycDocument:
+    "STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
+
+  startCardholderKycS2S:
+    "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
 
   withdrawFromCard:
     "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
@@ -642,13 +712,25 @@ export const PREREQUISITES: Record<string, string> = {
     "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
 
   uploadCustomerKycDocument:
-    "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
+    "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; keep sandbox files under about 500 KB) in place of base64 content.",
 
   downloadCustomerKycDocument:
     "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
 
   startCustomerKycS2S:
     "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
+
+  getWebhookHistory:
+    "Use an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
+
+  getWebhookEventDetail:
+    "Takes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
+
+  getWebhookCallHistory:
+    "Takes the `id` of a getWebhookHistory item.",
+
+  getCollection:
+    "onramp_status `settlement_abandoned` is not live yet; production does not send it.",
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
@@ -783,10 +865,10 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   uploadCustomerKycDocument: { lookup: "getCustomerKycDocuments" },
   activateFeature: { lookup: "listFeatures, and read the feature's status" },
   startCardholderKyc: {
-    lookup: "getCustomer, and read the kyc status; do not start it again in a loop, as each start is billed",
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop",
   },
   startCardholderKycS2S: {
-    lookup: "getCustomer, and read the kyc status; do not start it again in a loop, as each start is billed",
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop",
   },
   uploadCardholderKycDocument: {
     lookup:

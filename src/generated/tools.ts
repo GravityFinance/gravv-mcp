@@ -46,7 +46,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
-    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.",
+    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account) as well as annual_remuneration and estimated_monthly_limit as JSON numbers: without account_id the call fails with `cards service: internal server error`. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -310,7 +310,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/eligibility",
-    "description": "Check feature eligibility — Lists the requirements a customer has met, and those still pending, for one feature. The call only reads data, but it is a POST and needs an Idempotency-Key. A repeated key returns the cached answer for 24 hours, so use a new key for each check. Every error is HTTP 400.",
+    "description": "Check feature eligibility — Lists the requirements a customer has met, and those still pending, for one feature. The call only reads data, but it is a POST and needs an Idempotency-Key. A repeated key returns the cached answer for 24 hours, so use a new key for each check. Every error is HTTP 400.\n\nThe provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -414,7 +414,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers and customer card accounts use the account application flow instead. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
+    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers and customer card accounts use the account application flow instead. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1590,7 +1590,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v2/accounts",
-    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1924,7 +1924,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards",
-    "description": "Create a card — Issues a virtual or physical card once the customer's application is `approved`. The first card gets the application's ID. Each further card needs a new Idempotency-Key; a customer can hold 10 cards, not counting blocked ones. A PIN is set for you; read it with `GET /v1/cards/{card_id}/pin`. Fund the card with a transfer whose destination is the card.",
+    "description": "Create a card — Issues a virtual or physical card once the customer's application is `approved`. The first card gets the application's ID. Each further card needs a new Idempotency-Key; a customer can hold 10 cards, not counting blocked ones. A PIN is set for you; read it with `GET /v1/cards/{card_id}/pin`. Fund the card with a transfer whose destination is the card.\n\nPREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2076,7 +2076,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/applications/new",
-    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.",
+    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3393,7 +3393,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/settlement-instructions",
-    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. The details are not checked with a bank, and there is no duplicate check.",
+    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. The details are not checked with a bank, and there is no duplicate check.\n\nThese are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3513,7 +3513,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Create a transfer — Sends money from a customer's account, crypto wallet or card to an account, crypto wallet, crypto address, card or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
+    "description": "Create a transfer — Sends money from a customer's account, crypto wallet or card to an account, crypto wallet, crypto address, card or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3902,7 +3902,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
+    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3979,7 +3979,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "delete",
     "path": "/v1/accounts/applications/{id}",
-    "description": "Delete account application — Delete a single application.",
+    "description": "Delete account application — Delete a single application.\n\nOnly a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4347,7 +4347,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/applications/{application_id}",
-    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`: upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.",
+    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`: upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.\n\nRead before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4380,7 +4380,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/capabilities",
-    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. Send `customer_type` with `customer_id` too, or options for both types come back. The answer uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. Send `customer_type` with `customer_id` too, or options for both types come back. The answer uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.\n\nCall first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4435,7 +4435,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/requirements",
-    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that the same bank as create is chosen. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.",
+    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that the same bank as create is chosen. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.\n\nBuild createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4512,7 +4512,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/{id}",
-    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are major units; `ledger_balance` is minor units.",
+    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are major units; `ledger_balance` is minor units.\n\nPoll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4643,7 +4643,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of a collection. Pass the `transaction_id` from the create call, the charge call or a webhook. The `id` in this response is a different value.",
+    "description": "Get transaction by ID — Returns the status and details of a collection. Pass the `transaction_id` from the create call, the charge call or a webhook. The `id` in this response is a different value.\n\nonramp_status `settlement_abandoned` is not live yet; production does not send it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4783,7 +4783,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/customers/{customer_id}/limits",
-    "description": "Get a customer's limits — Returns a customer's transfer tier, the caps for each window and what is left in each. Use it before a large payout, or to explain why a transfer paused. All amounts are USD strings.",
+    "description": "Get a customer's limits — Returns a customer's transfer tier, the caps for each window and what is left in each. Use it before a large payout, or to explain why a transfer paused. All amounts are USD strings.\n\nUse before a large payout, or to explain a pause: remaining_usd is what is left in each window. A null cap means no cap only when caps_basis is `tier`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4934,7 +4934,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/limits/remitters/{remitter_id}",
-    "description": "Get a remitter's limits — Returns the same view for a remitter: the sender you name in `additional_information.remitter_verification` on a transfer. Usage counts only transfers that carry it, on a policy with attested tiers. An unknown remitter gets the policy's default tier.",
+    "description": "Get a remitter's limits — Returns the same view for a remitter: the sender you name in `additional_information.remitter_verification` on a transfer. Usage counts only transfers that carry it, on a policy with attested tiers. An unknown remitter gets the policy's default tier.\n\nremitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5228,7 +5228,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/calls/{id}",
-    "description": "Get call history for a webhook event — Lists every delivery attempt for one record, newest first, with the status code, time taken and any connection error. Attempts that failed before the call was made, such as a missing or unsafe URL, are not listed; they only add to `attempts` on the detail route.",
+    "description": "Get call history for a webhook event — Lists every delivery attempt for one record, newest first, with the status code, time taken and any connection error. Attempts that failed before the call was made, such as a missing or unsafe URL, are not listed; they only add to `attempts` on the detail route.\n\nTakes the `id` of a getWebhookHistory item.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5261,7 +5261,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/event/{id}",
-    "description": "Get webhook event details — Returns one delivery record with the stored payload, the delivery state and your endpoint's last response. Use it to see what was sent and why a delivery failed. Request headers are not returned.",
+    "description": "Get webhook event details — Returns one delivery record with the stored payload, the delivery state and your endpoint's last response. Use it to see what was sent and why a delivery failed. Request headers are not returned.\n\nTakes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5294,7 +5294,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/history",
-    "description": "Get paginated webhook event history — Lists the webhook delivery records for your business, newest first. There is one record for each event Gravv sent you. Sandbox and live keys see separate records. All filters combine.",
+    "description": "Get paginated webhook event history — Lists the webhook delivery records for your business, newest first. There is one record for each event Gravv sent you. Sandbox and live keys see separate records. All filters combine.\n\nUse an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5430,7 +5430,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/applications",
-    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total; page until `count` is less than `limit`. A misspelt `status` returns an empty list.",
+    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total; page until `count` is less than `limit`. A misspelt `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6645,7 +6645,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer/{id}/resume",
-    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and the `transfer.resumed` webhook is sent. When it still cannot, `resumed` is false and the response lists the new requirements. The fee is not charged again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.",
+    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and the `transfer.resumed` webhook is sent. When it still cannot, `resumed` is false and the response lists the new requirements. The fee is not charged again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.\n\nOnly for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6892,7 +6892,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "sandbox",
     "method": "post",
     "path": "/v2/accounts/simulate/deposit",
-    "description": "Simulate a deposit — Sandbox only; a live key gets a 403. Makes a test bank deposit land on an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled; wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.",
+    "description": "Simulate a deposit — Sandbox only; a live key gets a 403. Makes a test bank deposit land on an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled; wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6960,7 +6960,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/start-kyc",
-    "description": "Start KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.",
+    "description": "Start KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.\n\nCard KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7000,7 +7000,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/start-kyc-s2s",
-    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.",
+    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.\n\nSTEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8227,7 +8227,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "patch",
     "path": "/v2/accounts/applications/{application_id}",
-    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call; a partial answer stays `blocked`. There is no Idempotency-Key on this route, so a retry uploads again. The response leaves out the status reason fields; get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.",
+    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call; a partial answer stays `blocked`. There is no Idempotency-Key on this route, so a retry uploads again. The response leaves out the status reason fields; get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8426,7 +8426,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "patch",
     "path": "/v1/accounts/{account_id}/status",
-    "description": "Update account status — Changes an account's status. Set `frozen` to suspend an account, `active` to reactivate it, `manual_review` to hold it, or `deleted` to close it. Each change sends an account webhook. Setting the current status again changes nothing and sends no webhook. Deleting needs a zero balance and cannot be undone. `auto_sweep` and `default` accounts cannot change status. Do not use `active` to move a `pending` account forward; that skips the bank set-up. An unknown ID returns the generic error message.",
+    "description": "Update account status — Changes an account's status. Set `frozen` to suspend an account, `active` to reactivate it, `manual_review` to hold it, or `deleted` to close it. Each change sends an account webhook. Setting the current status again changes nothing and sends no webhook. Deleting needs a zero balance and cannot be undone. `auto_sweep` and `default` accounts cannot change status. Do not use `active` to move a `pending` account forward; that skips the bank set-up. An unknown ID returns the generic error message.\n\nThis tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8767,7 +8767,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "patch",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202; get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its state; add a new one instead. This route needs no Idempotency-Key.",
+    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202; get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its state; add a new one instead. This route needs no Idempotency-Key.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9133,7 +9133,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/upload-document",
-    "description": "Upload document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and sub-type again replaces the earlier file. Keep files under 5 MB.",
+    "description": "Upload document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and sub-type again replaces the earlier file. Keep files under 5 MB.\n\nSTEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9291,7 +9291,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/upload-document",
-    "description": "Upload document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and sub-type again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
+    "description": "Upload document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and sub-type again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; keep sandbox files under about 500 KB) in place of base64 content.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9441,7 +9441,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer/documents",
-    "description": "Upload a supporting document — Uploads a document, such as an invoice, for a payout that needs one. Pass the returned `id` in `supporting_document_ids` on `POST /v1/transfer` or on resume. A document can be used by one transfer only, and an unused one is deleted after 7 days. The file must be PDF, PNG or JPEG, at most 700 KB.",
+    "description": "Upload a supporting document — Uploads a document, such as an invoice, for a payout that needs one. Pass the returned `id` in `supporting_document_ids` on `POST /v1/transfer` or on resume. A document can be used by one transfer only, and an unused one is deleted after 7 days. The file must be PDF, PNG or JPEG, at most 700 KB.\n\nUpload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB): the server reads it and fills content, file_name and content_type.",
     "inputSchema": {
       "type": "object",
       "properties": {
