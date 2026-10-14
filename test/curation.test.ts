@@ -137,3 +137,45 @@ describe("money and irreversible tools are gated", () => {
     for (const key of MONEY_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
   });
 });
+
+/**
+ * Texts that were false and were corrected. A spec sync or a hint edit that brings one
+ * back fails here rather than reaching a model.
+ */
+const FALSE_TEXT: Array<[RegExp, string]> = [
+  [/second user approves/i, "API-key FX orders run at once; there is no second approver"],
+  [/lock in the quoted rate|lock the rate|locked a rate/i, "a quote does not lock a rate"],
+  [/50,000/, "exports return at most the 10 newest rows"],
+  [/no API key is required/i, "every route needs an API key"],
+  [/cosmetic/i, "the path customer_id wins"],
+  [/RETURNS 202/, "bank_account and mobile_money payees return 200"],
+  [/(Poll|Check) getCustomerKycStatus/, "KYC completion is getCustomer's basic kyc status"],
+  [/until the status changes to/i, "polling must also stop on setup_failed"],
+  [/token you got from the webhook/i, "card tokens come from listSavedCards"],
+  [/Optional spending limit/i, "leaving limit out zeroes the daily limit"],
+];
+
+describe("corrected texts stay corrected", () => {
+  for (const [pattern, why] of FALSE_TEXT) {
+    test(`no tool says ${pattern} (${why})`, () => {
+      for (const t of TOOLS) {
+        const text = `${t.description}\n${JSON.stringify(t.inputSchema)}`;
+        assert.doesNotMatch(text, pattern, `${t.name}: ${why}`);
+      }
+    });
+  }
+
+  test("account-application hints use the lower-case statuses the API sends", () => {
+    for (const name of ["submitAccountApplication", "processAccountApplication", "submitAndProcessAccountApplication"]) {
+      const d = TOOLS_BY_NAME.get(name)!.description;
+      assert.doesNotMatch(d, /\b(DRAFT|SUBMITTED|PROCESSING|CREATING_ACCOUNT|APPROVED|REJECTED)\b/, name);
+      assert.match(d, /manual_review/, `${name} must name manual_review`);
+    }
+  });
+
+  test("listFxPendingApprovals stays, and says who can see it", () => {
+    const d = TOOLS_BY_NAME.get("listFxPendingApprovals")?.description ?? "";
+    assert.match(d, /fx:order_approve/);
+    assert.match(d, /API key run at once/);
+  });
+});
