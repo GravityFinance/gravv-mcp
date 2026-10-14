@@ -6,6 +6,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import {
   GravvClient,
   GravvApiError,
+  ignoredArguments,
   PUBLISHABLE_KEY_MESSAGE,
   bodyWithoutHtml,
   errorFields,
@@ -20,32 +21,8 @@ import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { VERSION } from "./version.ts";
 
-/**
- * Read the version from package.json rather than hardcoding it. A literal here had
- * already drifted — the server reported 0.1.0 while the package was 0.2.0, so clients
- * were told the wrong version.
- */
-function packageVersion(): string {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    for (const rel of ["../package.json", "../../package.json"]) {
-      try {
-        return JSON.parse(readFileSync(join(here, rel), "utf8")).version;
-      } catch {
-        /* try the next candidate */
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-  return "0.0.0";
-}
-
-const VERSION = packageVersion();
 
 /**
  * Documentation tools, always present regardless of --toolsets.
@@ -118,11 +95,25 @@ export interface ServerConfig {
   downloadDir?: string;
 }
 
-export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
+/** Raised when a hand-authored tool takes a generated tool's name: one would hide the other. */
+export class ToolNameCollisionError extends Error {
+  constructor(names: string[]) {
+    super(`manual tool name(s) collide with generated tools: ${names.join(", ")}`);
+    this.name = "ToolNameCollisionError";
+  }
+}
+
+export function selectTools(
+  toolsets: Toolset[] | "all",
+  gate: SafetyGate,
+  manual: readonly GeneratedTool[] = MANUAL_TOOLS,
+): GeneratedTool[] {
   const wanted = toolsets === "all" ? null : new Set(toolsets);
   // Tools for routes no OpenAPI specification covers are hand-authored and merged in
-  // here rather than generated.
-  const candidates: GeneratedTool[] = [...TOOLS, ...MANUAL_TOOLS];
+  // here rather than generated. A shared name would leave one of the two unreachable.
+  const clashes = manual.filter((t) => TOOLS_BY_NAME.has(t.name)).map((t) => t.name);
+  if (clashes.length > 0) throw new ToolNameCollisionError(clashes);
+  const candidates: GeneratedTool[] = [...TOOLS, ...manual];
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
 
@@ -361,6 +352,13 @@ export function createServer(config: ServerConfig) {
         environment,
         data: redact(saveDownload(tool.name, callArgs, result.data, config.downloadDir ?? defaultDownloadDir())),
       };
+      const ignored = ignoredArguments(tool, callArgs);
+      if (ignored.length > 0) {
+        payload.ignored_arguments = ignored;
+        payload.ignored_note = `${tool.name} does not take ${ignored.join(", ")}, so ${
+          ignored.length === 1 ? "it was" : "they were"
+        } not sent. Check the tool's schema for the field names it reads.`;
+      }
       if (result.idempotencyKey) payload.idempotency_key = result.idempotencyKey;
       if (result.replayed) {
         payload.note =
@@ -369,7 +367,7 @@ export function createServer(config: ServerConfig) {
         payload.note = "Rate limited first; retried with a new key. The earlier attempts did not run.";
       }
 
-      return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
+      return { content: [{ type: "text" as const, text: capResult(payload) }] };
     } catch (err) {
       if (err instanceof SafetyError) return errorResult(err.message);
       if (err instanceof GravvApiError) {
@@ -405,6 +403,41 @@ function staleDocsNote(docs: DocsIndex): string | null {
     `The documentation index could not be refreshed: ${reason} This comes from the copy loaded at ` +
     `${f.loadedAt}, which may miss recent changes.`
   );
+}
+
+/** About 25,000 tokens: larger answers crowd out the rest of a model's context. */
+export const MAX_RESULT_CHARS = 100_000;
+
+/**
+ * The result as JSON, cut to MAX_RESULT_CHARS. A list is cut by dropping its last items,
+ * so what remains is still valid JSON and says how many were left out; anything else is
+ * cut as text, with a note.
+ */
+export function capResult(payload: Record<string, unknown>, max = MAX_RESULT_CHARS): string {
+  const full = JSON.stringify(payload, null, 2);
+  if (full.length <= max) return full;
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  const items = data && typeof data === "object" && Array.isArray(data.items) ? (data.items as unknown[]) : undefined;
+  if (items && items.length > 1) {
+    let keep = items.length;
+    let text = full;
+    while (keep > 1 && text.length > max) {
+      keep = Math.max(1, Math.floor(keep * (max / text.length) * 0.95));
+      text = JSON.stringify(
+        {
+          ...payload,
+          data: { ...data, items: items.slice(0, keep) },
+          truncated: `Showing ${keep} of ${items.length} items on this page: the full answer is over ${max} characters. Ask for a smaller page (limit or items_per_page) to see the rest.`,
+        },
+        null,
+        2,
+      );
+    }
+    if (text.length <= max) return text;
+  }
+  const note = `\n[truncated by gravv-mcp: the answer is ${full.length} characters, over the ${max} limit. Narrow the request with filters or a smaller page.]`;
+  return full.slice(0, max - note.length) + note;
 }
 
 function okResult(text: string) {

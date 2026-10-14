@@ -60,6 +60,7 @@ describe("route matching", () => {
     bodyMode: "none",
     bodyProps: [],
     alsoInBody: [],
+    closedBody: false,
     movesMoney: false,
     needsConfirm: false,
     needsIdempotency: false,

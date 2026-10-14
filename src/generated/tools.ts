@@ -28,6 +28,8 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
+  /** The route rejects unknown body fields: undeclared arguments are not passed through. */
+  closedBody: boolean;
   /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
   /** Requires confirm: true (every money-moving tool, and the irreversible ones). */
@@ -149,6 +151,7 @@ export const TOOLS: GeneratedTool[] = [
       "provider_data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -193,6 +196,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -299,6 +303,7 @@ export const TOOLS: GeneratedTool[] = [
       "billing_country"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -355,6 +360,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -403,6 +409,7 @@ export const TOOLS: GeneratedTool[] = [
       "agreement_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -533,6 +540,7 @@ export const TOOLS: GeneratedTool[] = [
       "wallet_address"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -1579,6 +1587,7 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -1893,7 +1902,7 @@ export const TOOLS: GeneratedTool[] = [
         "customer_id",
         "currency"
       ],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "pathParams": [],
     "queryParams": [],
@@ -1913,6 +1922,7 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": true,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -2065,6 +2075,7 @@ export const TOOLS: GeneratedTool[] = [
       "funding"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -2182,6 +2193,7 @@ export const TOOLS: GeneratedTool[] = [
       "funding"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -2415,6 +2427,7 @@ export const TOOLS: GeneratedTool[] = [
       "source"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -2635,6 +2648,7 @@ export const TOOLS: GeneratedTool[] = [
       "destination"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -2993,6 +3007,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "wrapped",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -3272,6 +3287,7 @@ export const TOOLS: GeneratedTool[] = [
       "pix_key"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -3382,6 +3398,7 @@ export const TOOLS: GeneratedTool[] = [
       "metadata"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -3502,6 +3519,7 @@ export const TOOLS: GeneratedTool[] = [
       "memo"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -3891,6 +3909,7 @@ export const TOOLS: GeneratedTool[] = [
       "additional_information"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -3968,6 +3987,7 @@ export const TOOLS: GeneratedTool[] = [
       "wallet_type"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -4004,6 +4024,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": false,
@@ -4056,6 +4077,7 @@ export const TOOLS: GeneratedTool[] = [
       "card_token"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": false,
@@ -4093,6 +4115,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": false,
@@ -4144,6 +4167,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4240,6 +4264,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4272,6 +4297,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4304,6 +4330,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4336,6 +4363,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4369,6 +4397,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4424,6 +4453,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4501,6 +4531,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4534,6 +4565,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4567,6 +4599,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4599,6 +4632,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4632,6 +4666,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4674,6 +4709,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4706,6 +4742,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4739,6 +4776,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4772,6 +4810,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4805,6 +4844,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4838,6 +4878,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4871,6 +4912,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4923,6 +4965,7 @@ export const TOOLS: GeneratedTool[] = [
       "amount"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -4957,6 +5000,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -4990,6 +5034,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5023,6 +5068,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5056,6 +5102,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5119,6 +5166,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5184,6 +5232,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5217,6 +5266,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5250,6 +5300,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5283,6 +5334,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5358,6 +5410,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5419,6 +5472,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5478,6 +5532,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5567,6 +5622,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5701,6 +5757,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5738,6 +5795,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5793,6 +5851,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5863,6 +5922,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -5942,6 +6002,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6014,6 +6075,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6061,6 +6123,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6084,6 +6147,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6136,6 +6200,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6175,6 +6240,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6226,6 +6292,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6249,6 +6316,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6287,6 +6355,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6338,6 +6407,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6424,6 +6494,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6454,6 +6525,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6487,6 +6559,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6510,6 +6583,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6595,6 +6669,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6634,6 +6709,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -6834,7 +6910,7 @@ export const TOOLS: GeneratedTool[] = [
       "required": [
         "id"
       ],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "pathParams": [
       "id"
@@ -6848,6 +6924,7 @@ export const TOOLS: GeneratedTool[] = [
       "supporting_document_ids"
     ],
     "alsoInBody": [],
+    "closedBody": true,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
@@ -6881,6 +6958,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -6937,7 +7015,7 @@ export const TOOLS: GeneratedTool[] = [
         "account_id",
         "amount"
       ],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "pathParams": [],
     "queryParams": [],
@@ -6949,6 +7027,7 @@ export const TOOLS: GeneratedTool[] = [
       "rail"
     ],
     "alsoInBody": [],
+    "closedBody": true,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -6989,6 +7068,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -7030,6 +7110,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -7070,6 +7151,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -7111,6 +7193,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -7150,6 +7233,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -7189,6 +7273,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -8216,6 +8301,7 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -8401,7 +8487,7 @@ export const TOOLS: GeneratedTool[] = [
       "required": [
         "application_id"
       ],
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "pathParams": [
       "application_id"
@@ -8415,6 +8501,7 @@ export const TOOLS: GeneratedTool[] = [
       "documents"
     ],
     "alsoInBody": [],
+    "closedBody": true,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -8460,6 +8547,7 @@ export const TOOLS: GeneratedTool[] = [
       "status"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -8512,6 +8600,7 @@ export const TOOLS: GeneratedTool[] = [
       "limit"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -8756,6 +8845,7 @@ export const TOOLS: GeneratedTool[] = [
     "alsoInBody": [
       "customer_id"
     ],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -9035,6 +9125,7 @@ export const TOOLS: GeneratedTool[] = [
       "pix_key"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -9122,6 +9213,7 @@ export const TOOLS: GeneratedTool[] = [
       "memo"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -9280,6 +9372,7 @@ export const TOOLS: GeneratedTool[] = [
       "filename"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -9430,6 +9523,7 @@ export const TOOLS: GeneratedTool[] = [
       "filename"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -9521,6 +9615,7 @@ export const TOOLS: GeneratedTool[] = [
       "content"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -10559,6 +10654,7 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
@@ -10616,6 +10712,7 @@ export const TOOLS: GeneratedTool[] = [
       "clabe"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
@@ -10668,6 +10765,7 @@ export const TOOLS: GeneratedTool[] = [
       "amount"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,

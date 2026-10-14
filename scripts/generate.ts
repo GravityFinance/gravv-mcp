@@ -260,6 +260,7 @@ interface Generated {
    * We expose a single argument and write it to both.
    */
   alsoInBody: string[];
+  closedBody: boolean;
   movesMoney: boolean;
   needsConfirm: boolean;
   needsIdempotency: boolean;
@@ -338,6 +339,7 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       }
 
       let bodyMode: "inline" | "wrapped" | "none" = "none";
+      let closedBody = false;
       const bodyProps: string[] = [];
       const alsoInBody: string[] = [];
       const bodyContent = op.requestBody?.content;
@@ -353,6 +355,9 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         if (body?.type === "object" && body.properties && !body.oneOf && !body.anyOf) {
           // Plain object: inline its properties so the model fills one flat argument set.
           bodyMode = "inline";
+          // A body the spec closes is closed in the tool too: the route rejects unknown
+          // fields, so passing extra arguments through would fail the call.
+          closedBody = body.additionalProperties === false;
           for (const [k, v] of Object.entries(body.properties)) {
             if (k in properties) {
               if (paramLocation[k] === "path") {
@@ -481,15 +486,17 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
           properties,
           required: [...new Set(required)],
           // Inline bodies stay open: several specs document a subset of accepted fields
-          // and rejecting extras here would block valid calls. Wrapped bodies carry the
-          // full schema already, so extras are a mistake.
-          additionalProperties: bodyMode === "inline",
+          // and rejecting extras here would block valid calls. A body the spec closes
+          // stays closed. Wrapped bodies carry the full schema already, so extras are a
+          // mistake.
+          additionalProperties: bodyMode === "inline" && !closedBody,
         },
         pathParams: Object.keys(paramLocation).filter((k) => paramLocation[k] === "path"),
         queryParams: Object.keys(paramLocation).filter((k) => paramLocation[k] === "query"),
         bodyMode,
         bodyProps,
         alsoInBody,
+        closedBody,
         movesMoney,
         needsConfirm,
         needsIdempotency,
@@ -609,6 +616,8 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
+  /** The route rejects unknown body fields: undeclared arguments are not passed through. */
+  closedBody: boolean;
   /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
   /** Requires confirm: true (every money-moving tool, and the irreversible ones). */

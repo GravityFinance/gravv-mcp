@@ -8,7 +8,7 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
-import { PUBLISHABLE_KEY_MESSAGE, isPublishableKey } from "../client.ts";
+import { PUBLISHABLE_KEY_MESSAGE, baseUrlWarning, isPublishableKey } from "../client.ts";
 import { DEFAULT_DOCS_ORIGIN, InvalidDocsOriginError, parseDocsOrigin } from "../docs.ts";
 import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 import { defaultDownloadDir } from "../files.ts";
@@ -92,9 +92,13 @@ async function main() {
 
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");
 
+  const baseUrl = arg("base-url") ?? (process.env.GRAVV_BASE_URL || undefined);
+  const urlWarning = baseUrlWarning(baseUrl);
+  if (urlWarning) process.stderr.write(`warning: ${urlWarning}\n`);
+
   const { server, environment, tools } = createServer({
     apiKey,
-    baseUrl: arg("base-url") ?? process.env.GRAVV_BASE_URL,
+    baseUrl,
     toolsets,
     readOnly: process.argv.includes("--read-only"),
     allowLiveWrites: process.env.GRAVV_ALLOW_LIVE_WRITES === "true",
