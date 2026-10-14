@@ -40,7 +40,7 @@
     "build": "npm run generate && tsc",
     "dev": "node --experimental-strip-types src/bin/gravv-mcp.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

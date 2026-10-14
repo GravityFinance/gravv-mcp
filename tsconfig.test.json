@@ -1,0 +1,11 @@
+{
+  // Typecheck only: the tests and scripts run as TypeScript through
+  // --experimental-strip-types and are never compiled. tsconfig.json builds src/ alone.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
