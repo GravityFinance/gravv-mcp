@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -166,8 +166,8 @@ components:
           type: string
           description: >-
             BIC of 8 or 11 characters. Required for `swift`. The bank must be in
-            the SWIFT directory; its `institution_id` and `bank_name` are filled
-            in for you.
+            the SWIFT directory. Gravv fills in its `institution_id` and
+            `bank_name` for you.
           example: DEUTDEFF
         routing_number:
           type: string
@@ -178,9 +178,8 @@ components:
         payment_rail:
           type: string
           description: >-
-            Required for `ach_wire`; there is no default. `wire` needs a
-            routing number that takes wires, and `rtp` one that takes instant
-            payments.
+            Required for `ach_wire`. There is no default. `wire` needs a routing
+            number that takes wires, and `rtp` one that takes instant payments.
           enum:
             - ach
             - wire
@@ -236,7 +235,7 @@ components:
           type: string
           description: >-
             Optional intermediary bank for `swift`. Send all the intermediary
-            fields or none; only `intermediary_bank_address2` is optional.
+            fields or none. Only `intermediary_bank_address2` is optional.
         intermediary_bank_routing_number:
           type: string
         intermediary_bank_address1:
@@ -287,7 +286,7 @@ components:
       description: >-
         Send only what changes. A missing field keeps its value and `null`
         clears it. `phone_number`, `currency`, `payee_type`, `customer_id` and
-        `internal_account_id` cannot change; unknown fields are ignored.
+        `internal_account_id` cannot change. Unknown fields are ignored.
       properties:
         account_name:
           type: string
@@ -556,8 +555,8 @@ components:
   responses:
     BadRequest:
       description: >-
-        Invalid request, an unknown ID or a failure. Read `error`; not-found is
-        a 400 here, not a 404.
+        Invalid request, an unknown ID or a failure. Read `error`. A not-found
+        error is a 400 here, not a 404.
       content:
         application/json:
           schema:
@@ -777,7 +776,7 @@ paths:
         Lists your external accounts, newest first, in every status including
         `deleted`. There is no status filter. Filters match exactly and are
         case-sensitive, so send currencies in upper case. `total_items` is an
-        estimate; stop when a page has fewer items than `items_per_page`.
+        estimate. Stop when a page has fewer items than `items_per_page`.
       parameters:
         - in: query
           name: page
@@ -854,13 +853,13 @@ paths:
       description: >-
         Checks account details before you add the external account, and returns
         the holder's name when the bank can look it up. Send `account_number`
-        with `institution_id`; only that pair reaches the bank.
+        with `institution_id`. Only that pair reaches the bank.
 
 
-        `verified: true` with `verification_source: local` means only the
-        format was checked. Trust the name only when `verification_source` is
-        `provider`. An IBAN, phone or CLABE alone is checked locally. This
-        route needs no Idempotency-Key.
+        `verified: true` with `verification_source: local` means only the format
+        was checked. Trust the name only when `verification_source` is
+        `provider`. An IBAN, phone or CLABE alone is checked locally. This route
+        needs no Idempotency-Key.
       requestBody:
         required: true
         content:
@@ -925,7 +924,7 @@ paths:
                         enum:
                           - provider
                           - local
-                        description: '`provider` when a bank confirmed it; `local` for format checks only'
+                        description: '`provider` when a bank confirmed it, `local` for format checks only'
                   error:
                     type: 'null'
               example:
@@ -991,13 +990,13 @@ paths:
       description: >-
         Corrects an external account. Use it to fix the bank details of a
         `setup_failed` account, which runs setup again, or to add the national
-        ID, PIX key or address that a payout corridor asks for. An empty body
-        on a failed account retries setup.
+        ID, PIX key or address that a payout corridor asks for. An empty body on
+        a failed account retries setup.
 
 
-        It always returns 202; get the account until it is `active` or
-        `setup_failed`. A 409 means the account cannot change in its state;
-        add a new one instead. This route needs no Idempotency-Key.
+        It always returns 202. Get the account until it is `active` or
+        `setup_failed`. A 409 means the account cannot change in its current
+        state, so add a new one instead. This route needs no Idempotency-Key.
       parameters:
         - $ref: '#/components/parameters/ExternalAccountIdPath'
       requestBody:
@@ -1119,7 +1118,7 @@ paths:
           schema:
             type: string
             pattern: ^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$
-          description: Find a SWIFT bank by its 8 or 11 character BIC
+          description: Find a SWIFT bank by its 8- or 11-character BIC
           example: MIDLGB22
         - in: query
           name: search

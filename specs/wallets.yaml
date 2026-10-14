@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -57,15 +57,15 @@ components:
           type: string
           format: date-time
           description: >-
-            When the balance was last read on-chain. Left out when it is not
-            known.
+            When the balance was last read on-chain. The API leaves it out when
+            it is not known.
           example: '2026-10-12T09:20:00Z'
         stale:
           type: boolean
           description: >-
-            True when the balance is older than 5 minutes. A refresh has been
-            queued, so read the wallet again in a few seconds. Left out when
-            false.
+            True when the balance is older than 5 minutes. Gravv has queued a
+            refresh, so read the wallet again in a few seconds. The API leaves
+            it out when false.
           example: true
     Wallet:
       type: object
@@ -85,7 +85,7 @@ components:
         address:
           type: string
           description: >-
-            Blockchain address. EVM addresses come back in checksum case.
+            Blockchain address. The API returns EVM addresses in checksum case.
           example: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
         network:
           $ref: '#/components/schemas/Network'
@@ -226,7 +226,7 @@ paths:
       operationId: createWallet
       description: >-
         Creates a blockchain wallet for a customer on one network. The call is
-        synchronous: the response has the address.
+        synchronous, so the response includes the address.
 
 
         Every call creates a new wallet with a new address, even for the same
@@ -353,7 +353,8 @@ paths:
             maximum: 100
             default: 10
           description: >-
-            Wallets per page. A larger value is lowered to 100, not rejected.
+            Wallets per page. The API lowers a larger value to 100 instead of
+            rejecting it.
           example: 10
       responses:
         '200':
@@ -409,7 +410,7 @@ paths:
         returns without waiting for it.
 
 
-        Balances are tracked for USDC on every listed network, USDT on polygon,
+        Gravv tracks balances for USDC on every listed network, USDT on polygon,
         ethereum, avalanche and solana, and the network's own coin.
       parameters:
         - in: path

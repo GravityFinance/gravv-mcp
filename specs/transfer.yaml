@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -144,7 +144,7 @@ components:
           example: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
         currency:
           type: string
-          description: Accepted, but the source's own currency is used
+          description: Accepted but ignored. The transfer uses the source's own currency.
           enum:
             - USD
             - EUR
@@ -273,7 +273,7 @@ components:
         - destination
         - amount
         - customer_id
-      description: Unknown fields are ignored, so check the spelling.
+      description: The API ignores unknown fields, so check the spelling.
       properties:
         source:
           $ref: '#/components/schemas/TransferSource'
@@ -307,7 +307,7 @@ components:
           description: >-
             Your unique reference. On tenants whose limits are enforced, a reused
             reference returns the first transfer, or a 409 when the request
-            differs. Send it so retries are not paid twice.
+            differs. Send it so that a retry does not pay out twice.
           example: inv-114
         client_metadata:
           type: string
@@ -417,7 +417,7 @@ components:
                   type: string
                   description: >-
                     `pending` once recorded; the transfer then runs in the
-                    background. `paused` means it needs something from you: read
+                    background. `paused` means it needs something from you. Read
                     `requirements`, then resume it.
                   enum:
                     - pending
@@ -456,7 +456,7 @@ components:
                   description: USDT and USDC conversions only. Expected amount received.
                 min_receive_amount:
                   type: string
-                  description: USDT and USDC conversions only. Least amount accepted.
+                  description: USDT and USDC conversions only. Minimum amount accepted.
                 receive_asset:
                   type: string
                 status:
@@ -952,9 +952,9 @@ paths:
       description: >-
         Continues a transfer that returned `transfer_status: paused`, with what
         its `requirements` asked for. When the transfer can go ahead,
-        `resumed` is true and the `transfer.resumed` webhook is sent. When it
-        still cannot, `resumed` is false and the response lists the new
-        requirements. The fee is not charged again.
+        `resumed` is true and Gravv sends the `transfer.resumed` webhook. When
+        it still cannot, `resumed` is false and the response lists the new
+        requirements. Gravv does not charge the fee again.
 
 
         Use a new Idempotency-Key for each attempt with new information, as a

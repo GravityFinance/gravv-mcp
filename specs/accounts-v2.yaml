@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -160,7 +160,7 @@ components:
           default: front
         document_subtype:
           type: string
-          description: Optional sub-type
+          description: Optional subtype
         content:
           type: string
           description: >-
@@ -203,8 +203,9 @@ components:
         customer_type:
           type: string
           description: >-
-            `individual` or `business`. Always send it: bank choice and routing
-            use the value you send. Defaults to the customer's profile type.
+            `individual` or `business`. Always send it, because bank choice and
+            routing use the value you send. Defaults to the customer's profile
+            type.
           enum:
             - individual
             - business
@@ -237,8 +238,8 @@ components:
         network:
           description: >-
             Network for the account's token wallet. Required when the bank
-            offers token wallets, unless you send `wallet_id`; refused
-            otherwise. It must be one of the bank's `token_options`. Prefer
+            offers token wallets, unless you send `wallet_id`. Otherwise it is
+            refused. It must be one of the bank's `token_options`. Prefer
             polygon, ethereum, base or solana, which work end to end.
           allOf:
             - $ref: '#/components/schemas/Network'
@@ -260,8 +261,8 @@ components:
           description: >-
             The form from `GET /v2/accounts/requirements`. Put `root` scope
             fields in `data.root`, party fields in `data.parties[]`, and
-            documents in `data.documents[]` or a party's `documents`. Fields the
-            customer record already answers are filled in for you.
+            documents in `data.documents[]` or a party's `documents`. Gravv
+            fills in the fields that the customer record already answers.
           properties:
             root:
               type: object
@@ -277,15 +278,15 @@ components:
                   x-not-yet-live: true
                   description: >-
                     Not yet live. Lets a non-US applicant ask the bank to fill
-                    the tax form. Production rejects this field as unknown; do
-                    not send it there.
+                    the tax form. Production rejects this field as unknown, so
+                    do not send it there.
             parties:
               type: array
               description: >-
-                Business only; refused for individuals. Each entry is an
+                Business only. Refused for individuals. Each entry is an
                 associated person from the customer record (`id` plus any
-                changes) or a new person with the new-party fields. Leave it
-                out to declare every associated person on the record.
+                changes) or a new person with the new-party fields. Leave it out
+                to declare every associated person on the record.
               items:
                 type: object
                 additionalProperties: true
@@ -300,8 +301,8 @@ components:
             documents:
               type: array
               description: >-
-                Root documents. When you send none, documents on the customer
-                record are used.
+                Root documents. When you send none, Gravv uses the documents on
+                the customer record.
               items:
                 $ref: '#/components/schemas/DocumentUpload'
     AccountV2:
@@ -372,16 +373,16 @@ components:
         status_reason:
           type: string
           description: >-
-            Stable code that explains a status other than `active`; branch on
-            it. You act on `tos_pending` and `kyc_pending` (send the customer to
-            `required_action_url`) and on `awaiting_customer_document` and
-            `awaiting_customer_data` (update the application). Other codes need
-            no action, or mean the account cannot be opened. Only on the single
-            account read.
+            A stable code that explains a status other than `active`. Branch on
+            it. You act on `tos_pending` and `kyc_pending` by sending the
+            customer to `required_action_url`, and on
+            `awaiting_customer_document` and `awaiting_customer_data` by
+            updating the application. Other codes need no action, or mean the
+            account cannot be opened. Returned only on the single account read.
           example: awaiting_customer_document
         status_message:
           type: string
-          description: Explanation in words. The wording can change; use `status_reason`.
+          description: Explanation in words. The wording can change, so branch on `status_reason`.
         required_documents:
           type: array
           description: Document types to upload with the application update
@@ -424,7 +425,7 @@ components:
           type: string
           description: >-
             Balance in major units. It comes from the wallet, else the bank's
-            last known figure, else the ledger; `balance_source` says which.
+            last known figure, else the ledger. `balance_source` says which.
             Omitted when there is no figure, which means unknown, not zero.
           example: '1250.00'
         balance_source:
@@ -504,7 +505,7 @@ components:
               type: string
         virtual_account_bank_name:
           type: string
-          description: Deposit bank name. Some banks leave it out; then use `bank_name`.
+          description: Deposit bank name. Some banks leave it out. Use `bank_name` then.
         virtual_account_bank_address:
           type: string
         virtual_account_bank_beneficiary_address:
@@ -719,7 +720,7 @@ components:
           additionalProperties: true
         write_only:
           type: boolean
-          description: Secret values that are never returned
+          description: True for secret values that are never returned
         enum:
           type: string
           description: Name of the value list
@@ -1439,7 +1440,7 @@ paths:
       operationId: listAccountApplicationsV2
       description: >-
         Lists your account applications, newest first, without status reasons.
-        `count` is the number on this page, not a total; page until `count` is
+        `count` is the number on this page, not a total. Page until `count` is
         less than `limit`. A misspelt `status` returns an empty list.
       parameters:
         - in: query
@@ -1495,11 +1496,10 @@ paths:
       summary: Get an account application
       operationId: getAccountApplicationV2
       description: >-
-        Returns one application with what it waits for. Act on
-        `status_reason`: upload `required_documents` or send
-        `required_fields` with the update, or send the customer to
-        `required_action_url` for terms or verification. Use `status`, not the
-        deprecated `provisioning` object.
+        Returns one application with what it waits for. Act on `status_reason`.
+        Upload `required_documents` or send `required_fields` with the update,
+        or send the customer to `required_action_url` for terms or verification.
+        Use `status`, not the deprecated `provisioning` object.
       parameters:
         - $ref: '#/components/parameters/ApplicationIdPath'
       responses:
@@ -1543,13 +1543,13 @@ paths:
       description: >-
         Sends the data or documents the bank asked for, and resumes opening the
         account. Get the application first. It must be `blocked`, or
-        `manual_review` for documents. Send every requested item in one call;
-        a partial answer stays `blocked`.
+        `manual_review` for documents. Send every requested item in one call. A
+        partial answer stays `blocked`.
 
 
-        There is no Idempotency-Key on this route, so a retry uploads again.
-        The response leaves out the status reason fields; get the application
-        again to see what is still needed. For terms or verification, send the
+        This route takes no Idempotency-Key, so a retry uploads again. The
+        response leaves out the status reason fields. Get the application again
+        to see what is still needed. For terms or verification, send the
         customer to `required_action_url` instead.
       parameters:
         - $ref: '#/components/parameters/ApplicationIdPath'
@@ -1622,10 +1622,10 @@ paths:
       operationId: getAccountV2
       description: >-
         Returns one account with bank details, balances and, when it is not
-        `active`, the reason. Poll it after create until `status` is
-        `active`. When `requires_user_action` is true, act on `status_reason`
-        with `application_id`. `balance` and `balance_details` are major
-        units; `ledger_balance` is minor units.
+        `active`, the reason. Poll it after create until `status` is `active`.
+        When `requires_user_action` is true, act on `status_reason` with
+        `application_id`. `balance` and `balance_details` are in major units.
+        `ledger_balance` is in minor units.
       parameters:
         - $ref: '#/components/parameters/AccountIdPath'
       responses:
@@ -1670,12 +1670,12 @@ paths:
       summary: Simulate a deposit
       operationId: simulateDeposit
       description: >-
-        Sandbox only; a live key gets a 403. Makes a test bank deposit land on
-        an account through the normal deposit flow, with fees, ledger entries
-        and webhooks. The account must be `active` with bank details.
+        Sandbox only. A live key gets a 403. Sends a test bank deposit to an
+        account through the normal deposit flow, with fees, ledger entries and
+        webhooks. The account must be `active` with bank details.
 
 
-        A 200 means the deposit was accepted, not settled; wait for the
+        A 200 means the deposit was accepted, not settled. Wait for the
         `transfer.inflow.completed` or `transfer.inflow.deposit_settled`
         webhook. Each new Idempotency-Key makes a new deposit.
       parameters:

@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -38,9 +38,9 @@ components:
     DeliveryStatus:
       type: string
       description: >-
-        Delivery status. `pending` → `processing` → `sent` on a 2xx, or
-        `retrying` on a failure. After the last allowed attempt it is
-        `failed`.
+        Delivery status. A delivery moves from `pending` to `processing`, then
+        to `sent` on a 2xx or to `retrying` on a failure. After the last allowed
+        attempt it is `failed`.
       enum:
         - pending
         - processing
@@ -84,7 +84,7 @@ components:
           example: null
     WebhookHistorySummary:
       type: object
-      description: One delivery record. Call the detail route for the payload.
+      description: One delivery record. Call `GET /v1/webhooks/event/{id}` for the payload.
       properties:
         id:
           type: string
@@ -126,8 +126,8 @@ components:
             - 'null'
           format: int32
           description: >-
-            Last HTTP status from your endpoint. Null until your endpoint has
-            answered. 0 when an attempt failed before any call was made, for
+            Last HTTP status from your endpoint. Null until your endpoint
+            responds. 0 when an attempt failed before Gravv made any call, for
             example because no webhook URL is set or the URL is not https.
           example: 200
         created_at:
@@ -139,7 +139,8 @@ components:
           type: string
           format: date-time
           description: >-
-            Time of the last failed attempt. Left out until an attempt fails.
+            Time of the last failed attempt. The API leaves it out until an
+            attempt fails.
           example: '2026-10-13T09:11:15.330127Z'
     WebhookEventDetail:
       type: object
@@ -151,7 +152,7 @@ components:
           example: 0b3c2f4e-7c1a-4e0e-9a51-2f7d1c9e8a10
         transaction_id:
           type: string
-          description: As in the history list. Left out when there is none.
+          description: As in the history list. The API leaves it out when there is none.
           example: 5d1e7a3b-2c4f-4b8e-9d6a-1f0e3c2b7a95
         event_id:
           type: string
@@ -197,15 +198,15 @@ components:
             - 'null'
           format: int32
           description: >-
-            Last HTTP status from your endpoint. Null until your endpoint has
-            answered. 0 when an attempt failed before any call was made, for
+            Last HTTP status from your endpoint. Null until your endpoint
+            responds. 0 when an attempt failed before Gravv made any call, for
             example because no webhook URL is set or the URL is not https.
           example: 200
         response_body:
           type: object
           description: >-
-            Your endpoint's last response body, up to 64 KiB. A body that is
-            not JSON is wrapped as `{"error": "Invalid JSON response", "raw":
+            Your endpoint's last response body, up to 64 KiB. Gravv wraps a body
+            that is not JSON as `{"error": "Invalid JSON response", "raw":
             "..."}`.
           additionalProperties: true
         attempts:
@@ -218,16 +219,16 @@ components:
         max_retries:
           type: integer
           format: int32
-          description: Total attempts allowed. Read it to learn the retry budget.
+          description: Total attempts allowed
           example: 50
         last_attempt:
           type: string
           format: date-time
-          description: Time of the last failed attempt. Left out until one fails.
+          description: Time of the last failed attempt. The API leaves it out until one fails.
         next_attempt:
           type: string
           format: date-time
-          description: When the next retry may run. Left out when none is due.
+          description: When the next retry may run. The API leaves it out when none is due.
         created_at:
           type: string
           format: date-time
@@ -287,11 +288,11 @@ paths:
   /v1/webhooks/history:
     get:
       operationId: getWebhookHistory
-      summary: Get paginated webhook event history
+      summary: List webhook event history
       description: >-
         Lists the webhook delivery records for your business, newest first.
         There is one record for each event Gravv sent you. Sandbox and live
-        keys see separate records. All filters combine.
+        keys see separate records. You can combine all filters.
       tags:
         - Webhooks
       parameters:
@@ -350,8 +351,8 @@ paths:
           in: query
           required: false
           description: >-
-            Records per page. A value over 100 is lowered to 100, and 0 means
-            the default.
+            Records per page. The API lowers a value over 100 to 100, and 0
+            means the default.
           schema:
             type: integer
             format: int32
@@ -418,7 +419,7 @@ paths:
       description: >-
         Returns one delivery record with the stored payload, the delivery state
         and your endpoint's last response. Use it to see what was sent and why
-        a delivery failed. Request headers are not returned.
+        a delivery failed. The response does not include request headers.
       tags:
         - Webhooks
       parameters:
@@ -490,9 +491,9 @@ paths:
       summary: Get call history for a webhook event
       description: >-
         Lists every delivery attempt for one record, newest first, with the
-        status code, time taken and any connection error. Attempts that failed
-        before the call was made, such as a missing or unsafe URL, are not
-        listed; they only add to `attempts` on the detail route.
+        status code, time taken and any connection error. The list leaves out
+        attempts that failed before Gravv made the call, such as a missing or
+        unsafe URL. Those only add to `attempts` on the detail route.
       tags:
         - Webhooks
       parameters:
@@ -548,7 +549,7 @@ paths:
   /v1/webhooks/event/send/{id}:
     post:
       operationId: retryWebhookEvent
-      summary: Manually retry a webhook event
+      summary: Resend a webhook event
       description: >-
         Sends one stored event to your current webhook URL now and returns your
         endpoint's response. The call waits up to 30 seconds for your endpoint.
@@ -556,10 +557,10 @@ paths:
         needed, and each call sends the event again.
 
 
-        The resend is not signed: it carries no X-Signature header. The call
+        The resend is not signed and carries no `X-Signature` header. The call
         returns HTTP 200 with your endpoint's status code, even when your
-        endpoint answered non-2xx, and a failed resend puts the event back into
-        signed automatic retries.
+        endpoint returned a non-2xx status. A failed resend puts the event back
+        into signed automatic retries.
       tags:
         - Webhooks
       parameters:
@@ -567,7 +568,8 @@ paths:
       responses:
         '200':
           description: >-
-            The event was sent. Read `status_code` for your endpoint's answer.
+            The event was sent. Read `status_code` for your endpoint's response
+            status.
           content:
             application/json:
               schema:
@@ -623,7 +625,7 @@ paths:
             `event is already being processed`, `event not found`, an unsafe
             URL such as `unsafe webhook url: webhook url must use https scheme`,
             and `webhook delivery failed: <error>` when no response came back.
-            That last one also schedules an automatic retry.
+            The last error also schedules an automatic retry.
           content:
             application/json:
               schema:

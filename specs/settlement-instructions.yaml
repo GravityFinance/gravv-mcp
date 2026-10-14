@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -39,7 +39,7 @@ components:
   schemas:
     InstructionType:
       type: string
-      description: Exact lower case
+      description: Send it in lower case, exactly as listed
       enum:
         - bank_account
         - crypto_wallet
@@ -48,8 +48,8 @@ components:
       type: object
       description: >-
         A bank account needs `account_number` and `bank_name`. A crypto wallet
-        needs `wallet_address` and `network`, and `memo` on `stellar`. Unknown
-        fields are ignored.
+        needs `wallet_address` and `network`, and `memo` on `stellar`. The API
+        ignores unknown fields.
       required:
         - instruction_type
         - account_name
@@ -64,14 +64,14 @@ components:
         currency:
           type: string
           description: >-
-            Currency this destination receives, such as `USD` or `USDC`. It is
-            stored as sent and filters match it exactly, so always send upper
+            Currency this destination receives, such as `USD` or `USDC`. Gravv
+            stores it as sent and filters match it exactly, so always send upper
             case.
           example: USD
         is_default:
           type: boolean
           default: false
-          description: Make this the default for its currency. The old default is unset.
+          description: Makes this the default for its currency and unsets the old default.
         account_number:
           type: string
           description: Required for `bank_account`
@@ -98,7 +98,7 @@ components:
           additionalProperties: true
         wallet_address:
           type: string
-          description: Required for `crypto_wallet`. Its format is not checked, so check it yourself.
+          description: Required for `crypto_wallet`. Gravv does not check its format, so check it yourself.
         network:
           type: string
           description: Required for `crypto_wallet`, such as `polygon` or `stellar`. Send lower case.
@@ -111,7 +111,7 @@ components:
       description: >-
         Send only what changes. Empty strings keep the current value, and no
         field can be cleared. `instruction_type` and `currency` cannot change.
-        Values are not checked again on update.
+        Gravv does not check the values again on update.
       properties:
         is_default:
           type: boolean
@@ -142,7 +142,7 @@ components:
           type: string
     SettlementInstruction:
       type: object
-      description: A settlement instruction. Empty fields are left out.
+      description: A settlement instruction. The response leaves out empty fields.
       properties:
         id:
           type: string
@@ -168,7 +168,7 @@ components:
           type: boolean
         status:
           type: string
-          description: Always `active`; deleted instructions are not returned
+          description: Always `active`; the API does not return deleted instructions
           enum:
             - active
         account_number:
@@ -310,8 +310,8 @@ paths:
         Saves one of your own bank accounts or crypto wallets to receive FX
         order proceeds. Pass its `id` as the order destination with type
         `external_account`. Its currency must match the currency the order
-        buys. The details are not checked with a bank, and there is no
-        duplicate check.
+        buys. Gravv does not check the details with a bank or check for
+        duplicates.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -381,7 +381,7 @@ paths:
         - Settlement instructions
       summary: Get a settlement instruction
       operationId: getSettlementInstruction
-      description: Returns one active settlement instruction. A deleted one is not found.
+      description: Returns one active settlement instruction. A deleted one returns not found.
       parameters:
         - $ref: '#/components/parameters/InstructionIdPath'
       responses:
@@ -428,14 +428,14 @@ paths:
       summary: Delete a settlement instruction
       operationId: deleteSettlementInstruction
       description: >-
-        Retires a settlement instruction. It can no longer be read or used, and
-        it cannot be restored. Orders that used it keep its ID. Deleting the
+        Retires a settlement instruction. You can no longer read or use it, and
+        you cannot restore it. Orders that used it keep its ID. Deleting the
         default leaves its currency with no default.
       parameters:
         - $ref: '#/components/parameters/InstructionIdPath'
       responses:
         '200':
-          description: Deleted
+          description: The settlement instruction is deleted
           content:
             application/json:
               schema:

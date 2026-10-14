@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -33,7 +33,7 @@ components:
         The catalogue lists six features: `virtual_cards` (Cards),
         `usd_account`, `eur_account` and `gbp_account` (accounts),
         `crypto_wallet` (Wallet) and `international_transfers` (Payout). These
-        routes serve cards: send `virtual_cards`. Open accounts, wallets and
+        routes serve cards, so send `virtual_cards`. Open accounts, wallets and
         payouts with their own APIs.
       enum:
         - crypto_wallet
@@ -108,8 +108,8 @@ components:
         provider_data:
           type: object
           description: >-
-            Data the feature needs. Only `virtual_cards` reads it today; it is
-            required for that feature. Send numbers as JSON numbers.
+            Data the feature needs. Only `virtual_cards` reads it today, and
+            that feature requires it. Send numbers as JSON numbers.
           properties:
             annual_remuneration:
               type: number
@@ -128,9 +128,9 @@ components:
               type: string
               format: uuid
               description: >-
-                Always send it for `virtual_cards`: the id of your business's
-                card account (type `card`, status `active`). The same card
-                account backs every cardholder. Leaving it out fails with
+                Always send it for `virtual_cards`. It is the ID of your
+                business's card account (type `card`, status `active`). The same
+                card account backs every cardholder. Leaving it out fails with
                 `cards service: internal server error`.
               example: 5d9e677f-f071-4881-a861-7cdcebacd9d5
             funding:
@@ -149,8 +149,8 @@ components:
             ip_address:
               type: string
               description: >-
-                Replaced by the IP address of the calling server when one is
-                present. You do not need to send it.
+                Gravv replaces it with the IP address of the calling server when
+                one is present. You do not need to send it.
           additionalProperties: true
     ActivateFeatureResponse:
       type: object
@@ -177,8 +177,8 @@ components:
                 `active` when activated. For `virtual_cards` this means the card
                 application was submitted, not that a card was issued.
                 `pending_liveness` when the cardholder must first complete a
-                liveness check at `websdk_url`; nothing is stored, so call
-                again afterwards.
+                liveness check at `websdk_url`. Nothing is stored, so call again
+                afterwards.
               enum:
                 - active
                 - pending_liveness
@@ -186,7 +186,7 @@ components:
               example: active
             activated_at:
               type: string
-              description: Activation time in RFC 3339. Empty for `pending_liveness`.
+              description: Activation time in RFC 3339 format. Empty for `pending_liveness`.
               example: '2026-10-13T11:20:05Z'
             message:
               type: string
@@ -242,7 +242,7 @@ components:
           example: completed
         fulfilled_at:
           type: string
-          description: Time in RFC 3339 for KYC; empty for other types
+          description: Time in RFC 3339 format for KYC. Empty for other types.
           example: '2026-10-13T10:01:02Z'
     PendingRequirement:
       type: object
@@ -340,7 +340,7 @@ paths:
           in: query
           required: false
           description: >-
-            Filter by activation. It needs `customer_id`; without it every
+            Filter by activation. It needs `customer_id`. Without it, every
             feature is inactive. Other values act as `all`.
           schema:
             type: string
@@ -513,12 +513,12 @@ paths:
         card. Cards need completed KYC with a liveness check, a card-type
         account, and `provider_data` with `annual_remuneration` and
         `estimated_monthly_limit`. If the customer has no liveness check, the
-        status is `pending_liveness`: give the cardholder `websdk_url`, then
+        status is `pending_liveness`. Give the cardholder `websdk_url`, then
         call again.
 
 
-        `crypto_wallet` and `international_transfers` become active at once.
-        An activation that already exists is returned unchanged. Every error is
+        `crypto_wallet` and `international_transfers` become active at once. An
+        activation that already exists is returned unchanged. Every error is
         HTTP 400.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'

@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -121,7 +121,7 @@ components:
         filename:
           type: string
           description: >-
-            Name of the file. The extension is not checked; the content decides
+            Name of the file. The extension is not checked. The content decides
             the file type.
           example: passport_front.jpg
           maxLength: 255
@@ -255,7 +255,7 @@ components:
               type: string
               format: uuid
               description: >-
-                ID of the stored document. Uploading the same type and sub-type
+                ID of the stored document. Uploading the same type and subtype
                 again replaces the file and keeps this ID.
               example: c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f
             country:
@@ -416,7 +416,7 @@ components:
                     type:
                       - string
                       - 'null'
-                    description: Document sub-type
+                    description: Document subtype
                     example: FRONT_SIDE
                   IDNumber:
                     type:
@@ -482,8 +482,8 @@ components:
             content:
               type: string
               description: >-
-                The image as a data URI, `data:<content_type>;base64,...`. Upload
-                takes plain base64; download returns a data URI.
+                The image as a data URI, `data:<content_type>;base64,...`.
+                Upload takes plain base64, and download returns a data URI.
               example: data:image/png;base64,iVBORw0KGgo...
             content_type:
               type: string
@@ -602,7 +602,7 @@ security:
   - ApiKeyAuth: []
 tags:
   - name: KYC
-    description: Verify your customers
+    description: Verify customers' identity (KYC) with a hosted link or with documents you upload
 paths:
   /v1/customers/kyc/start:
     post:
@@ -612,7 +612,7 @@ paths:
       description: >
         Starts hosted verification and returns a link for the person or business
         to complete. The link expires after one hour. Call again with a new
-        Idempotency-Key for a fresh link; the same key returns the old link.
+        Idempotency-Key for a fresh link. The same key returns the old link.
 
 
         A customer who is already verified gets `review_status: completed` and
@@ -621,8 +621,8 @@ paths:
         400 and must use the upload route instead.
 
 
-        The result arrives by the `customer.kyc.status.*` webhooks. Each first
-        start charges one KYC fee.
+        Gravv sends the result in the `customer.kyc.status.*` webhooks. Each
+        first start charges one KYC fee.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -725,7 +725,7 @@ paths:
     post:
       tags:
         - KYC
-      summary: Upload document
+      summary: Upload a KYC document
       description: >
         Stores one document file for a customer. This is step 1 of
         server-to-server verification. Upload each document, and each side of a
@@ -744,9 +744,9 @@ paths:
         `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`).
 
 
-        Uploading the same type and sub-type again replaces the earlier file.
-        On tenants with automatic document verification, the upload that
-        completes the required set also completes KYC.
+        Uploading the same type and subtype again replaces the earlier file. On
+        tenants with automatic document verification, the upload that completes
+        the required set also completes KYC.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -952,7 +952,7 @@ paths:
     post:
       tags:
         - KYC
-      summary: Initiate server-to-server KYC verification
+      summary: Start server-to-server KYC verification
       description: >
         Sends the documents you uploaded for review, with no hosted page. This
         is step 2 of server-to-server verification. Upload every required
@@ -960,8 +960,8 @@ paths:
 
 
         For a business, every associated person must complete verification
-        first, and the business needs each `COMPANY_DOC` sub-type. The result
-        arrives by the `customer.kyc.status.*` webhooks.
+        first, and the business needs each `COMPANY_DOC` subtype. Gravv sends
+        the result in the `customer.kyc.status.*` webhooks.
 
 
         This flow records no liveness check. A customer verified this way must
@@ -1072,7 +1072,7 @@ paths:
     get:
       tags:
         - KYC
-      summary: Get KYC document data
+      summary: List KYC documents
       description: >
         Lists the documents stored for a customer, with their details and which
         sides have an image. Use a document's `id` to download its image.
@@ -1154,7 +1154,7 @@ paths:
       description: >
         Returns one side of a stored document as a data URI. Get the
         `document_id` from the documents list. A two-sided card is two
-        documents: read the back image of the `BACK_SIDE` document with
+        documents. Read the back image of the `BACK_SIDE` document with
         `side=back`.
 
 
@@ -1250,7 +1250,7 @@ paths:
     get:
       tags:
         - KYC
-      summary: Get applicant verification status
+      summary: Get a customer's KYC review status
       description: >
         Reads the live review state for a customer's verification. It does not
         change the customer's KYC status, which only the webhooks update.

@@ -48,7 +48,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
-    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
+    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`. Give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -60,7 +60,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "feature_id": {
           "type": "string",
-          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards, so send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -78,7 +78,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "provider_data": {
           "type": "object",
-          "description": "Data the feature needs. Only `virtual_cards` reads it today; it is required for that feature. Send numbers as JSON numbers.",
+          "description": "Data the feature needs. Only `virtual_cards` reads it today, and that feature requires it. Send numbers as JSON numbers.",
           "properties": {
             "annual_remuneration": {
               "type": "number",
@@ -95,7 +95,7 @@ export const TOOLS: GeneratedTool[] = [
             "account_id": {
               "type": "string",
               "format": "uuid",
-              "description": "Always send it for `virtual_cards`: the id of your business's card account (type `card`, status `active`). The same card account backs every cardholder. Leaving it out fails with `cards service: internal server error`.",
+              "description": "Always send it for `virtual_cards`. It is the ID of your business's card account (type `card`, status `active`). The same card account backs every cardholder. Leaving it out fails with `cards service: internal server error`.",
               "example": "5d9e677f-f071-4881-a861-7cdcebacd9d5"
             },
             "funding": {
@@ -118,7 +118,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "ip_address": {
               "type": "string",
-              "description": "Replaced by the IP address of the calling server when one is present. You do not need to send it."
+              "description": "Gravv replaces it with the IP address of the calling server when one is present. You do not need to send it."
             }
           },
           "additionalProperties": true
@@ -208,7 +208,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents/charge",
-    "description": "Charge card — Charges a saved card against an open payment intent, server to server. Use it for repeat charges after the payer saved a card. The card must be saved under the intent's `client_customer_id`. A saved card can be charged at most 5 times in 24 hours, and each charge can be at most 3 times the card's first payment. A declined charge returns HTTP 400 with a sentence such as `The card has insufficient funds: payment declined`.\n\nMOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
+    "description": "Charge card — Charges a saved card against an open payment intent, server to server. Use it for repeat charges after the payer saved a card. The card must be saved under the intent's `client_customer_id`. You can charge a saved card at most 5 times in 24 hours, and each charge can be at most 3 times the card's first payment. A declined charge returns HTTP 400 with a sentence such as `The card has insufficient funds: payment declined`.\n\nMOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -219,7 +219,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "card_token": {
           "type": "string",
-          "description": "A saved card token, saved under the intent's `client_customer_id`",
+          "description": "A card token saved under the intent's `client_customer_id`",
           "example": "tokn_80aebb6ea2594a74bc"
         },
         "first_name": {
@@ -321,7 +321,7 @@ export const TOOLS: GeneratedTool[] = [
       "properties": {
         "feature_id": {
           "type": "string",
-          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards, so send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -372,7 +372,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/tos",
-    "description": "Complete TOS acceptance — Record the applicant's acceptance of the provider terms of service for a draft application.",
+    "description": "Accept the terms of service — Records that the applicant accepted the bank's terms of service for a `draft` application.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -384,7 +384,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "agreement_id": {
           "type": "string",
-          "description": "Provider agreement identifier being accepted.",
+          "description": "ID of the terms of service agreement being accepted.",
           "example": "agr_123"
         },
         "idempotency_key": {
@@ -421,7 +421,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers use the account application flow instead. Your business opens its one card account here, with its own customer id; it starts `pending`. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
+    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers use the account application flow instead. Your business opens its one card account here, with its own customer ID. That account starts `pending`. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -561,7 +561,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications",
-    "description": "Create account application — Create a new account application for a given customer. For sandbox and testing integrations, use `polygon` as the `blockchain_network`.",
+    "description": "Create an account application — Creates an account application for a customer. In sandbox, use `polygon` as the `blockchain_network`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -582,7 +582,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "description": "Application data including KYC information and account configuration.",
+          "description": "Application data, with the customer's KYC information and the account settings.",
           "required": [
             "account_type",
             "currency"
@@ -689,12 +689,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -704,7 +704,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -746,7 +746,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_wealth_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                  "description": "The source of wealth in free text, when no standard option fits.",
                   "example": "Salary from tech job"
                 },
                 "account_purposes": {
@@ -761,7 +761,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Personal savings"
                 },
                 "source_of_funds_list": {
@@ -776,7 +776,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Income"
                 },
                 "expected_counterparty_countries": {
@@ -917,12 +917,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -932,7 +932,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -953,12 +953,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -968,7 +968,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -989,12 +989,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -1004,7 +1004,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -1120,12 +1120,12 @@ export const TOOLS: GeneratedTool[] = [
                       "properties": {
                         "street_line_1": {
                           "type": "string",
-                          "description": "Street address, PO box, company name, c/o",
+                          "description": "Street address, PO box, company name or c/o",
                           "example": "123 Main St"
                         },
                         "street_line_2": {
                           "type": "string",
-                          "description": "Apartment, suite, unit, building, floor, etc.",
+                          "description": "Apartment, suite, unit, building or floor",
                           "example": "Apt 4B"
                         },
                         "city": {
@@ -1135,7 +1135,7 @@ export const TOOLS: GeneratedTool[] = [
                         },
                         "state": {
                           "type": "string",
-                          "description": "State, province, county",
+                          "description": "State, province or county",
                           "example": "CA"
                         },
                         "postal_code": {
@@ -1177,7 +1177,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_wealth_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                      "description": "The source of wealth in free text, when no standard option fits.",
                       "example": "Salary from tech job"
                     },
                     "account_purposes": {
@@ -1192,7 +1192,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "account_purposes_other_description": {
                       "type": "string",
-                      "description": "Free-text description of account purposes when not covered by the standard options.",
+                      "description": "The account purposes in free text, when no standard option fits.",
                       "example": "Personal savings"
                     },
                     "source_of_funds_list": {
@@ -1207,7 +1207,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_funds_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of funds when not covered by the standard options.",
+                      "description": "The source of funds in free text, when no standard option fits.",
                       "example": "Income"
                     },
                     "expected_counterparty_countries": {
@@ -1283,7 +1283,7 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "description": "Standardized associated person (UBO, control person, etc.)",
+                    "description": "A person linked to the business, such as an ultimate beneficial owner (UBO) or a control person",
                     "properties": {
                       "first_name": {
                         "type": "string",
@@ -1339,22 +1339,22 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "has_ownership": {
                         "type": "boolean",
-                        "description": "Indicates whether the person holds an ownership stake in the business.",
+                        "description": "Whether the person holds an ownership stake in the business.",
                         "example": true
                       },
                       "has_control": {
                         "type": "boolean",
-                        "description": "Indicates whether the person has control over the business.",
+                        "description": "Whether the person has control over the business.",
                         "example": true
                       },
                       "is_signer": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is an authorized signer on the account.",
+                        "description": "Whether the person is an authorized signer on the account.",
                         "example": true
                       },
                       "is_director": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is a director of the business.",
+                        "description": "Whether the person is a director of the business.",
                         "example": true
                       },
                       "ownership_percentage": {
@@ -1368,12 +1368,12 @@ export const TOOLS: GeneratedTool[] = [
                         "properties": {
                           "street_line_1": {
                             "type": "string",
-                            "description": "Street address, PO box, company name, c/o",
+                            "description": "Street address, PO box, company name or c/o",
                             "example": "123 Main St"
                           },
                           "street_line_2": {
                             "type": "string",
-                            "description": "Apartment, suite, unit, building, floor, etc.",
+                            "description": "Apartment, suite, unit, building or floor",
                             "example": "Apt 4B"
                           },
                           "city": {
@@ -1383,7 +1383,7 @@ export const TOOLS: GeneratedTool[] = [
                           },
                           "state": {
                             "type": "string",
-                            "description": "State, province, county",
+                            "description": "State, province or county",
                             "example": "CA"
                           },
                           "postal_code": {
@@ -1435,11 +1435,11 @@ export const TOOLS: GeneratedTool[] = [
                       }
                     }
                   },
-                  "description": "Provide at least one associated person."
+                  "description": "Send at least one associated person."
                 },
                 "has_material_intermediary_ownership": {
                   "type": "boolean",
-                  "description": "Indicates whether the business has ownership held through a material intermediary.",
+                  "description": "Whether the business has ownership held through a material intermediary.",
                   "example": false
                 },
                 "formation_document": {
@@ -1464,7 +1464,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_dao": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a decentralized autonomous organization (DAO).",
+                  "description": "Whether the business is a decentralized autonomous organization (DAO).",
                   "example": false
                 },
                 "account_purpose": {
@@ -1479,17 +1479,17 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "industry_financial_services_subtype": {
                   "type": "string",
-                  "description": "Subtype of financial services industry, if applicable.",
+                  "description": "Subtype of the financial services industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_crypto_subtype": {
                   "type": "string",
-                  "description": "Subtype of crypto industry, if applicable.",
+                  "description": "Subtype of the crypto industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_other_description": {
                   "type": "string",
-                  "description": "Description of the industry when it does not fit a standard category.",
+                  "description": "The industry in words, when it does not fit a standard category.",
                   "example": "Software dev"
                 },
                 "expected_counterparty_countries": {
@@ -1515,7 +1515,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Sales revenue"
                 },
                 "tin_verification_document": {
@@ -1530,7 +1530,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_msb": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a money services business (MSB).",
+                  "description": "Whether the business is a money services business (MSB).",
                   "example": false
                 },
                 "account_purposes": {
@@ -1545,7 +1545,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Operations"
                 },
                 "primary_target_market": {
@@ -1555,7 +1555,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "primary_target_market_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the primary target market when not covered by the standard options.",
+                  "description": "The primary target market in free text, when no standard option fits.",
                   "example": "US market"
                 },
                 "expected_fiat_monthly_volume": {
@@ -1599,7 +1599,7 @@ export const TOOLS: GeneratedTool[] = [
                 "auto_sweep",
                 "collection"
               ],
-              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
+              "description": "Type of account to open. This is the account type, not the customer type. Use `application_type` to choose individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -1635,13 +1635,13 @@ export const TOOLS: GeneratedTool[] = [
             },
             "tos_link": {
               "type": "string",
-              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
+              "description": "Gravv sets this on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Arbitrary key-value pairs for storing additional information about the application.",
+              "description": "Key-value pairs you can store with the application.",
               "example": {
                 "source": "web"
               }
@@ -1696,7 +1696,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "customer_type": {
           "type": "string",
-          "description": "`individual` or `business`. Always send it: bank choice and routing use the value you send. Defaults to the customer's profile type.",
+          "description": "`individual` or `business`. Always send it, because bank choice and routing use the value you send. Defaults to the customer's profile type.",
           "enum": [
             "individual",
             "business"
@@ -1737,7 +1737,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "network": {
           "type": "string",
-          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`; refused otherwise. It must be one of the bank's `token_options`. Prefer polygon, ethereum, base or solana, which work end to end.",
+          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`. Otherwise it is refused. It must be one of the bank's `token_options`. Prefer polygon, ethereum, base or solana, which work end to end.",
           "enum": [
             "stellar",
             "polygon",
@@ -1779,7 +1779,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`. Fields the customer record already answers are filled in for you.",
+          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`. Gravv fills in the fields that the customer record already answers.",
           "properties": {
             "root": {
               "type": "object",
@@ -1788,7 +1788,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "parties": {
               "type": "array",
-              "description": "Business only; refused for individuals. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record.",
+              "description": "Business only. Refused for individuals. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record.",
               "items": {
                 "type": "object",
                 "additionalProperties": true,
@@ -1844,7 +1844,7 @@ export const TOOLS: GeneratedTool[] = [
                         },
                         "document_subtype": {
                           "type": "string",
-                          "description": "Optional sub-type"
+                          "description": "Optional subtype"
                         },
                         "content": {
                           "type": "string",
@@ -1888,7 +1888,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "documents": {
               "type": "array",
-              "description": "Root documents. When you send none, documents on the customer record are used.",
+              "description": "Root documents. When you send none, Gravv uses the documents on the customer record.",
               "items": {
                 "type": "object",
                 "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
@@ -1934,7 +1934,7 @@ export const TOOLS: GeneratedTool[] = [
                   },
                   "document_subtype": {
                     "type": "string",
-                    "description": "Optional sub-type"
+                    "description": "Optional subtype"
                   },
                   "content": {
                     "type": "string",
@@ -2019,7 +2019,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards",
-    "description": "Create a card — Issues a virtual or physical card once the customer's application is `approved`. The first card gets the application's ID. Each further card needs a new Idempotency-Key; a customer can hold 10 cards, not counting blocked ones. A PIN is set for you; read it with `GET /v1/cards/{card_id}/pin`. Fund the card with a transfer whose destination is the card.\n\nPREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
+    "description": "Create a card — Issues a virtual or physical card once the customer's application is `approved`. The first card gets the application's ID. Each further card needs a new Idempotency-Key; a customer can hold 10 cards, not counting blocked ones. Gravv sets a PIN for you; read it with `GET /v1/cards/{card_id}/pin`. Fund the card with a transfer whose destination is the card.\n\nPREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2328,13 +2328,13 @@ export const TOOLS: GeneratedTool[] = [
         },
         "card_token": {
           "type": "string",
-          "description": "A saved card token from `GET /v1/collections/cards`. When you send it, the card is charged at once.",
+          "description": "A saved card token from `GET /v1/collections/cards`. When you send it, Gravv charges the card at once.",
           "example": "tokn_80aebb6ea2594a74bc"
         },
         "save_card": {
           "type": "boolean",
           "default": false,
-          "description": "Ask the checkout to save the card"
+          "description": "When true, asks the checkout to save the card"
         },
         "redirect_url": {
           "type": "string",
@@ -2745,14 +2745,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "post",
     "path": "/v1/customers",
-    "description": "Add a customer — Creates an individual or business customer. A business is created with its associated persons in the same call, and each person becomes its own customer of type `ubo`. Each new customer gets `basic` and `intermediate` KYC records with status `not_started`, and a `customer.created` webhook. A duplicate email or `external_id` is a 400, not a 409.",
+    "description": "Create a customer — Creates an individual or business customer. A business is created with its associated persons in the same call, and each person becomes its own customer of type `ubo`. Each new customer gets `basic` and `intermediate` KYC records with status `not_started`, and a `customer.created` webhook. A duplicate email or `external_id` is a 400, not a 409.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "body": {
           "oneOf": [
             {
-              "title": "Individual Customer",
+              "title": "Individual customer",
               "type": "object",
               "required": [
                 "first_name",
@@ -2861,7 +2861,7 @@ export const TOOLS: GeneratedTool[] = [
               }
             },
             {
-              "title": "Business Customer",
+              "title": "Business customer",
               "type": "object",
               "required": [
                 "email",
@@ -2879,7 +2879,7 @@ export const TOOLS: GeneratedTool[] = [
                 "email": {
                   "type": "string",
                   "format": "email",
-                  "description": "Business contact email. It must use a company domain; free email domains such as gmail.com are rejected.",
+                  "description": "Business contact email. It must use a company domain. Free email domains, such as gmail.com, are rejected.",
                   "example": "ops@acmecorp.com"
                 },
                 "type": {
@@ -3072,7 +3072,7 @@ export const TOOLS: GeneratedTool[] = [
               }
             }
           ],
-          "description": "Request body. Choose exactly one shape: Individual Customer | Business Customer. "
+          "description": "Request body. Choose exactly one shape: Individual customer | Business customer. "
         },
         "idempotency_key": {
           "type": "string",
@@ -3149,7 +3149,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "bic": {
           "type": "string",
-          "description": "BIC of 8 or 11 characters. Required for `swift`. The bank must be in the SWIFT directory; its `institution_id` and `bank_name` are filled in for you.",
+          "description": "BIC of 8 or 11 characters. Required for `swift`. The bank must be in the SWIFT directory. Gravv fills in its `institution_id` and `bank_name` for you.",
           "example": "DEUTDEFF"
         },
         "routing_number": {
@@ -3159,7 +3159,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "payment_rail": {
           "type": "string",
-          "description": "Required for `ach_wire`; there is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
+          "description": "Required for `ach_wire`. There is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
           "enum": [
             "ach",
             "wire",
@@ -3224,7 +3224,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "intermediary_financial_institution": {
           "type": "string",
-          "description": "Optional intermediary bank for `swift`. Send all the intermediary fields or none; only `intermediary_bank_address2` is optional."
+          "description": "Optional intermediary bank for `swift`. Send all the intermediary fields or none. Only `intermediary_bank_address2` is optional."
         },
         "intermediary_bank_routing_number": {
           "type": "string"
@@ -3384,7 +3384,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders",
-    "description": "Create an order — Trades a quote. With an API key there is no approval step: the order starts as `pending` and the source is debited at once. Then get the order until it is `completed` or `cancelled`. FX orders send no webhooks. If the error is `order source could not be charged`, an order may still exist; list your orders before you retry with a new quote.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
+    "description": "Create an order — Trades a quote. With an API key there is no approval step. The order starts as `pending` and Gravv debits the source at once. Then get the order until it is `completed` or `cancelled`. FX orders send no webhooks. If the error is `order source could not be charged`, an order may still exist; list your orders before you retry with a new quote.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3414,7 +3414,7 @@ export const TOOLS: GeneratedTool[] = [
             "type",
             "id"
           ],
-          "description": "Where the sold amount comes from: your account or crypto wallet holding at least `from_amount` in the FROM currency. It cannot be `external_account`."
+          "description": "Your account or crypto wallet that pays the sold amount. It must hold at least `from_amount` in the FROM currency. It cannot be `external_account`."
         },
         "destination": {
           "type": "object",
@@ -3437,7 +3437,7 @@ export const TOOLS: GeneratedTool[] = [
             "type",
             "id"
           ],
-          "description": "Where the bought amount goes: your account or crypto wallet, or an active settlement instruction (`external_account`) in the TO currency."
+          "description": "Where the bought amount goes. It is your account or crypto wallet, or an active settlement instruction (`external_account`) in the TO currency."
         },
         "transaction_id": {
           "type": "string",
@@ -3495,13 +3495,13 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/settlement-instructions",
-    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. The details are not checked with a bank, and there is no duplicate check.\n\nThese are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
+    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. Gravv does not check the details with a bank or check for duplicates.\n\nThese are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "instruction_type": {
           "type": "string",
-          "description": "Exact lower case",
+          "description": "Send it in lower case, exactly as listed",
           "enum": [
             "bank_account",
             "crypto_wallet"
@@ -3515,13 +3515,13 @@ export const TOOLS: GeneratedTool[] = [
         },
         "currency": {
           "type": "string",
-          "description": "Currency this destination receives, such as `USD` or `USDC`. It is stored as sent and filters match it exactly, so always send upper case.",
+          "description": "Currency this destination receives, such as `USD` or `USDC`. Gravv stores it as sent and filters match it exactly, so always send upper case.",
           "example": "USD"
         },
         "is_default": {
           "type": "boolean",
           "default": false,
-          "description": "Make this the default for its currency. The old default is unset."
+          "description": "Makes this the default for its currency and unsets the old default."
         },
         "account_number": {
           "type": "string",
@@ -3557,7 +3557,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "wallet_address": {
           "type": "string",
-          "description": "Required for `crypto_wallet`. Its format is not checked, so check it yourself."
+          "description": "Required for `crypto_wallet`. Gravv does not check its format, so check it yourself."
         },
         "network": {
           "type": "string",
@@ -3644,7 +3644,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "currency": {
               "type": "string",
-              "description": "Accepted, but the source's own currency is used",
+              "description": "Accepted but ignored. The transfer uses the source's own currency.",
               "enum": [
                 "USD",
                 "EUR",
@@ -3827,7 +3827,7 @@ export const TOOLS: GeneratedTool[] = [
           "type": "string",
           "minLength": 1,
           "maxLength": 100,
-          "description": "Your unique reference. On tenants whose limits are enforced, a reused reference returns the first transfer, or a 409 when the request differs. Send it so retries are not paid twice.",
+          "description": "Your unique reference. On tenants whose limits are enforced, a reused reference returns the first transfer, or a 409 when the request differs. Send it so that a retry does not pay out twice.",
           "example": "inv-114"
         },
         "client_metadata": {
@@ -4084,7 +4084,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "delete",
     "path": "/v1/accounts/applications/{id}",
-    "description": "Delete account application — Delete a single application.\n\nOnly a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
+    "description": "Delete an account application — Deletes one application.\n\nOnly a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4121,7 +4121,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "delete",
     "path": "/v1/collections/cards/{card_id}",
-    "description": "Delete saved card — Removes a saved card. Send the owner's `customer_id` and the `card_token` in the body: the card deleted is the one named by `card_token`, not by the path. A request without a body fails with `EOF`. A token that matches no active card returns `card already deleted`.",
+    "description": "Delete saved card — Removes a saved card. Send the owner's `customer_id` and the `card_token` in the body. Gravv deletes the card that `card_token` names, not the one in the path. A request without a body fails with `EOF`. A token that matches no active card returns `card already deleted`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4174,7 +4174,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "delete",
     "path": "/v1/settlement-instructions/{id}",
-    "description": "Delete a settlement instruction — Retires a settlement instruction. It can no longer be read or used, and it cannot be restored. Orders that used it keep its ID. Deleting the default leaves its currency with no default.",
+    "description": "Delete a settlement instruction — Retires a settlement instruction. You can no longer read or use it, and you cannot restore it. Orders that used it keep its ID. Deleting the default leaves its currency with no default.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4212,7 +4212,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/documents/{document_id}/download",
-    "description": "Download a KYC document — Returns one side of a stored document as a data URI. Get the `document_id` from the documents list. A two-sided card is two documents: read the back image of the `BACK_SIDE` document with `side=back`. Responses can be large, up to about 13 MB. A scoped API key needs the `customer:update` permission.\n\nThis server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
+    "description": "Download a KYC document — Returns one side of a stored document as a data URI. Get the `document_id` from the documents list. A two-sided card is two documents. Read the back image of the `BACK_SIDE` document with `side=back`. Responses can be large, up to about 13 MB. A scoped API key needs the `customer:update` permission.\n\nThis server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4311,12 +4311,12 @@ export const TOOLS: GeneratedTool[] = [
         "start_date": {
           "type": "string",
           "format": "date",
-          "description": "First day, as YYYY-MM-DD. Other formats are ignored."
+          "description": "First day, as YYYY-MM-DD. The API ignores other formats."
         },
         "end_date": {
           "type": "string",
           "format": "date",
-          "description": "Last day, included, as YYYY-MM-DD. Other formats are ignored."
+          "description": "Last day, included, as YYYY-MM-DD. The API ignores other formats."
         },
         "export_format": {
           "type": "string",
@@ -4325,7 +4325,7 @@ export const TOOLS: GeneratedTool[] = [
             "json"
           ],
           "default": "json",
-          "description": "Lower case only"
+          "description": "Send it in lower case"
         }
       },
       "required": [],
@@ -4361,7 +4361,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/{account_id}",
-    "description": "Get a single account — Returns one account with its deposit details, balance and assets. Poll it after you create an account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with `internal account not found`.",
+    "description": "Get an account — Returns one account with its deposit details, balance and assets. Poll it after you create an account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with `internal account not found`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4394,7 +4394,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/{id}",
-    "description": "Get account application — Retrieve details of a single application by ID.",
+    "description": "Get an account application — Returns one application by ID.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4427,7 +4427,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/{id}/history",
-    "description": "Get application history — Get the audit log or history of an application.",
+    "description": "Get application history — Returns the history of an application. Each entry records an action, who performed it and the fields that changed.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4460,7 +4460,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/applications/{application_id}",
-    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`: upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.\n\nRead before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
+    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`. Upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.\n\nRead before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4494,7 +4494,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/capabilities",
-    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. Send `customer_type` with `customer_id` too, or options for both types come back. The answer uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.\n\nCall first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. If you send `customer_id` without `customer_type`, the response lists options for both types. The response uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.\n\nCall first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4628,7 +4628,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/{id}",
-    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are major units; `ledger_balance` is minor units.\n\nPoll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
+    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are in major units. `ledger_balance` is in minor units.\n\nPoll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4763,7 +4763,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of a collection. Pass the `transaction_id` from the create call, the charge call or a webhook. The `id` in this response is a different value.\n\nonramp_status `settlement_abandoned` is not live yet; production does not send it.",
+    "description": "Get a collection — Returns the status and details of a collection. Pass the `transaction_id` from the create call, the charge call or a webhook. The `id` in this response is a different value.\n\nonramp_status `settlement_abandoned` is not live yet; production does not send it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4806,7 +4806,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "get",
     "path": "/v1/customers/{customer_id}",
-    "description": "Get a single customer — Returns one customer with its KYC records, and for a business its associated persons. It also returns an associated person by its own `id`. Send no query parameters.",
+    "description": "Get a customer — Returns one customer with its KYC records, and for a business its associated persons. It also returns an associated person by its own `id`. Send no query parameters.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4839,7 +4839,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/documents",
-    "description": "Get KYC document data — Lists the documents stored for a customer, with their details and which sides have an image. Use a document's `id` to download its image. The response includes each document number in plain text. Treat it as personal data. A customer with no documents gets a 404, not an empty list.",
+    "description": "List KYC documents — Lists the documents stored for a customer, with their details and which sides have an image. Use a document's `id` to download its image. The response includes each document number in plain text. Treat it as personal data. A customer with no documents gets a 404, not an empty list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4873,7 +4873,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/status",
-    "description": "Get applicant verification status — Reads the live review state for a customer's verification. It does not change the customer's KYC status, which only the webhooks update. For the final result, read `kyc` on the customer (`GET /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*` webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means verification failed. Customers verified by automatic document verification have no review and get a 404 here.",
+    "description": "Get a customer's KYC review status — Reads the live review state for a customer's verification. It does not change the customer's KYC status, which only the webhooks update. For the final result, read `kyc` on the customer (`GET /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*` webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means verification failed. Customers verified by automatic document verification have no review and get a 404 here.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4975,7 +4975,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/{order_id}",
-    "description": "Get an order — Returns one order. `pending` covers both a debit in progress and a debit that landed and is waiting to settle. Not-found is a 400.",
+    "description": "Get an order — Returns one order. `pending` covers both a debit in progress and a debit that landed and is waiting to settle. An unknown order returns a 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5015,7 +5015,7 @@ export const TOOLS: GeneratedTool[] = [
       "properties": {
         "currency_pair": {
           "type": "string",
-          "description": "`FROM_TO`: the currency you sell, then the currency you buy, such as `USD_XAF`. The four-part form `USD_US_XAF_CM` is also accepted; its countries do not change the price. It wins over `direction`.",
+          "description": "The currency you sell, then the currency you buy, in `FROM_TO` form, such as `USD_XAF`. The four-part form `USD_US_XAF_CM` is also accepted; its countries do not change the price. It takes precedence over `direction`.",
           "example": "USD_XAF"
         },
         "direction": {
@@ -5025,7 +5025,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "amount": {
           "type": "string",
-          "description": "Amount you sell, in major units of the FROM currency, as a string. A JSON number is rejected.",
+          "description": "Amount you sell, in major units of the FROM currency, as a string. The API rejects a JSON number.",
           "example": "10000"
         },
         "idempotency_key": {
@@ -5097,7 +5097,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/cards/{card_id}",
-    "description": "Get saved card — Returns one active saved card by the `id` from the list. Ignore `is_active` in this response: it always reads `false`.",
+    "description": "Get saved card — Returns one active saved card by the `id` from the list. Ignore `is_active` in this response, as it is always `false`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5131,7 +5131,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/settlement-instructions/{id}",
-    "description": "Get a settlement instruction — Returns one active settlement instruction. A deleted one is not found.",
+    "description": "Get a settlement instruction — Returns one active settlement instruction. A deleted one returns not found.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5165,7 +5165,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions/{transaction_id}",
-    "description": "Get a transaction — Returns one transaction. Poll it after a transfer until `status` is `completed` or `failed`; `paused` means the transfer needs something from you. Not-found is a 400.",
+    "description": "Get a transaction — Returns one transaction. Poll it after a transfer until `status` is `completed` or `failed`; `paused` means the transfer needs something from you. An unknown ID returns a 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5329,7 +5329,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "get",
     "path": "/v1/wallets/{wallet_id}",
-    "description": "Get a single wallet — Returns one wallet with its balances. Balances come from a cache. When one is missing or older than 5 minutes, Gravv queues a refresh and returns without waiting for it. Balances are tracked for USDC on every listed network, USDT on polygon, ethereum, avalanche and solana, and the network's own coin.",
+    "description": "Get a single wallet — Returns one wallet with its balances. Balances come from a cache. When one is missing or older than 5 minutes, Gravv queues a refresh and returns without waiting for it. Gravv tracks balances for USDC on every listed network, USDT on polygon, ethereum, avalanche and solana, and the network's own coin.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5363,7 +5363,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/calls/{id}",
-    "description": "Get call history for a webhook event — Lists every delivery attempt for one record, newest first, with the status code, time taken and any connection error. Attempts that failed before the call was made, such as a missing or unsafe URL, are not listed; they only add to `attempts` on the detail route.\n\nTakes the `id` of a getWebhookHistory item.",
+    "description": "Get call history for a webhook event — Lists every delivery attempt for one record, newest first, with the status code, time taken and any connection error. The list leaves out attempts that failed before Gravv made the call, such as a missing or unsafe URL. Those only add to `attempts` on the detail route.\n\nTakes the `id` of a getWebhookHistory item.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5397,7 +5397,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/event/{id}",
-    "description": "Get webhook event details — Returns one delivery record with the stored payload, the delivery state and your endpoint's last response. Use it to see what was sent and why a delivery failed. Request headers are not returned.\n\nTakes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
+    "description": "Get webhook event details — Returns one delivery record with the stored payload, the delivery state and your endpoint's last response. Use it to see what was sent and why a delivery failed. The response does not include request headers.\n\nTakes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5431,7 +5431,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/history",
-    "description": "Get paginated webhook event history — Lists the webhook delivery records for your business, newest first. There is one record for each event Gravv sent you. Sandbox and live keys see separate records. All filters combine.\n\nUse an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
+    "description": "List webhook event history — Lists the webhook delivery records for your business, newest first. There is one record for each event Gravv sent you. Sandbox and live keys see separate records. You can combine all filters.\n\nUse an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5469,7 +5469,7 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 0,
           "maximum": 100,
           "default": 50,
-          "description": "Records per page. A value over 100 is lowered to 100, and 0 means the default."
+          "description": "Records per page. The API lowers a value over 100 to 100, and 0 means the default."
         },
         "page": {
           "type": "integer",
@@ -5507,7 +5507,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications",
-    "description": "Get account applications — Retrieve a list of applications with optional filters and pagination.",
+    "description": "List account applications — Lists account applications. Filter by customer or status, and page through the results.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5569,7 +5569,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/applications",
-    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total; page until `count` is less than `limit`. A misspelt `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
+    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total. Page until `count` is less than `limit`. A misspelt `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5629,7 +5629,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts",
-    "description": "Get accounts — Lists your internal accounts, newest first, with balances. Accounts opened with `/v2/accounts` are included. Filters combine with AND, and a filter that matches nothing returns an empty list.",
+    "description": "List accounts — Lists your internal accounts, newest first, with balances. Accounts opened with `/v2/accounts` are included. Filters combine with AND, and a filter that matches nothing returns an empty list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5854,7 +5854,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "get",
     "path": "/v1/cards/applications",
-    "description": "List card applications — Lists your card applications, newest first, with `application_status`. This is the only route that returns it: poll it until the status is `approved`, or wait for the `cards.application.update` webhook. There are no filters.",
+    "description": "List card applications — Lists your card applications, newest first, with `application_status`. This is the only route that returns it. Poll it until the status is `approved`, or wait for the `cards.application.update` webhook. It takes no filters.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5948,7 +5948,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "get",
     "path": "/v1/customers",
-    "description": "Get customers — Lists your individual and business customers, newest first. Associated persons are not listed; get their business to see them. Unknown or invalid filters are ignored.",
+    "description": "List customers — Lists your individual and business customers, newest first. Associated persons are not listed. Get their business to see them. Unknown or invalid filters are ignored.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6062,7 +6062,7 @@ export const TOOLS: GeneratedTool[] = [
         "swift_code": {
           "type": "string",
           "pattern": "^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$",
-          "description": "Find a SWIFT bank by its 8 or 11 character BIC"
+          "description": "Find a SWIFT bank by its 8- or 11-character BIC"
         },
         "search": {
           "type": "string",
@@ -6099,7 +6099,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts",
-    "description": "List external accounts — Lists your external accounts, newest first, in every status including `deleted`. There is no status filter. Filters match exactly and are case-sensitive, so send currencies in upper case. `total_items` is an estimate; stop when a page has fewer items than `items_per_page`.",
+    "description": "List external accounts — Lists your external accounts, newest first, in every status including `deleted`. There is no status filter. Filters match exactly and are case-sensitive, so send currencies in upper case. `total_items` is an estimate. Stop when a page has fewer items than `items_per_page`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6193,7 +6193,7 @@ export const TOOLS: GeneratedTool[] = [
             "all"
           ],
           "default": "all",
-          "description": "Filter by activation. It needs `customer_id`; without it every feature is inactive. Other values act as `all`."
+          "description": "Filter by activation. It needs `customer_id`. Without it, every feature is inactive. Other values act as `all`."
         }
       },
       "required": [],
@@ -6220,7 +6220,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/supported-currencies",
-    "description": "List supported currency pairs — Lists every currency pair FX knows. A listed pair is not always enabled for you; `POST /v1/fx/quote` tells you. This route reads no query parameters.",
+    "description": "List supported currency pairs — Lists every currency pair in FX. A listed pair is not always enabled for you; `POST /v1/fx/quote` returns an error for a pair that is not. This route reads no query parameters.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -6258,11 +6258,11 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 1,
           "maximum": 100,
           "default": 20,
-          "description": "Page size. Values above 100 give 100."
+          "description": "Page size. The API caps values above 100 at 100."
         },
         "status": {
           "type": "string",
-          "description": "An order made with an API key starts as `pending` and its source is debited at once. It then becomes `completed`, or `cancelled` if the debit fails. `waiting_approval` is for orders made in the dashboard.",
+          "description": "An order made with an API key starts as `pending`, and Gravv debits its source at once. It then becomes `completed`, or `cancelled` if the debit fails. `waiting_approval` is for orders made in the dashboard.",
           "enum": [
             "waiting_approval",
             "pending",
@@ -6297,7 +6297,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/pending-approvals",
-    "description": "List orders waiting for approval — Lists orders in `waiting_approval`, newest first. Only orders made in the dashboard wait for approval, so orders made with an API key never appear here. A scoped key needs `fx:order_approve`. Approving and rejecting are done in the dashboard.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+    "description": "List orders waiting for approval — Lists orders in `waiting_approval`, newest first. Only orders made in the dashboard wait for approval, so orders made with an API key never appear here. A scoped key needs `fx:order_approve`. You approve and reject orders in the dashboard.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6311,7 +6311,7 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 1,
           "maximum": 100,
           "default": 20,
-          "description": "Page size. Values above 100 give 100."
+          "description": "Page size. The API caps values above 100 at 100."
         }
       },
       "required": [],
@@ -6337,7 +6337,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/rates",
-    "description": "List exchange rates — Returns indicative rates for display, sorted by pair. You cannot trade at these rates; call `POST /v1/fx/quote` for a firm price. Filters are not case-sensitive. When rates are not loaded yet, the error is `fx cache is not ready`; retry.",
+    "description": "List exchange rates — Returns indicative rates for display, sorted by pair. You cannot trade at these rates; call `POST /v1/fx/quote` for a firm price. Filters are not case-sensitive. When rates are not loaded yet, the error is `fx cache is not ready`; retry the call.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6389,7 +6389,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/pending",
-    "description": "Get pending applications — Returns up to 10 applications in status `submitted`, oldest first. These are submitted applications that were never processed; `processing` applications are not included. The route takes no parameters; a `limit` parameter makes it fail.",
+    "description": "List pending applications — Returns up to 10 applications in status `submitted`, oldest first. These are submitted applications that were never processed. `processing` applications are not included. The route takes no parameters, and a `limit` parameter makes it fail.",
     "inputSchema": {
       "type": "object",
       "properties": {},
@@ -6424,7 +6424,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "client_customer_id": {
           "type": "string",
-          "description": "When set, cards are matched by this value only, and `customer_id` is not used to filter."
+          "description": "When set, Gravv matches cards by this value only and does not filter by `customer_id`."
         }
       },
       "required": [
@@ -6471,7 +6471,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "instruction_type": {
           "type": "string",
-          "description": "Exact lower case",
+          "description": "Send it in lower case, exactly as listed",
           "enum": [
             "bank_account",
             "crypto_wallet"
@@ -6504,7 +6504,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions",
-    "description": "List transactions — Lists your transactions, newest first. Filters that take values accept a comma-separated list. There is no date filter; use the export for dates. A typo in a filter value returns an empty list, not an error. Page until a page is empty, using `total_pages`.",
+    "description": "List transactions — Lists your transactions, newest first. Filters that take values accept a comma-separated list. There is no date filter; use the export for dates. A typo in a filter value returns an empty list, not an error. Page through the results with `total_pages` until a page is empty.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6734,7 +6734,7 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 1,
           "maximum": 100,
           "default": 10,
-          "description": "Wallets per page. A larger value is lowered to 100, not rejected."
+          "description": "Wallets per page. The API lowers a larger value to 100 instead of rejecting it."
         }
       },
       "required": [],
@@ -6766,7 +6766,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/process",
-    "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
+    "description": "Process an account application — Sends a `submitted` application to the bank it is routed to for processing.\n\nASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6806,7 +6806,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer/{id}/resume",
-    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and the `transfer.resumed` webhook is sent. When it still cannot, `resumed` is false and the response lists the new requirements. The fee is not charged again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.\n\nOnly for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
+    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and Gravv sends the `transfer.resumed` webhook. When it still cannot, `resumed` is false and the response lists the new requirements. Gravv does not charge the fee again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.\n\nOnly for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7021,7 +7021,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "post",
     "path": "/v1/webhooks/event/send/{id}",
-    "description": "Manually retry a webhook event — Sends one stored event to your current webhook URL now and returns your endpoint's response. The call waits up to 30 seconds for your endpoint. It needs the `webhook:create` permission. No `Idempotency-Key` is needed, and each call sends the event again. The resend is not signed: it carries no X-Signature header. The call returns HTTP 200 with your endpoint's status code, even when your endpoint answered non-2xx, and a failed resend puts the event back into signed automatic retries.",
+    "description": "Resend a webhook event — Sends one stored event to your current webhook URL now and returns your endpoint's response. The call waits up to 30 seconds for your endpoint. It needs the `webhook:create` permission. No `Idempotency-Key` is needed, and each call sends the event again. The resend is not signed and carries no `X-Signature` header. The call returns HTTP 200 with your endpoint's status code, even when your endpoint returned a non-2xx status. A failed resend puts the event back into signed automatic retries.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7055,7 +7055,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "sandbox",
     "method": "post",
     "path": "/v2/accounts/simulate/deposit",
-    "description": "Simulate a deposit — Sandbox only; a live key gets a 403. Makes a test bank deposit land on an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled; wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
+    "description": "Simulate a deposit — Sandbox only. A live key gets a 403. Sends a test bank deposit to an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled. Wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7124,7 +7124,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/start-kyc",
-    "description": "Start KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.\n\nCard KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
+    "description": "Start cardholder KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.\n\nCard KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7165,7 +7165,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/start-kyc-s2s",
-    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.\n\nSTEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
+    "description": "Start server-to-server cardholder KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.\n\nSTEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7207,7 +7207,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Starts hosted verification and returns a link for the person or business to complete. The link expires after one hour. Call again with a new Idempotency-Key for a fresh link; the same key returns the old link. A customer who is already verified gets `review_status: completed` and no link. For a business, every associated person must complete verification first. Tenants with automatic document verification get a 400 and must use the upload route instead. The result arrives by the `customer.kyc.status.*` webhooks. Each first start charges one KYC fee.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
+    "description": "Start KYC verification — Starts hosted verification and returns a link for the person or business to complete. The link expires after one hour. Call again with a new Idempotency-Key for a fresh link. The same key returns the old link. A customer who is already verified gets `review_status: completed` and no link. For a business, every associated person must complete verification first. Tenants with automatic document verification get a 400 and must use the upload route instead. Gravv sends the result in the `customer.kyc.status.*` webhooks. Each first start charges one KYC fee.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7248,7 +7248,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start-s2s",
-    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for review, with no hosted page. This is step 2 of server-to-server verification. Upload every required document first. For a business, every associated person must complete verification first, and the business needs each `COMPANY_DOC` sub-type. The result arrives by the `customer.kyc.status.*` webhooks. This flow records no liveness check. A customer verified this way must still complete a liveness step before a card can be issued.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
+    "description": "Start server-to-server KYC verification — Sends the documents you uploaded for review, with no hosted page. This is step 2 of server-to-server verification. Upload every required document first. For a business, every associated person must complete verification first, and the business needs each `COMPANY_DOC` subtype. Gravv sends the result in the `customer.kyc.status.*` webhooks. This flow records no liveness check. A customer verified this way must still complete a liveness step before a card can be issued.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7290,7 +7290,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit",
-    "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
+    "description": "Submit an account application — Marks the application as `submitted`. It then waits for the process call.\n\nORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7330,7 +7330,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit-and-process",
-    "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
+    "description": "Submit and process an application — Submits and processes the application in one call.\n\nASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7370,7 +7370,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "put",
     "path": "/v1/accounts/applications/{id}",
-    "description": "Update account application — Update data for a draft or rejected application.",
+    "description": "Update an account application — Updates the data of a `draft` or `rejected` application.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7380,7 +7380,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "description": "The parts of an application's `data` to change. The fields and types are those of UnifiedApplicationData, and none is required: send only what changes. The update merges into the stored data, so an empty value never clears a field and `true` cannot be set back to `false`.",
+          "description": "The parts of an application's `data` to change. The fields and types are those of UnifiedApplicationData, and none is required. Send only what changes. The update merges into the stored data, so an empty value never clears a field and `true` cannot be set back to `false`.",
           "properties": {
             "individual": {
               "type": "object",
@@ -7483,12 +7483,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -7498,7 +7498,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -7540,7 +7540,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_wealth_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                  "description": "The source of wealth in free text, when no standard option fits.",
                   "example": "Salary from tech job"
                 },
                 "account_purposes": {
@@ -7555,7 +7555,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Personal savings"
                 },
                 "source_of_funds_list": {
@@ -7570,7 +7570,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Income"
                 },
                 "expected_counterparty_countries": {
@@ -7711,12 +7711,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -7726,7 +7726,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -7747,12 +7747,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -7762,7 +7762,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -7783,12 +7783,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -7798,7 +7798,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -7914,12 +7914,12 @@ export const TOOLS: GeneratedTool[] = [
                       "properties": {
                         "street_line_1": {
                           "type": "string",
-                          "description": "Street address, PO box, company name, c/o",
+                          "description": "Street address, PO box, company name or c/o",
                           "example": "123 Main St"
                         },
                         "street_line_2": {
                           "type": "string",
-                          "description": "Apartment, suite, unit, building, floor, etc.",
+                          "description": "Apartment, suite, unit, building or floor",
                           "example": "Apt 4B"
                         },
                         "city": {
@@ -7929,7 +7929,7 @@ export const TOOLS: GeneratedTool[] = [
                         },
                         "state": {
                           "type": "string",
-                          "description": "State, province, county",
+                          "description": "State, province or county",
                           "example": "CA"
                         },
                         "postal_code": {
@@ -7971,7 +7971,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_wealth_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                      "description": "The source of wealth in free text, when no standard option fits.",
                       "example": "Salary from tech job"
                     },
                     "account_purposes": {
@@ -7986,7 +7986,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "account_purposes_other_description": {
                       "type": "string",
-                      "description": "Free-text description of account purposes when not covered by the standard options.",
+                      "description": "The account purposes in free text, when no standard option fits.",
                       "example": "Personal savings"
                     },
                     "source_of_funds_list": {
@@ -8001,7 +8001,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_funds_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of funds when not covered by the standard options.",
+                      "description": "The source of funds in free text, when no standard option fits.",
                       "example": "Income"
                     },
                     "expected_counterparty_countries": {
@@ -8077,7 +8077,7 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "description": "Standardized associated person (UBO, control person, etc.)",
+                    "description": "A person linked to the business, such as an ultimate beneficial owner (UBO) or a control person",
                     "properties": {
                       "first_name": {
                         "type": "string",
@@ -8133,22 +8133,22 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "has_ownership": {
                         "type": "boolean",
-                        "description": "Indicates whether the person holds an ownership stake in the business.",
+                        "description": "Whether the person holds an ownership stake in the business.",
                         "example": true
                       },
                       "has_control": {
                         "type": "boolean",
-                        "description": "Indicates whether the person has control over the business.",
+                        "description": "Whether the person has control over the business.",
                         "example": true
                       },
                       "is_signer": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is an authorized signer on the account.",
+                        "description": "Whether the person is an authorized signer on the account.",
                         "example": true
                       },
                       "is_director": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is a director of the business.",
+                        "description": "Whether the person is a director of the business.",
                         "example": true
                       },
                       "ownership_percentage": {
@@ -8162,12 +8162,12 @@ export const TOOLS: GeneratedTool[] = [
                         "properties": {
                           "street_line_1": {
                             "type": "string",
-                            "description": "Street address, PO box, company name, c/o",
+                            "description": "Street address, PO box, company name or c/o",
                             "example": "123 Main St"
                           },
                           "street_line_2": {
                             "type": "string",
-                            "description": "Apartment, suite, unit, building, floor, etc.",
+                            "description": "Apartment, suite, unit, building or floor",
                             "example": "Apt 4B"
                           },
                           "city": {
@@ -8177,7 +8177,7 @@ export const TOOLS: GeneratedTool[] = [
                           },
                           "state": {
                             "type": "string",
-                            "description": "State, province, county",
+                            "description": "State, province or county",
                             "example": "CA"
                           },
                           "postal_code": {
@@ -8229,11 +8229,11 @@ export const TOOLS: GeneratedTool[] = [
                       }
                     }
                   },
-                  "description": "Provide at least one associated person."
+                  "description": "Send at least one associated person."
                 },
                 "has_material_intermediary_ownership": {
                   "type": "boolean",
-                  "description": "Indicates whether the business has ownership held through a material intermediary.",
+                  "description": "Whether the business has ownership held through a material intermediary.",
                   "example": false
                 },
                 "formation_document": {
@@ -8258,7 +8258,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_dao": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a decentralized autonomous organization (DAO).",
+                  "description": "Whether the business is a decentralized autonomous organization (DAO).",
                   "example": false
                 },
                 "account_purpose": {
@@ -8273,17 +8273,17 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "industry_financial_services_subtype": {
                   "type": "string",
-                  "description": "Subtype of financial services industry, if applicable.",
+                  "description": "Subtype of the financial services industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_crypto_subtype": {
                   "type": "string",
-                  "description": "Subtype of crypto industry, if applicable.",
+                  "description": "Subtype of the crypto industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_other_description": {
                   "type": "string",
-                  "description": "Description of the industry when it does not fit a standard category.",
+                  "description": "The industry in words, when it does not fit a standard category.",
                   "example": "Software dev"
                 },
                 "expected_counterparty_countries": {
@@ -8309,7 +8309,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Sales revenue"
                 },
                 "tin_verification_document": {
@@ -8324,7 +8324,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_msb": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a money services business (MSB).",
+                  "description": "Whether the business is a money services business (MSB).",
                   "example": false
                 },
                 "account_purposes": {
@@ -8339,7 +8339,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Operations"
                 },
                 "primary_target_market": {
@@ -8349,7 +8349,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "primary_target_market_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the primary target market when not covered by the standard options.",
+                  "description": "The primary target market in free text, when no standard option fits.",
                   "example": "US market"
                 },
                 "expected_fiat_monthly_volume": {
@@ -8393,7 +8393,7 @@ export const TOOLS: GeneratedTool[] = [
                 "auto_sweep",
                 "collection"
               ],
-              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
+              "description": "Type of account to open. This is the account type, not the customer type. Use `application_type` to choose individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -8429,13 +8429,13 @@ export const TOOLS: GeneratedTool[] = [
             },
             "tos_link": {
               "type": "string",
-              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
+              "description": "Gravv sets this on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Arbitrary key-value pairs for storing additional information about the application.",
+              "description": "Key-value pairs you can store with the application.",
               "example": {
                 "source": "web"
               }
@@ -8470,7 +8470,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "patch",
     "path": "/v2/accounts/applications/{application_id}",
-    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call; a partial answer stays `blocked`. There is no Idempotency-Key on this route, so a retry uploads again. The response leaves out the status reason fields; get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call. A partial answer stays `blocked`. This route takes no Idempotency-Key, so a retry uploads again. The response leaves out the status reason fields. Get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8670,7 +8670,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "patch",
     "path": "/v1/accounts/{account_id}/status",
-    "description": "Update account status — Changes an account's status. Set `frozen` to suspend an account, `active` to reactivate it, `manual_review` to hold it, or `deleted` to close it. Each change sends an account webhook. Setting the current status again changes nothing and sends no webhook. Deleting needs a zero balance and cannot be undone. `auto_sweep` and `default` accounts cannot change status. Do not use `active` to move a `pending` account forward; that skips the bank set-up. An unknown ID returns the generic error message.\n\nThis tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
+    "description": "Update account status — Changes an account's status. Set `frozen` to suspend an account, `active` to reactivate it, `manual_review` to hold it, or `deleted` to close it. Each change sends an account webhook. Setting the current status again changes nothing and sends no webhook. Deleting needs a zero balance and cannot be undone. `auto_sweep` and `default` accounts cannot change status. Do not set `active` on a `pending` account, because that skips the bank set-up. An unknown ID returns the generic error message.\n\nThis tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8716,7 +8716,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "patch",
     "path": "/v1/cards/{card_id}/update",
-    "description": "Update a card's status and limit — Freezes, unfreezes or blocks a card, and sets its daily limit. Always send `limit` with `status`: a call without `limit` sets the limit to 0, which stops the card spending on live cards. To change only the limit, send the current status with the new limit. `blocked` is permanent. Allowed changes are `active` to `freeze` or `blocked`, `freeze` to `active` or `blocked`, and `inactive` to `active` or `blocked`. A status change sends the `cards.status.update` webhook. This route needs no Idempotency-Key.\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
+    "description": "Update a card's status and limit — Freezes, unfreezes or blocks a card, and sets its daily limit. Always send `limit` with `status`. A call without `limit` sets the limit to 0, which stops a live card from spending. To change only the limit, send the current status with the new limit. `blocked` is permanent. Allowed changes are `active` to `freeze` or `blocked`, `freeze` to `active` or `blocked`, and `inactive` to `active` or `blocked`. Gravv sends the `cards.status.update` webhook when the status changes. This route needs no Idempotency-Key.\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8769,7 +8769,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "put",
     "path": "/v1/customers/{customer_id}",
-    "description": "Update a customer — Updates the fields you send on one customer. The path `customer_id` selects the customer and replaces any `customer_id` in the body. Empty values change nothing, the customer type cannot change, and KYC status is not reset. The response does not include the customer; get it to read the result.",
+    "description": "Update a customer — Updates the fields you send on one customer. The path `customer_id` selects the customer and replaces any `customer_id` in the body. Empty values change nothing, the customer type cannot change, and KYC status is not reset. The response does not include the customer. Get the customer to read the result.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8877,7 +8877,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "associated_persons": {
           "type": "array",
-          "description": "Business customers only; ignored for individuals. Send `id` to edit a person. Omit it to add a new person, who then needs `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone` and `address`.",
+          "description": "Business customers only. Ignored for individuals. Send `id` to edit a person. Omit it to add a new person, who then needs `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone` and `address`.",
           "items": {
             "type": "object",
             "description": "Send `id` to edit an existing person. Omit it to add a new person, who then needs `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone` and `address`.",
@@ -9014,7 +9014,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "patch",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202; get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its state; add a new one instead. This route needs no Idempotency-Key.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
+    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202. Get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its current state, so add a new one instead. This route needs no Idempotency-Key.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9382,7 +9382,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/upload-document",
-    "description": "Upload document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and sub-type again replaces the earlier file. Keep files under 5 MB.\n\nSTEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB; in sandbox, under 500 KB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
+    "description": "Upload a cardholder KYC document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and subtype again replaces the earlier file. Keep files under 5 MB.\n\nSTEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB; in sandbox, under 500 KB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9401,7 +9401,7 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "idDocType": {
               "type": "string",
-              "description": "Type of document, in lower case. Individual customers need a `selfie` plus one of `passport`, `id_card` or `drivers_license`. Business customers need one of `company_doc`, `registration_certificate` or `formation_document`. These names differ from the customer KYC upload; do not mix the two upload flows for one customer.",
+              "description": "Type of document, in lower case. Individual customers need a `selfie` plus one of `passport`, `id_card` or `drivers_license`. Business customers need one of `company_doc`, `registration_certificate` or `formation_document`. These names differ from the customer KYC upload. Do not mix the two upload flows for one customer.",
               "enum": [
                 "passport",
                 "id_card",
@@ -9490,7 +9490,7 @@ export const TOOLS: GeneratedTool[] = [
         "content": {
           "type": "string",
           "format": "byte",
-          "description": "The file as plain standard base64. The decoded file must be a JPEG, PNG or PDF. Keep files under 5 MB; larger files fail with a 400.",
+          "description": "The file as plain standard base64. The decoded file must be a JPEG, PNG or PDF. Keep files under 5 MB. Larger files fail with a 400.",
           "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         },
         "filename": {
@@ -9541,7 +9541,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/upload-document",
-    "description": "Upload document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and sub-type again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; in sandbox, under 500 KB) in place of base64 content.",
+    "description": "Upload a KYC document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and subtype again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; in sandbox, under 500 KB) in place of base64 content.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9647,7 +9647,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "filename": {
           "type": "string",
-          "description": "Name of the file. The extension is not checked; the content decides the file type.",
+          "description": "Name of the file. The extension is not checked. The content decides the file type.",
           "example": "passport_front.jpg",
           "maxLength": 255
         },
@@ -9784,7 +9784,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/validate",
-    "description": "Validate application data — Checks application data against the bank it would be sent to, and returns that bank's requirements, without saving anything. It checks only the data you send: there is no fill from the customer record and no KYC or duplicate check. Fix every `validation_errors` entry before you create or submit.",
+    "description": "Validate application data — Checks application data against the bank it would be sent to, and returns that bank's requirements, without saving anything. It checks only the data you send. It does not fill fields from the customer record and runs no KYC or duplicate check. Fix every `validation_errors` entry before you create or submit.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -9799,7 +9799,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "description": "Application data to validate. Not persisted.",
+          "description": "Application data to validate. Gravv does not save it.",
           "required": [
             "account_type",
             "currency"
@@ -9906,12 +9906,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -9921,7 +9921,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -9963,7 +9963,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_wealth_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                  "description": "The source of wealth in free text, when no standard option fits.",
                   "example": "Salary from tech job"
                 },
                 "account_purposes": {
@@ -9978,7 +9978,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Personal savings"
                 },
                 "source_of_funds_list": {
@@ -9993,7 +9993,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Income"
                 },
                 "expected_counterparty_countries": {
@@ -10134,12 +10134,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -10149,7 +10149,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -10170,12 +10170,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -10185,7 +10185,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -10206,12 +10206,12 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "street_line_1": {
                       "type": "string",
-                      "description": "Street address, PO box, company name, c/o",
+                      "description": "Street address, PO box, company name or c/o",
                       "example": "123 Main St"
                     },
                     "street_line_2": {
                       "type": "string",
-                      "description": "Apartment, suite, unit, building, floor, etc.",
+                      "description": "Apartment, suite, unit, building or floor",
                       "example": "Apt 4B"
                     },
                     "city": {
@@ -10221,7 +10221,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "state": {
                       "type": "string",
-                      "description": "State, province, county",
+                      "description": "State, province or county",
                       "example": "CA"
                     },
                     "postal_code": {
@@ -10337,12 +10337,12 @@ export const TOOLS: GeneratedTool[] = [
                       "properties": {
                         "street_line_1": {
                           "type": "string",
-                          "description": "Street address, PO box, company name, c/o",
+                          "description": "Street address, PO box, company name or c/o",
                           "example": "123 Main St"
                         },
                         "street_line_2": {
                           "type": "string",
-                          "description": "Apartment, suite, unit, building, floor, etc.",
+                          "description": "Apartment, suite, unit, building or floor",
                           "example": "Apt 4B"
                         },
                         "city": {
@@ -10352,7 +10352,7 @@ export const TOOLS: GeneratedTool[] = [
                         },
                         "state": {
                           "type": "string",
-                          "description": "State, province, county",
+                          "description": "State, province or county",
                           "example": "CA"
                         },
                         "postal_code": {
@@ -10394,7 +10394,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_wealth_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of wealth when not covered by the standard options.",
+                      "description": "The source of wealth in free text, when no standard option fits.",
                       "example": "Salary from tech job"
                     },
                     "account_purposes": {
@@ -10409,7 +10409,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "account_purposes_other_description": {
                       "type": "string",
-                      "description": "Free-text description of account purposes when not covered by the standard options.",
+                      "description": "The account purposes in free text, when no standard option fits.",
                       "example": "Personal savings"
                     },
                     "source_of_funds_list": {
@@ -10424,7 +10424,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "source_of_funds_other_description": {
                       "type": "string",
-                      "description": "Free-text description of the source of funds when not covered by the standard options.",
+                      "description": "The source of funds in free text, when no standard option fits.",
                       "example": "Income"
                     },
                     "expected_counterparty_countries": {
@@ -10500,7 +10500,7 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "description": "Standardized associated person (UBO, control person, etc.)",
+                    "description": "A person linked to the business, such as an ultimate beneficial owner (UBO) or a control person",
                     "properties": {
                       "first_name": {
                         "type": "string",
@@ -10556,22 +10556,22 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "has_ownership": {
                         "type": "boolean",
-                        "description": "Indicates whether the person holds an ownership stake in the business.",
+                        "description": "Whether the person holds an ownership stake in the business.",
                         "example": true
                       },
                       "has_control": {
                         "type": "boolean",
-                        "description": "Indicates whether the person has control over the business.",
+                        "description": "Whether the person has control over the business.",
                         "example": true
                       },
                       "is_signer": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is an authorized signer on the account.",
+                        "description": "Whether the person is an authorized signer on the account.",
                         "example": true
                       },
                       "is_director": {
                         "type": "boolean",
-                        "description": "Indicates whether the person is a director of the business.",
+                        "description": "Whether the person is a director of the business.",
                         "example": true
                       },
                       "ownership_percentage": {
@@ -10585,12 +10585,12 @@ export const TOOLS: GeneratedTool[] = [
                         "properties": {
                           "street_line_1": {
                             "type": "string",
-                            "description": "Street address, PO box, company name, c/o",
+                            "description": "Street address, PO box, company name or c/o",
                             "example": "123 Main St"
                           },
                           "street_line_2": {
                             "type": "string",
-                            "description": "Apartment, suite, unit, building, floor, etc.",
+                            "description": "Apartment, suite, unit, building or floor",
                             "example": "Apt 4B"
                           },
                           "city": {
@@ -10600,7 +10600,7 @@ export const TOOLS: GeneratedTool[] = [
                           },
                           "state": {
                             "type": "string",
-                            "description": "State, province, county",
+                            "description": "State, province or county",
                             "example": "CA"
                           },
                           "postal_code": {
@@ -10652,11 +10652,11 @@ export const TOOLS: GeneratedTool[] = [
                       }
                     }
                   },
-                  "description": "Provide at least one associated person."
+                  "description": "Send at least one associated person."
                 },
                 "has_material_intermediary_ownership": {
                   "type": "boolean",
-                  "description": "Indicates whether the business has ownership held through a material intermediary.",
+                  "description": "Whether the business has ownership held through a material intermediary.",
                   "example": false
                 },
                 "formation_document": {
@@ -10681,7 +10681,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_dao": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a decentralized autonomous organization (DAO).",
+                  "description": "Whether the business is a decentralized autonomous organization (DAO).",
                   "example": false
                 },
                 "account_purpose": {
@@ -10696,17 +10696,17 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "industry_financial_services_subtype": {
                   "type": "string",
-                  "description": "Subtype of financial services industry, if applicable.",
+                  "description": "Subtype of the financial services industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_crypto_subtype": {
                   "type": "string",
-                  "description": "Subtype of crypto industry, if applicable.",
+                  "description": "Subtype of the crypto industry, if the business is in it.",
                   "example": "none"
                 },
                 "industry_other_description": {
                   "type": "string",
-                  "description": "Description of the industry when it does not fit a standard category.",
+                  "description": "The industry in words, when it does not fit a standard category.",
                   "example": "Software dev"
                 },
                 "expected_counterparty_countries": {
@@ -10732,7 +10732,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "source_of_funds_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the source of funds when not covered by the standard options.",
+                  "description": "The source of funds in free text, when no standard option fits.",
                   "example": "Sales revenue"
                 },
                 "tin_verification_document": {
@@ -10747,7 +10747,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "is_msb": {
                   "type": "boolean",
-                  "description": "Indicates whether the business is a money services business (MSB).",
+                  "description": "Whether the business is a money services business (MSB).",
                   "example": false
                 },
                 "account_purposes": {
@@ -10762,7 +10762,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "account_purposes_other_description": {
                   "type": "string",
-                  "description": "Free-text description of account purposes when not covered by the standard options.",
+                  "description": "The account purposes in free text, when no standard option fits.",
                   "example": "Operations"
                 },
                 "primary_target_market": {
@@ -10772,7 +10772,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "primary_target_market_other_description": {
                   "type": "string",
-                  "description": "Free-text description of the primary target market when not covered by the standard options.",
+                  "description": "The primary target market in free text, when no standard option fits.",
                   "example": "US market"
                 },
                 "expected_fiat_monthly_volume": {
@@ -10816,7 +10816,7 @@ export const TOOLS: GeneratedTool[] = [
                 "auto_sweep",
                 "collection"
               ],
-              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
+              "description": "Type of account to open. This is the account type, not the customer type. Use `application_type` to choose individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -10852,13 +10852,13 @@ export const TOOLS: GeneratedTool[] = [
             },
             "tos_link": {
               "type": "string",
-              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
+              "description": "Gravv sets this on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Arbitrary key-value pairs for storing additional information about the application.",
+              "description": "Key-value pairs you can store with the application.",
               "example": {
                 "source": "web"
               }
@@ -10899,7 +10899,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts/verify",
-    "description": "Verify an external account — Checks account details before you add the external account, and returns the holder's name when the bank can look it up. Send `account_number` with `institution_id`; only that pair reaches the bank. `verified: true` with `verification_source: local` means only the format was checked. Trust the name only when `verification_source` is `provider`. An IBAN, phone or CLABE alone is checked locally. This route needs no Idempotency-Key.",
+    "description": "Verify an external account — Checks account details before you add the external account, and returns the holder's name when the bank can look it up. Send `account_number` with `institution_id`. Only that pair reaches the bank. `verified: true` with `verification_source: local` means only the format was checked. Trust the name only when `verification_source` is `provider`. An IBAN, phone or CLABE alone is checked locally. This route needs no Idempotency-Key.",
     "inputSchema": {
       "type": "object",
       "properties": {

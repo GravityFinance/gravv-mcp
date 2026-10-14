@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -39,7 +39,7 @@ components:
       example: '+2348031234567'
     CreateCustomerRequest:
       oneOf:
-        - title: Individual Customer
+        - title: Individual customer
           type: object
           required:
             - first_name
@@ -87,7 +87,7 @@ components:
               example: individual_12345
             address:
               $ref: '#/components/schemas/Address'
-        - title: Business Customer
+        - title: Business customer
           type: object
           required:
             - email
@@ -105,8 +105,8 @@ components:
               type: string
               format: email
               description: >-
-                Business contact email. It must use a company domain; free email
-                domains such as gmail.com are rejected.
+                Business contact email. It must use a company domain. Free email
+                domains, such as gmail.com, are rejected.
               example: ops@acmecorp.com
             type:
               type: string
@@ -301,10 +301,10 @@ components:
         associated_persons:
           type: array
           description: >-
-            Business customers only; ignored for individuals. Send `id` to edit
-            a person. Omit it to add a new person, who then needs
-            `first_name`, `last_name`, `email`, `gender`, `date_of_birth`,
-            `phone` and `address`.
+            Business customers only. Ignored for individuals. Send `id` to edit
+            a person. Omit it to add a new person, who then needs `first_name`,
+            `last_name`, `email`, `gender`, `date_of_birth`, `phone` and
+            `address`.
           items:
             $ref: '#/components/schemas/UpdateAssociatedPerson'
     AddressUpdate:
@@ -420,7 +420,7 @@ components:
           description: >-
             KYC records, one per level. Read the `basic` record's `status` to
             know whether the customer is verified. The create response may not
-            include them; get the customer to read them.
+            include them. Get the customer to read them.
           items:
             $ref: '#/components/schemas/KYCInfo'
         associated_persons:
@@ -452,7 +452,7 @@ components:
         date_added:
           type: string
           format: date-time
-          description: Time the customer was created, in RFC 3339.
+          description: Time the customer was created, in RFC 3339 format.
           example: '2026-10-13T09:12:44Z'
         external_id:
           type: string
@@ -521,13 +521,13 @@ security:
   - ApiKeyAuth: []
 tags:
   - name: Customers
-    description: Manage customer records
+    description: Create, list, read and update customers
 paths:
   /v1/customers:
     post:
       tags:
         - Customers
-      summary: Add a customer
+      summary: Create a customer
       description: >
         Creates an individual or business customer. A business is created with
         its associated persons in the same call, and each person becomes its
@@ -656,10 +656,10 @@ paths:
     get:
       tags:
         - Customers
-      summary: Get customers
+      summary: List customers
       description: >-
         Lists your individual and business customers, newest first. Associated
-        persons are not listed; get their business to see them. Unknown or
+        persons are not listed. Get their business to see them. Unknown or
         invalid filters are ignored.
       parameters:
         - in: query
@@ -749,7 +749,7 @@ paths:
     get:
       tags:
         - Customers
-      summary: Get a single customer
+      summary: Get a customer
       description: >-
         Returns one customer with its KYC records, and for a business its
         associated persons. It also returns an associated person by its own
@@ -799,8 +799,8 @@ paths:
         Updates the fields you send on one customer. The path `customer_id`
         selects the customer and replaces any `customer_id` in the body. Empty
         values change nothing, the customer type cannot change, and KYC status
-        is not reset. The response does not include the customer; get it to
-        read the result.
+        is not reset. The response does not include the customer. Get the
+        customer to read the result.
       parameters:
         - in: path
           name: customer_id
