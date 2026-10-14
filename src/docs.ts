@@ -21,6 +21,8 @@
  * evaluation.
  */
 
+import { DOCS_REDIRECTS } from "./docs-redirects.ts";
+
 /**
  * Where the docs are published today. GRAVV_DOCS_ORIGIN or --docs-origin overrides it,
  * so a move of the docs site needs no code change, and the docs links the server hands
@@ -76,6 +78,11 @@ export interface DocPage {
   section: string;
   description: string;
   content: string;
+  /**
+   * Set by getPage when the slug asked for is a page that moved: the slug as asked, while
+   * `slug` is the page the docs site's redirects lead to.
+   */
+  redirectedFrom?: string;
 }
 
 export interface DocsFreshness {
@@ -246,11 +253,21 @@ export class DocsIndex {
   readonly origin: string;
   private readonly doFetch: typeof fetch;
   private readonly now: () => number;
+  private readonly redirects: DocsRedirects;
 
-  constructor(opts: { origin?: string; fetchImpl?: typeof fetch; now?: () => number } = {}) {
+  constructor(
+    opts: {
+      origin?: string;
+      fetchImpl?: typeof fetch;
+      now?: () => number;
+      /** The docs site's redirects; the copy in docs-redirects.ts by default. */
+      redirects?: ReadonlyArray<readonly [from: string, to: string]>;
+    } = {},
+  ) {
     this.origin = (opts.origin ?? DEFAULT_DOCS_ORIGIN).replace(/\/+$/, "");
     this.doFetch = opts.fetchImpl ?? fetch;
     this.now = opts.now ?? Date.now;
+    this.redirects = new DocsRedirects(opts.redirects ?? DOCS_REDIRECTS);
   }
 
   private async ensureLoaded(): Promise<void> {
@@ -383,11 +400,20 @@ export class DocsIndex {
   async getPage(slug: string): Promise<DocPage | null> {
     await this.ensureLoaded();
     // A full docs URL works too, on whatever host it names.
-    const clean = /^https?:\/\//i.test(slug.trim())
-      ? slugFromUrl(slug.trim(), this.origin)
-      : slug.replace(/^\/+/, "").replace(/\.md$/, "");
+    const clean = (
+      /^https?:\/\//i.test(slug.trim()) ? slugFromUrl(slug.trim(), this.origin) : slug.trim().replace(/^\/+/, "")
+    )
+      .replace(/\.md$/, "")
+      .replace(/\/+$/, "");
+    const bySlug = (s: string) => this.pages.find((p) => p.slug === s);
+
+    // As the site serves it: a page wins, then a redirect. Only then the looser matches,
+    // which would otherwise send a moved page's slug to whichever page ends the same way.
+    const page = bySlug(clean);
+    if (page) return page;
+    const moved = this.redirects.follow(clean, bySlug);
+    if (moved) return { ...moved, redirectedFrom: clean };
     return (
-      this.pages.find((p) => p.slug === clean) ??
       this.pages.find((p) => p.slug.endsWith(`/${clean}`)) ??
       this.pages.find((p) => p.title.toLowerCase() === clean.toLowerCase()) ??
       null
@@ -407,6 +433,61 @@ export class DocsIndex {
   async stats(): Promise<DocsStats> {
     await this.ensureLoaded();
     return { ...this.counts };
+  }
+}
+
+// ---- redirects ----------------------------------------------------------------
+
+/**
+ * The docs site's redirects, applied as the site applies them and as client-docs tests
+ * them (tests/docs_support.py RedirectResolver): an exact entry, the first one listed
+ * winning, then the first `/*` entry whose prefix matches, its `:splat` replaced by the
+ * rest of the path. A chain is followed for at most five hops.
+ *
+ * llms.txt lists pages only, so without these a slug for a page that moved, such as one an
+ * older answer or an older docs link gave, found nothing.
+ */
+export class DocsRedirects {
+  static readonly MAX_HOPS = 5;
+  private readonly exact = new Map<string, string>();
+  private readonly splats: Array<[prefix: string, target: string]> = [];
+
+  constructor(redirects: ReadonlyArray<readonly [from: string, to: string]>) {
+    for (const [from, to] of redirects) {
+      if (from.endsWith("/*")) this.splats.push([from.slice(0, -1), to]);
+      else if (!this.exact.has(from)) this.exact.set(from, to);
+    }
+  }
+
+  /** Where one redirect sends `path` (a site path such as /recipes/x), or null. */
+  next(path: string): string | null {
+    const exact = this.exact.get(path) ?? this.exact.get(`${path}/`);
+    if (exact !== undefined) return exact;
+    for (const [prefix, target] of this.splats) {
+      if (path.startsWith(prefix)) return target.replace(":splat", path.slice(prefix.length));
+    }
+    return null;
+  }
+
+  /**
+   * The page a slug's redirect chain ends on, found with `pageFor`; null when the slug has
+   * no redirect, or the chain ends on no page, loops or runs past MAX_HOPS. An anchor or a
+   * query on a target is dropped: the page is returned whole.
+   */
+  follow<T>(slug: string, pageFor: (slug: string) => T | undefined): T | null {
+    const seen = new Set<string>();
+    let path = `/${slug}`;
+    for (let hop = 0; hop < DocsRedirects.MAX_HOPS; hop++) {
+      seen.add(path);
+      const target = this.next(path);
+      if (target === null) return null;
+      const next = target.replace(/[#?].*$/, "").replace(/\/+$/, "") || "/";
+      const page = pageFor(next.replace(/^\/+/, ""));
+      if (page !== undefined) return page;
+      if (seen.has(next)) return null;
+      path = next;
+    }
+    return null;
   }
 }
 

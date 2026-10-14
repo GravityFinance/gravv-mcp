@@ -4,7 +4,8 @@ name: Drift
 # schedule there would rerun the test jobs nightly, and the path filter below applies to a
 # whole workflow, so an unrelated PR never fails because client-docs moved on.
 #
-#   spec-drift  specs/ against client-docs main (nightly, manual, and PRs that touch specs/)
+#   spec-drift  specs/ and src/docs-redirects.ts against client-docs main (nightly, manual,
+#               and PRs that touch them)
 #   docs-links  every docs link the server hands out still resolves (nightly and manual)
 #   report      on a failed nightly run, opens or updates one issue
 
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - "specs/**"
+      - "src/docs-redirects.ts"
       - "scripts/sync-specs.ts"
       - ".github/workflows/drift.yml"
 
@@ -64,14 +66,15 @@ jobs:
         with:
           node-version: 22
 
-      - name: Compare specs/ with client-docs openapi/
+      - name: Compare specs/ and the docs redirects with client-docs
         if: steps.token.outputs.present == 'true'
-        # sync-specs.ts has no dependencies, so no npm ci is needed.
+        # sync-specs.ts has no dependencies, so no npm ci is needed. It reads the redirects
+        # from client-docs/, the directory above GRAVV_OPENAPI_DIR.
         env:
           GRAVV_OPENAPI_DIR: client-docs/openapi
         run: |
           if ! npm run --silent sync-specs -- --check; then
-            echo "::error::specs/ differs from client-docs main. Run GRAVV_OPENAPI_DIR=<client-docs>/openapi npm run sync-specs, then npm run generate and npm run scenarios, and commit the result."
+            echo "::error::specs/ or src/docs-redirects.ts differs from client-docs main. Run GRAVV_OPENAPI_DIR=<client-docs>/openapi npm run sync-specs, then npm run generate and npm run scenarios, and commit the result."
             exit 1
           fi
 

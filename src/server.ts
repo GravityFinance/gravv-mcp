@@ -79,7 +79,7 @@ const DOC_TOOLS = [
         slug: {
           type: "string",
           description:
-            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/bank-payouts/pay-a-us-bank-account-by-ach'. The page's full docs URL also works.",
+            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/bank-payouts/pay-a-us-bank-account-by-ach'. The page's full docs URL also works, and so does the slug of a page that moved: the result names its new slug.",
         },
       },
       required: ["slug"],
@@ -309,9 +309,13 @@ export function createServer(config: ServerConfig) {
             `No documentation page with slug "${args.slug}". Use searchGravvDocs to find the correct slug.`,
           );
         }
-        const note = staleDocsNote(docs);
+        const notes = [
+          staleDocsNote(docs),
+          // Say so, so the next call and any link the model writes use the page's new slug.
+          page.redirectedFrom ? `"${page.redirectedFrom}" has moved; this is its new page, slug "${page.slug}".` : null,
+        ].filter(Boolean);
         return okResult(
-          `${note ? `Note: ${note}\n\n` : ""}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
+          `${notes.map((n) => `Note: ${n}\n\n`).join("")}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
         );
       } catch (err) {
         return errorResult(`Could not fetch documentation page: ${(err as Error).message}`);

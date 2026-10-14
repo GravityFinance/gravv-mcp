@@ -96,6 +96,9 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Fixed
 
+- `getGravvDocPage` follows the docs site's redirects. A slug for a page that moved, such
+  as `recipes/remit-funds-to-a-recipient`, now returns the page it redirects to and says
+  its new slug; before, it found no page. Its example slug names a page that exists.
 - A schema built with `allOf` kept the member types, so a field typed in one member is no
   longer left untyped.
 - The notes for `createAccountV2`, `createWallet` and `withdrawFromCard` no longer tell the
@@ -109,6 +112,9 @@ documented endpoint now has a tool or a stated reason it has none.
 - Properties and enum values marked not yet live are left out of the schemas.
 - A coverage test checks that every documented endpoint has a tool or a reason.
 - `npm run sync-specs` deletes specs removed upstream.
+- `npm run sync-specs` also copies the docs redirects (client-docs `syntext.json`, then
+  `docs/_redirects.json`) into `src/docs-redirects.ts`, and `--check` reports them stale.
+  It reads them from the directory above `GRAVV_OPENAPI_DIR`, or from `GRAVV_DOCS_DIR`.
 - `yaml` moved to devDependencies; it is used only by the generator and tests.
 - The specs are synced from the top of the client-docs docs stack, the webhooks catalogue
   branch (8917a0c), which has not merged. The nightly drift check compares against
