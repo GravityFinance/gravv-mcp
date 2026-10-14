@@ -222,8 +222,11 @@ export class GravvClient {
     let retriedWithNewKey = false;
     if (body !== undefined) headers["Content-Type"] = "application/json";
 
-    // 409 means an identical request is still in flight; the gateway asks for a 1s
-    // pause. Anything else is returned to the caller for interpretation.
+    // Retries happen only where a resend cannot run the call twice: a 409 that says the
+    // first request is still running, and a 429 (below). There is no automatic retry
+    // after a timeout, a network error or a 5xx. The outcome is unknown, and a 5xx is not
+    // stored under its key, so a blind resend can run a money call twice. Those go back
+    // to the caller with a hint to look the result up first.
     const maxAttempts = 3;
     let lastError: GravvApiError | undefined;
 
@@ -268,9 +271,11 @@ export class GravvClient {
 
       const apiMessage = extractErrorMessage(parsed, res.statusText);
 
-      if (res.status === 409 && attempt < maxAttempts) {
-        const retryAfter = Number(res.headers.get("Retry-After") ?? 1);
-        await this.sleep(Math.max(1, retryAfter) * 1000);
+      // Only these two 409s mean "still running"; both send Retry-After: 1, and a resend
+      // under the same key gets the first request's answer. Every other 409 is final,
+      // such as a client_reference already used for a different transfer.
+      if (res.status === 409 && attempt < maxAttempts && IN_FLIGHT_CODES.has(errorCode(parsed) ?? "")) {
+        await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 1));
         lastError = new GravvApiError(apiMessage, 409, parsed);
         continue;
       }
@@ -283,8 +288,7 @@ export class GravvClient {
       // call is not retried then.
       const rateLimited = res.status === 429 && attempt < maxAttempts;
       if (rateLimited && (idempotencyKey === undefined || (!keySupplied && isGatewayRateLimit(apiMessage)))) {
-        const retryAfter = Number(res.headers.get("Retry-After") ?? 6);
-        await this.sleep(Math.max(1, retryAfter) * 1000);
+        await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 6));
         lastError = new GravvApiError(String(apiMessage), 429, parsed);
         if (idempotencyKey !== undefined) {
           idempotencyKey = randomUUID();
@@ -303,6 +307,31 @@ export class GravvClient {
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
   }
+}
+
+/** 409 codes that mean the first request is still running, so a same-key retry is safe. */
+const IN_FLIGHT_CODES = new Set(["idempotency_in_flight", "ERROR_CODE_TRANSFER_IN_PROGRESS"]);
+
+/** The longest wait the gateway's own limiter asks for. */
+const MAX_RETRY_WAIT_MS = 30_000;
+
+/**
+ * How long a Retry-After header asks the client to wait, in ms.
+ *
+ * The header is either delta-seconds or an HTTP-date. A date read as a number is NaN,
+ * which skipped the wait altogether. Anything unreadable falls back to the default, and
+ * the result is kept within 0-30 s.
+ */
+export function retryAfterMs(header: string | null, fallbackSeconds: number, now = Date.now()): number {
+  let ms = fallbackSeconds * 1000;
+  const value = header?.trim() ?? "";
+  if (/^\d+(\.\d+)?$/.test(value)) {
+    ms = Number(value) * 1000;
+  } else if (value) {
+    const at = Date.parse(value);
+    if (!Number.isNaN(at)) ms = at - now;
+  }
+  return Math.min(Math.max(ms, 0), MAX_RETRY_WAIT_MS);
 }
 
 /**
@@ -411,6 +440,18 @@ function hint429(tool: GeneratedTool, message: string, ctx: HintContext): string
   return `${RATE_LIMITED} This server already retried with a new key.`;
 }
 
+/** A 409 is not one thing: only two of them mean "still running". */
+function hint409(code: string | undefined): string | undefined {
+  switch (code) {
+    case "idempotency_in_flight":
+      return "The first call with this key is still running (the gateway holds it for up to 60 s). Wait, then call again with the same arguments and idempotency_key to get its answer.";
+    case "ERROR_CODE_TRANSFER_IN_PROGRESS":
+      return "A transfer with this client_reference is still being processed. Wait a few seconds, then call again with the same arguments and idempotency_key; if it is the same transfer, the API returns its result.";
+    default:
+      return undefined;
+  }
+}
+
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
 const LIMIT_CODES = new Set([
   "ERROR_CODE_LIMIT_EXCEEDED",
@@ -485,6 +526,8 @@ export function hintFor(
       return "Forbidden. Some endpoints are dashboard-only and reject API-key callers — approvals in particular must be done in the Gravv dashboard.";
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
+    case 409:
+      return hint409(errorCode(body));
     case 422:
       return hint422(errorCode(body));
     case 429:

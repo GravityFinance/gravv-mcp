@@ -7,6 +7,7 @@ import {
   canonicalJson,
   extractErrorMessage,
   hintFor,
+  retryAfterMs,
 } from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
@@ -310,23 +311,68 @@ describe("error message extraction", () => {
   });
 });
 
+const inFlightBody = {
+  data: null,
+  error: {
+    code: "idempotency_in_flight",
+    message: "A request with the same Idempotency-Key is currently being processed",
+  },
+};
+
 describe("retries", () => {
-  test("retries a 409 in-flight conflict then succeeds", async () => {
+  test("retries a 409 in-flight conflict with the same key, then succeeds", async () => {
     waits = [];
     const { calls, fetchImpl } = stub([
-      { status: 409, body: { error: "in flight" }, headers: { "Retry-After": "1" } },
+      { status: 409, body: inFlightBody, headers: { "Retry-After": "1" } },
       { status: 200, body: { data: { ok: true } } },
     ]);
     const res = await client(fetchImpl).call(createCustomer, { body: {} });
     assert.equal(calls.length, 2);
+    assert.equal(calls[0]!.headers["Idempotency-Key"], calls[1]!.headers["Idempotency-Key"]);
     assert.deepEqual(res.data, { ok: true });
     assert.deepEqual(waits, [1000], "the wait goes through the injected sleep");
   });
 
-  test("gives up after repeated 409s rather than looping", async () => {
-    const { calls, fetchImpl } = stub([{ status: 409, body: { error: "still running" } }]);
-    await assert.rejects(client(fetchImpl).call(createCustomer, { body: {} }));
+  test("retries a transfer still in progress with the same key", async () => {
+    const { calls, fetchImpl } = stub([
+      {
+        status: 409,
+        body: {
+          data: null,
+          error: "a transfer with this client_reference is still being processed; retry shortly",
+          code: "ERROR_CODE_TRANSFER_IN_PROGRESS",
+        },
+        headers: { "Retry-After": "1" },
+      },
+      { status: 200, body: { data: { transfer_id: "trf_1" } } },
+    ]);
+    await client(fetchImpl).call(TOOLS_BY_NAME.get("createTransfer")!, { amount: 5 });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0]!.headers["Idempotency-Key"], calls[1]!.headers["Idempotency-Key"]);
+  });
+
+  test("gives up after repeated in-flight 409s rather than looping", async () => {
+    const { calls, fetchImpl } = stub([{ status: 409, body: inFlightBody }]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: GravvApiError) => /still running/.test(e.hint ?? "") && /same arguments and idempotency_key/.test(e.hint ?? ""),
+    );
     assert.equal(calls.length, 3);
+  });
+
+  test("a stored 409 is final at once", async () => {
+    for (const body of [
+      {
+        data: null,
+        error: "client_reference has already been used for a different transfer",
+        code: "ERROR_CODE_DUPLICATE_TRANSACTION",
+      },
+      { data: null, error: "already exists" },
+    ]) {
+      const { calls, fetchImpl } = stub([{ status: 409, body }]);
+      await assert.rejects(client(fetchImpl).call(TOOLS_BY_NAME.get("createTransfer")!, { amount: 5 }));
+      assert.equal(calls.length, 1, JSON.stringify(body));
+    }
   });
 
   test("a rate-limited POST is retried under a new key", async () => {
@@ -396,6 +442,37 @@ describe("retries", () => {
     const { calls, fetchImpl } = stub([{ status: 400, body: { error: "bad" } }]);
     await assert.rejects(client(fetchImpl).call(createCustomer, { body: {} }));
     assert.equal(calls.length, 1);
+  });
+});
+
+describe("Retry-After", () => {
+  test("reads delta-seconds", () => {
+    assert.equal(retryAfterMs("2", 1), 2000);
+  });
+
+  test("reads an HTTP-date", () => {
+    const now = Date.parse("2026-10-14T12:00:00Z");
+    assert.equal(retryAfterMs(new Date(now + 3000).toUTCString(), 1, now), 3000);
+  });
+
+  test("falls back to the default when unreadable or absent", () => {
+    assert.equal(retryAfterMs("soon", 6), 6000);
+    assert.equal(retryAfterMs(null, 1), 1000);
+  });
+
+  test("is capped at 30 s and never negative", () => {
+    assert.equal(retryAfterMs("999", 1), 30_000);
+    assert.equal(retryAfterMs(new Date(Date.now() - 60_000).toUTCString(), 1), 0);
+  });
+
+  test("the client waits what the header asks", async () => {
+    waits = [];
+    const { fetchImpl } = stub([
+      { status: 409, body: inFlightBody, headers: { "Retry-After": "2" } },
+      { status: 200, body: { data: {} } },
+    ]);
+    await client(fetchImpl).call(createCustomer, { body: {} });
+    assert.deepEqual(waits, [2000]);
   });
 });
 
