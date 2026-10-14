@@ -38,7 +38,7 @@ describe("collectDocsLinks", () => {
         [`${DEFAULT_DOCS_ORIGIN}/platform/wallets/overview`, ["prompt collect-payment"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/webhooks/webhooks-overview`, ["prompt reconcile", "prompt fix-stuck-transfer"]],
         [`${DEFAULT_DOCS_ORIGIN}/recipes/bank-payouts/overview`, ["prompt send-payout"]], // *
-        [`${DEFAULT_DOCS_ORIGIN}/recipes/remit-funds-to-a-recipient`, ["tool getGravvDocPage"]],
+        [`${DEFAULT_DOCS_ORIGIN}/recipes/bank-payouts/pay-a-us-bank-account-by-ach`, ["tool getGravvDocPage"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/recipes/remittance-and-crypto/overview`, ["prompt send-remittance", "prompt send-crypto"]], // *
       ],
     );

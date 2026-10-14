@@ -675,8 +675,8 @@ export function uploadLimit(tool: string): string {
  * name routes, the call order across tools, what this server does (file_path, saved
  * downloads, the gates), and the caveats for behaviour that is not live yet. Without it
  * an agent will, for example, create an external account and immediately transfer to
- * it, skipping the poll-until-active step from
- * https://gravv-docs.syntext.dev/recipes/remit-funds-to-a-recipient
+ * it, skipping the wait-until-active step from
+ * https://gravv-docs.syntext.dev/recipes/bank-payouts/pay-a-us-bank-account-by-ach
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
