@@ -453,7 +453,7 @@ describe("stale index", () => {
       state.clock = HOUR + 1;
       const search = JSON.parse(await call("searchGravvDocs", { query: "wallet" }));
       assert.ok(search.results.length > 0);
-      assert.match(search.note, /could not be refreshed \(.*503.*\)\. This comes from the copy loaded at 1970-01-01T00:00:00\.000Z/);
+      assert.match(search.note, /could not be refreshed: Could not load .*503.*\. This comes from the copy loaded at 1970-01-01T00:00:00\.000Z/);
 
       const page = await call("getGravvDocPage", { slug: "platform/wallets/create-a-wallet" });
       assert.match(page, /^Note: The documentation index could not be refreshed/);

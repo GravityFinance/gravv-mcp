@@ -386,8 +386,9 @@ export function createServer(config: ServerConfig) {
 function staleDocsNote(docs: DocsIndex): string | null {
   const f = docs.freshness();
   if (!f.stale) return null;
+  const reason = /[.!?]$/.test(f.error ?? "") ? f.error : `${f.error}.`;
   return (
-    `The documentation index could not be refreshed (${f.error}). This comes from the copy loaded at ` +
+    `The documentation index could not be refreshed: ${reason} This comes from the copy loaded at ` +
     `${f.loadedAt}, which may miss recent changes.`
   );
 }
