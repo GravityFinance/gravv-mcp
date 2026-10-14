@@ -120,6 +120,10 @@ documented endpoint now has a tool or a stated reason it has none.
   branch (8917a0c), which has not merged. The nightly drift check compares against
   client-docs main, so it reports drift until that work merges.
 - The scenario and replay schema check reads `anyOf`: a value fits when any shape fits.
+- The publish workflow installs npm 11.20.0 instead of `npm@latest` and publishes with
+  `--provenance`, so a release published with the `NPM_TOKEN` secret carries a provenance
+  statement too, as one through Trusted Publishing does. `id-token: write` is granted to
+  the publish job only.
 - 0.3.2 is still unreleased. If it is not published on its own, its changes ship in this
   release.
 
