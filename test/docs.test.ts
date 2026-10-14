@@ -280,6 +280,63 @@ describe("failure handling", () => {
   });
 });
 
+describe("sections", () => {
+  /** The same pages with a "Guides" section and the reference section renamed. */
+  const REGROUPED = INDEX.replace(
+    "## Developer Platform\n",
+    "## Guides\n\n- [Overview](https://docs.test/platform/collections/collections-overview.md): " +
+      `${GENERIC}\n\n## Developer Platform\n`,
+  )
+    .replace(`- [Overview](https://docs.test/platform/collections/collections-overview.md): ${GENERIC}\n- [Overview](https://docs.test/platform/webhooks`, `- [Overview](https://docs.test/platform/webhooks`)
+    .replace("## API Reference", "## Reference");
+
+  test("come from the index, a Guides section included", async () => {
+    const docs = index(CORPUS, REGROUPED);
+    assert.deepEqual((await docs.listSections()).sort(), ["Developer Platform", "Get Started", "Guides", "Recipes", "Reference"]);
+    const page = await docs.getPage("platform/collections/collections-overview");
+    assert.equal(page?.section, "Guides");
+    assert.match(page!.content, /payer pays/);
+
+    const hits = await docs.search("collections settle", 10, "guides");
+    assert.deepEqual(hits.map((h) => h.slug), ["platform/collections/collections-overview"]);
+  });
+
+  test("a renamed reference section still ranks below the guide", async () => {
+    const hits = await index(CORPUS, REGROUPED).search("create a wallet on polygon");
+    assert.equal(hits[0]!.slug, "platform/wallets/create-a-wallet");
+    const reference = hits.find((h) => h.slug === "api-reference/wallets/post-v1-wallets");
+    assert.ok(!reference || reference.score < hits[0]!.score);
+  });
+
+  test("searchGravvDocs names the real sections when given an unknown one", async () => {
+    const { server } = createServer({
+      toolsets: "all",
+      readOnly: false,
+      allowLiveWrites: false,
+      docsOrigin: "https://docs.test",
+      fetchImpl: (async (url: any) =>
+        new Response(String(url).endsWith("/llms.txt") ? REGROUPED : CORPUS, { status: 200 })) as unknown as typeof fetch,
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "docs-test", version: "1.0.0" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    try {
+      const miss = (await client.callTool({ name: "searchGravvDocs", arguments: { query: "wallet", section: "Home" } })) as any;
+      assert.equal(miss.isError, true);
+      assert.match(miss.content[0].text, /No docs section is called "Home"\. The sections are: Get Started, Guides, Developer Platform, Recipes, Reference\./);
+
+      const hit = (await client.callTool({ name: "searchGravvDocs", arguments: { query: "wallet", section: "Guides" } })) as any;
+      assert.notEqual(hit.isError, true);
+
+      const tools = (await client.listTools()).tools;
+      const section = (tools.find((t) => t.name === "searchGravvDocs")!.inputSchema.properties as any).section;
+      assert.equal(section.enum, undefined, "no fixed list of sections");
+    } finally {
+      await client.close();
+    }
+  });
+});
+
 describe("stale index", () => {
   const HOUR = 60 * 60 * 1000;
 

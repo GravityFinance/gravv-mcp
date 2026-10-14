@@ -37,7 +37,10 @@ export interface DocPage {
   /** Path without the .md suffix, e.g. "platform/wallets/create-a-wallet". */
   slug: string;
   url: string;
-  /** Top-level grouping from llms.txt: "Get Started", "Developer Platform", "Recipes", "API Reference". */
+  /**
+   * The `## Section` heading the page sits under in llms.txt, such as "Get Started" or
+   * "API Reference". The site decides these names, so they are read, never assumed.
+   */
   section: string;
   description: string;
   content: string;
@@ -288,7 +291,7 @@ export class DocsIndex {
     const hits: SearchHit[] = [];
 
     for (const page of this.pages) {
-      if (section && page.section.toLowerCase() !== section.toLowerCase()) continue;
+      if (section && page.section.toLowerCase() !== section.trim().toLowerCase()) continue;
 
       const title = page.title.toLowerCase();
       const desc = page.description.toLowerCase();
@@ -313,9 +316,12 @@ export class DocsIndex {
       else if (body.includes(phrase)) score *= 1.2;
 
       // Guides answer "how do I"; reference pages answer "what fields". Nudge guides up
-      // so a broad question lands on a flow rather than a single endpoint.
-      if (page.section === "API Reference") score *= 0.75;
-      if (page.section === "Recipes" || page.section === "Get Started") score *= 1.15;
+      // so a broad question lands on a flow rather than a single endpoint. What a page is
+      // comes from its section name and its path, not from fixed names, so a renamed or
+      // regrouped section keeps its weight.
+      const kind = pageKind(page);
+      if (kind === "reference") score *= 0.75;
+      if (kind === "flow") score *= 1.15;
 
       hits.push({
         title: page.title,
@@ -596,6 +602,19 @@ export function pairPages(
   });
 
   return { pages, unmatchedEntries: entries.length - pageFor.size, unmatchedPages };
+}
+
+/**
+ * Reference pages describe one endpoint; flow pages (getting started, recipes) walk a whole
+ * task. Read from the section name, or from the path where the name says nothing.
+ */
+function pageKind(page: DocPage): "reference" | "flow" | "guide" {
+  const section = page.section.toLowerCase();
+  if (/\breference\b/.test(section) || page.slug.startsWith("api-reference/")) return "reference";
+  if (/\b(recipes?|get(ting)? started)\b/.test(section) || /^(recipes|getting-started)(\/|$)/.test(page.slug)) {
+    return "flow";
+  }
+  return "guide";
 }
 
 function count(haystack: string, needle: string): number {

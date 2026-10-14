@@ -74,8 +74,7 @@ const DOC_TOOLS = [
         section: {
           type: "string",
           description:
-            "Optional filter. 'Get Started' and 'Recipes' hold end-to-end flows; 'Developer Platform' holds per-feature guides; 'API Reference' holds per-endpoint detail.",
-          enum: ["Get Started", "Developer Platform", "Recipes", "API Reference", "Home"],
+            "Optional filter: one docs section, as the section field of a result names it. The names come from the docs site's index, so there is no fixed list; an unknown name returns the sections there are.",
         },
       },
       required: ["query"],
@@ -219,6 +218,18 @@ export function createServer(config: ServerConfig) {
     // ---- documentation tools -------------------------------------------------
     if (name === "searchGravvDocs") {
       try {
+        // Section names are the site's, and change as the docs are regrouped, so the
+        // argument has no enum. Check it against the index instead, and name the real ones.
+        if (typeof args.section === "string" && args.section.trim() !== "") {
+          const sections = await docs.listSections();
+          const wanted = args.section.trim().toLowerCase();
+          if (!sections.some((s) => s.toLowerCase() === wanted)) {
+            return errorResult(
+              `No docs section is called "${args.section}". The sections are: ${sections.join(", ")}. ` +
+                "Use one of them, or leave section out to search every page.",
+            );
+          }
+        }
         const hits = await docs.search(
           String(args.query ?? ""),
           typeof args.limit === "number" ? args.limit : 6,
