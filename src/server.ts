@@ -58,7 +58,7 @@ const DOC_TOOLS = [
   {
     name: "searchGravvDocs",
     description:
-      "Search the Gravv documentation — integration guides, recipes, and API reference (177 pages). " +
+      "Search the Gravv documentation — integration guides, recipes, and API reference, every page the docs site lists. " +
       "Use this BEFORE implementing any Gravv integration, and whenever a call fails in a way the error " +
       "does not fully explain. The guides carry the ordering, prerequisites, and corridor rules that the " +
       "API tool schemas do not. Returns ranked pages with excerpts; follow up with getGravvDocPage for full text.",

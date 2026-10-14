@@ -144,9 +144,9 @@ then paste a JSON-RPC frame on stdin:
 
 ## What you get
 
-**Documentation tools** — `searchGravvDocs` and `getGravvDocPage` search all 177 pages of
-the Gravv documentation. They need **no API key**, so you can explore Gravv before you
-have credentials.
+**Documentation tools** — `searchGravvDocs` and `getGravvDocPage` search every page of the
+Gravv documentation, read from the docs site as it is published. They need **no API key**,
+so you can explore Gravv before you have credentials.
 
 **API tools** — 72 tools (60 load by default) covering customers, KYC, accounts,
 transfers, cards, wallets, FX, collections, and webhooks.
