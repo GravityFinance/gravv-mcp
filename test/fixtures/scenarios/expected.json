@@ -502,13 +502,16 @@
     "outcome": "no-tool"
   },
   "S-CUS-06.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-CUS-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-CUS-06.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-CUS-06.4": {
     "outcome": "no-tool"
@@ -522,7 +525,8 @@
     "tool": "updateCustomer"
   },
   "S-CUS-07.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-ACC1-01.1": {
     "outcome": "ok",
@@ -915,17 +919,20 @@
     "tool": "getWebhookEventDetail"
   },
   "S-TXN-05.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-TXN-05.5": {
     "outcome": "ok",
     "tool": "listTransactions"
   },
   "S-TXN-06.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-TXN-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-01.1": {
     "outcome": "ok",
@@ -952,7 +959,8 @@
     "tool": "getExternalAccount"
   },
   "S-PAY-01.7": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-01.8": {
     "outcome": "ok",
@@ -1023,7 +1031,8 @@
     "tool": "createExternalAccount"
   },
   "S-PAY-05.6": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "uploadTransferDocument"
   },
   "S-PAY-05.7": {
     "outcome": "ok",
@@ -1042,7 +1051,8 @@
     "tool": "getTransaction"
   },
   "S-PAY-06.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-07.1": {
     "outcome": "ok",
@@ -1100,19 +1110,24 @@
     "tool": "simulateDeposit"
   },
   "S-PAY-11.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-11.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-11.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-PAY-11.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-11.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-12.1": {
     "outcome": "ok",
@@ -1227,7 +1242,8 @@
     "tool": "createTransfer"
   },
   "S-REM-02.9": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-REM-02.10": {
     "outcome": "ok",
@@ -1385,13 +1401,16 @@
     "tool": "getTransaction"
   },
   "S-REM-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-REM-10.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-REM-10.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-REM-10.4": {
     "outcome": "ok",

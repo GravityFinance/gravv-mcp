@@ -116,6 +116,7 @@ const GATED: Record<string, { route: string; why: string }> = {
     why: "charges at once with card_token",
   },
   chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
+  resumeTransfer: { route: "POST /v1/transfer/{id}/resume", why: "releases a held payout" },
 };
 
 /**
@@ -134,7 +135,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 27);
+    assert.equal(keyed.length, 29);
   });
 
   test("the exempt POSTs do not offer it", () => {
@@ -166,6 +167,8 @@ describe("outcome lookups", () => {
   test("each lookup starts with a tool that exists", () => {
     for (const [name, entry] of Object.entries(OUTCOME_LOOKUPS)) {
       if (!("lookup" in entry)) continue;
+      // A route nothing can look up says so, and says what to do instead.
+      if (entry.lookup.startsWith("no tool ")) continue;
       const first = entry.lookup.match(/^[A-Za-z0-9]+/)?.[0] ?? "";
       assert.ok(advertised.has(first), `${name}: "${first}" is not a tool`);
     }

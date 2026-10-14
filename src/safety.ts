@@ -269,6 +269,18 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
       return text(b.card_token)
         ? `Charge ${money(b.currency)} to saved card token ${b.card_token} now. A decline still returns HTTP 200: check data.status.`
         : `Create a hosted payment link for ${money(b.currency)}. No money moves until the payer pays.`;
+    case "resumeTransfer": {
+      const docs = Array.isArray(b.supporting_document_ids) ? b.supporting_document_ids.length : 0;
+      const sent = [
+        docs ? `${docs} supporting document${docs === 1 ? "" : "s"}` : "",
+        b.remitter_verification ? "the remitter's verification" : "",
+        b.additional_information ? "additional information" : "",
+      ].filter(Boolean);
+      return (
+        `Resume paused transfer ${text(args.id) ?? "(unspecified)"}${sent.length ? ` with ${sent.join(", ")}` : ""}. ` +
+        `If it can go ahead, the payout is released and cannot be reversed from the API.`
+      );
+    }
     case "deleteAccountApplication":
       return `Delete account application ${text(args.id) ?? "(unspecified)"}. It cannot be restored over the API.`;
     case "activateFeature":

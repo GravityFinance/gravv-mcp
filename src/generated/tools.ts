@@ -4509,6 +4509,39 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "kyc.yaml"
   },
   {
+    "name": "getCustomerLimits",
+    "toolset": "transfers",
+    "method": "get",
+    "path": "/v1/customers/{customer_id}/limits",
+    "description": "Get a customer's limits — Returns a customer's transfer tier, the caps for each window and what is left in each. Use it before a large payout, or to explain why a transfer paused. All amounts are USD strings.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer"
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "customer_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "limits.yaml"
+  },
+  {
     "name": "getExternalAccount",
     "toolset": "external-accounts",
     "method": "get",
@@ -4625,6 +4658,40 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": true,
     "sandboxOnly": false,
     "spec": "fx.yaml"
+  },
+  {
+    "name": "getRemitterLimits",
+    "toolset": "transfers",
+    "method": "get",
+    "path": "/v1/limits/remitters/{remitter_id}",
+    "description": "Get a remitter's limits — Returns the same view for a remitter: the sender you name in `additional_information.remitter_verification` on a transfer. Usage counts only transfers that carry it, on a policy with attested tiers. An unknown remitter gets the policy's default tier.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "remitter_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Your ID for the sender, 1 to 255 characters. It is case-sensitive."
+        }
+      },
+      "required": [
+        "remitter_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "remitter_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "limits.yaml"
   },
   {
     "name": "getSavedCard",
@@ -6218,6 +6285,220 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": true,
     "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "resumeTransfer",
+    "toolset": "transfers",
+    "method": "post",
+    "path": "/v1/transfer/{id}/resume",
+    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and the `transfer.resumed` webhook is sent. When it still cannot, `resumed` is false and the response lists the new requirements. The fee is not charged again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The transfer `reference` from `POST /v1/transfer`"
+        },
+        "transfer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Optional. It must match the path."
+        },
+        "remitter_verification": {
+          "type": "object",
+          "description": "Your record of how you verified the sender. When your limits policy uses attested tiers, the transfer counts against this remitter instead of the customer.",
+          "properties": {
+            "remitter_id": {
+              "type": "string",
+              "description": "Your ID for the sender",
+              "example": "rem_8842"
+            },
+            "level": {
+              "type": "string",
+              "example": "enhanced"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Who verified the sender"
+            },
+            "provider_reference": {
+              "type": "string"
+            },
+            "verified_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "screening": {
+              "type": "object",
+              "description": "Each value must be `clear`",
+              "properties": {
+                "sanctions": {
+                  "type": "string",
+                  "example": "clear"
+                },
+                "pep": {
+                  "type": "string",
+                  "example": "clear"
+                },
+                "adverse_media": {
+                  "type": "string",
+                  "example": "clear"
+                }
+              }
+            }
+          }
+        },
+        "additional_information": {
+          "type": "object",
+          "description": "Sender details. Some payout routes need them; without them the transfer pauses with `sender_details_required`.",
+          "properties": {
+            "remitter_full_name": {
+              "type": "string",
+              "example": "John Doe"
+            },
+            "remitter_country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_document_number": {
+              "type": "string",
+              "example": "A123456789"
+            },
+            "remitter_document_issue_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2020-01-15"
+            },
+            "remitter_document_expiry_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2030-01-15"
+            },
+            "remitter_date_of_birth": {
+              "type": "string",
+              "description": "YYYY-MM-DD, not in the future",
+              "example": "1990-06-25"
+            },
+            "remitter_nationality": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_address": {
+              "type": "object",
+              "properties": {
+                "address_line1": {
+                  "type": "string",
+                  "example": "123 Main Street"
+                },
+                "city": {
+                  "type": "string",
+                  "example": "New York"
+                },
+                "state": {
+                  "type": "string",
+                  "example": "NY"
+                },
+                "postal_code": {
+                  "type": "string",
+                  "example": "10001"
+                },
+                "country": {
+                  "type": "string",
+                  "example": "US"
+                }
+              }
+            },
+            "remitter_verification": {
+              "type": "object",
+              "description": "Your record of how you verified the sender. When your limits policy uses attested tiers, the transfer counts against this remitter instead of the customer.",
+              "properties": {
+                "remitter_id": {
+                  "type": "string",
+                  "description": "Your ID for the sender",
+                  "example": "rem_8842"
+                },
+                "level": {
+                  "type": "string",
+                  "example": "enhanced"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Who verified the sender"
+                },
+                "provider_reference": {
+                  "type": "string"
+                },
+                "verified_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "screening": {
+                  "type": "object",
+                  "description": "Each value must be `clear`",
+                  "properties": {
+                    "sanctions": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "pep": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "adverse_media": {
+                      "type": "string",
+                      "example": "clear"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "supporting_document_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "transfer_id",
+      "remitter_verification",
+      "additional_information",
+      "supporting_document_ids"
+    ],
+    "alsoInBody": [],
+    "movesMoney": true,
+    "needsConfirm": true,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "transfer.yaml"
   },
   {
     "name": "retryWebhookEvent",
@@ -8189,6 +8470,95 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": true,
     "sandboxOnly": false,
     "spec": "kyc.yaml"
+  },
+  {
+    "name": "uploadTransferDocument",
+    "toolset": "transfers",
+    "method": "post",
+    "path": "/v1/transfer/documents",
+    "description": "Upload a supporting document — Uploads a document, such as an invoice, for a payout that needs one. Pass the returned `id` in `supporting_document_ids` on `POST /v1/transfer` or on resume. A document can be used by one transfer only, and an unused one is deleted after 7 days. The file must be PDF, PNG or JPEG, at most 700 KB.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "example": "bb6c6022-f1d8-492f-80f0-7547134bb42f"
+        },
+        "document_type": {
+          "type": "string",
+          "enum": [
+            "invoice",
+            "proforma_invoice",
+            "purchase_order",
+            "contract",
+            "receipt",
+            "bill_of_lading",
+            "customs_declaration",
+            "bank_statement",
+            "proof_of_income",
+            "tax_document",
+            "other"
+          ],
+          "example": "invoice"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Required when `document_type` is `other`"
+        },
+        "file_name": {
+          "type": "string",
+          "example": "inv-2026-114.pdf"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "Must match the file itself",
+          "enum": [
+            "application/pdf",
+            "image/png",
+            "image/jpeg"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "description": "The file as standard base64, at most 700 KB decoded",
+          "example": "<base64>"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "document_type",
+        "file_name",
+        "content_type",
+        "content"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "document_type",
+      "description",
+      "file_name",
+      "content_type",
+      "content"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "transfer.yaml"
   },
   {
     "name": "validateAccountApplication",

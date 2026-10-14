@@ -199,6 +199,12 @@ export const NAMES: Record<string, Op> = {
     name: "listTransferSupportedCountriesForAddress",
     toolset: "transfers",
   },
+  "POST /v1/transfer/documents": { name: "uploadTransferDocument", toolset: "transfers" },
+  "POST /v1/transfer/{id}/resume": { name: "resumeTransfer", toolset: "transfers" },
+  // Limits answer "why did this transfer pause" and "how much can I send", so they sit
+  // with transfers rather than customers.
+  "GET /v1/customers/{customer_id}/limits": { name: "getCustomerLimits", toolset: "transfers" },
+  "GET /v1/limits/remitters/{remitter_id}": { name: "getRemitterLimits", toolset: "transfers" },
 
   // ---- transactions --------------------------------------------------------
   "GET /v1/transactions": { name: "listTransactions", toolset: "transactions" },
@@ -440,6 +446,8 @@ export const MONEY_OPS = new Set<string>([
   // Cancelling does not return funds already debited, and API-key orders are debited
   // when they are placed, so a cancel cannot be undone.
   "POST /v1/fx/orders/{order_id}/cancel",
+  // A paused transfer has not been paid out; resuming it releases the payout.
+  "POST /v1/transfer/{id}/resume",
 ]);
 
 /**
@@ -559,6 +567,11 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   createTransfer: {
     lookup:
       "listTransactions with account_id set to the source account (newest first), and find your client_reference in the rows (there is no client_reference filter)",
+  },
+  resumeTransfer: { lookup: "getTransaction with the transfer's transaction_id, and read whether it is still paused" },
+  uploadTransferDocument: {
+    lookup:
+      "no tool lists transfer documents, so resend with the same key, which returns the first upload's id if it landed",
   },
   withdrawFromCard: { lookup: "getCardBalance, and listTransactions with card_id set to the card" },
   createFxOrder: { lookup: "listFxOrders (newest first), and match the pair, side and amount" },

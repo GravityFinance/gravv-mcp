@@ -148,6 +148,21 @@ describe("previews for the newly gated tools", () => {
   });
 });
 
+describe("resuming a transfer is gated like a payout", () => {
+  const resume = TOOLS_BY_NAME.get("resumeTransfer")!;
+  const body = { supporting_document_ids: ["doc_1"] };
+  const p = { method: "POST", path: "/v1/transfer/{id}/resume", body };
+
+  test("the preview names the transfer and what is sent", () => {
+    const result = gate().check(resume, { id: "trf_1", ...body }, p);
+    assert.match(result!.willDo, /Resume paused transfer trf_1 with 1 supporting document\. /);
+  });
+
+  test("a live key needs the live-writes switch", () => {
+    assert.throws(() => gate({ environment: "live" }).check(resume, { id: "trf_1", confirm: true }, p), SafetyError);
+  });
+});
+
 describe("confirm-only gating", () => {
   const del = TOOLS_BY_NAME.get("deleteAccountApplication")!;
   const activate = TOOLS_BY_NAME.get("activateFeature")!;
