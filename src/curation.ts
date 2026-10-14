@@ -344,6 +344,17 @@ export const BLOCKED: Record<string, string> = {
     "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
   "GET /v1/webhooks/ingestion/search":
     "Dashboard only: an internal route that API keys cannot call. Check your own deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
+
+  // Routes that take API keys but are outside the 99 in-scope endpoints, so they are in
+  // no specification. The entries record why they have no tool. The rest of the routes
+  // left out of scope (card disputes and their simulator, the trade desk, billing and the
+  // other internal routes) are in no specification either and need no entry to stay out.
+  "POST /v1/cards/{id}/simulate":
+    "Not offered yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  "POST /v1/collections/simulate/webhook":
+    "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
+  "POST /v2/accounts/{id}/settlement/enable": "Out of scope: controlled settlement is not part of the published API.",
+  "POST /v2/accounts/{id}/settlement/disable": "Out of scope: controlled settlement is not part of the published API.",
 };
 
 /**
@@ -414,6 +425,16 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardPin:
     "Not available over MCP: returns the encrypted card PIN. Use the client-side decryption flow.",
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
+  simulateCardEvent:
+    "Not available over MCP yet: the sandbox card simulator (funding and spend events) is outside the published API reference, and whether to offer it is still open. In sandbox, simulateDeposit funds an account.",
+  simulateCardFunding:
+    "Not available over MCP yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCardSpend:
+    "Not available over MCP yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCollectionOutcome:
+    "Not available over MCP yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCollectionWebhook:
+    "Not available over MCP yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
   startRiskKyc:
     "Renamed: POST /v1/risk/start-kyc is card KYC for a cardholder, now the tool startCardholderKyc. For a customer's own KYC use startCustomerKyc.",
   startRiskKycS2S:

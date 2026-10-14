@@ -1472,14 +1472,20 @@
     "tool": "getCollection"
   },
   "S-SBX-03.2": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-SBX-03.3": {
     "outcome": "ok",
     "tool": "getCollection"
   },
   "S-SBX-03.4": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-SBX-03.5": {
     "outcome": "ok",
@@ -1622,7 +1628,10 @@
     "tool": "getCollection"
   },
   "S-COL-02.8": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-COL-03.1": {
     "outcome": "ok",
@@ -1651,7 +1660,10 @@
     ]
   },
   "S-COL-03.6": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-COL-04.1": {
     "outcome": "mismatch",
