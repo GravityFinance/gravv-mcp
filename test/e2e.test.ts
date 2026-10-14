@@ -38,6 +38,13 @@ before(async () => {
         return;
       }
 
+      // A server fault on a write, to check what an error result carries.
+      if (req.url?.startsWith("/v1/wallets") && req.method === "POST") {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: null, error: "bad gateway" }));
+        return;
+      }
+
       res.writeHead(200, { "Content-Type": "application/json" });
       if (req.url?.startsWith("/v1/accounts")) {
         res.end(JSON.stringify({ data: { items: [{ id: "acc_1", currency: "USD", balance: "100.00" }] } }));
@@ -280,6 +287,29 @@ describe("end-to-end over MCP stdio", () => {
       assert.equal(received.length, 1);
       assert.equal(received[0]!.headers["idempotency-key"], "e2e-key-1");
       assert.equal(received[0]!.body.idempotency_key, undefined, "the key is a header, not a body field");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("an error result carries the environment and the key that was sent", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", {
+        name: "createWallet",
+        arguments: { customer_id: "cus_1", network: "polygon" },
+      });
+      assert.equal(res.result.isError, true);
+      const payload = JSON.parse(textOf(res));
+      assert.equal(payload.status, 502);
+      assert.equal(payload.environment, "sandbox");
+      assert.ok(payload.idempotency_key);
+      assert.equal(payload.idempotency_key, received[0]!.headers["idempotency-key"]);
+      assert.deepEqual(payload.details, { data: null, error: "bad gateway" }, "details stays the raw body");
     } finally {
       mcp.kill();
     }

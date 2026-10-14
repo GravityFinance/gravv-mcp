@@ -337,13 +337,16 @@ export function createServer(config: ServerConfig) {
     } catch (err) {
       if (err instanceof SafetyError) return errorResult(err.message);
       if (err instanceof GravvApiError) {
-        return errorResult(
-          JSON.stringify(
-            { error: err.message, status: err.status, hint: err.hint, details: redact(err.body) },
-            null,
-            2,
-          ),
-        );
+        // The key and environment come back on every error, as on success: after a
+        // timeout the key is what lets the model resend safely. details stays the raw body.
+        const payload: Record<string, unknown> = { error: err.message, status: err.status };
+        if (err.outcomeUnknown) payload.outcome_unknown = true;
+        if (err.replayed) payload.replayed = true;
+        payload.environment = environment;
+        if (err.idempotencyKey) payload.idempotency_key = err.idempotencyKey;
+        payload.hint = err.hint;
+        payload.details = redact(err.body);
+        return errorResult(JSON.stringify(payload, null, 2));
       }
       return errorResult(`Unexpected error calling ${name}: ${(err as Error).message}`);
     }

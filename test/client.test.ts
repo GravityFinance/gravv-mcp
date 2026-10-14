@@ -36,6 +36,18 @@ function stub(responses: Array<{ status: number; body?: unknown; headers?: Recor
 /** Every retry wait the clients below asked for, in ms. No test waits for real. */
 let waits: number[] = [];
 
+/** A fetch that records the headers it was given, then fails the way `err` says. */
+function failing(err: Error) {
+  const calls: Array<{ headers: Record<string, string> }> = [];
+  const fetchImpl = (async (_url: any, init: any) => {
+    calls.push({ headers: { ...init.headers } });
+    throw err;
+  }) as unknown as typeof fetch;
+  return { calls, fetchImpl };
+}
+
+const abortError = () => Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+
 const client = (fetchImpl: typeof fetch, apiKey = "grvSec_sandbox_test") =>
   new GravvClient({
     apiKey,
@@ -254,6 +266,45 @@ describe("response handling", () => {
     await assert.rejects(
       client(fetchImpl).call(getAccount, { account_id: "a" }),
       (e: GravvApiError) => /dashboard/.test(e.hint ?? ""),
+    );
+  });
+});
+
+describe("errors keep the idempotency key", () => {
+  const transfer = TOOLS_BY_NAME.get("createTransfer")!;
+
+  test("a timeout returns the key that was sent", async () => {
+    const { calls, fetchImpl } = failing(abortError());
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.equal(e.status, 408);
+      assert.ok(e.idempotencyKey);
+      assert.equal(e.idempotencyKey, calls[0]!.headers["Idempotency-Key"]);
+      return true;
+    });
+  });
+
+  test("a network error returns the key that was sent", async () => {
+    const { calls, fetchImpl } = failing(new TypeError("fetch failed"));
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.equal(e.status, 0);
+      assert.equal(e.idempotencyKey, calls[0]!.headers["Idempotency-Key"]);
+      return true;
+    });
+  });
+
+  test("an API error returns the key that was sent", async () => {
+    const { calls, fetchImpl } = stub([{ status: 400, body: { data: null, error: "bad" } }]);
+    await assert.rejects(
+      client(fetchImpl).call(transfer, { amount: 5 }, { idempotencyKey: "trace-me" }),
+      (e: GravvApiError) => e.idempotencyKey === "trace-me" && calls[0]!.headers["Idempotency-Key"] === "trace-me",
+    );
+  });
+
+  test("a GET error has no key", async () => {
+    const { fetchImpl } = failing(abortError());
+    await assert.rejects(
+      client(fetchImpl).call(getAccount, { account_id: "a" }),
+      (e: GravvApiError) => e.status === 408 && e.idempotencyKey === undefined,
     );
   });
 });

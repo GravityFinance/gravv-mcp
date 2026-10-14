@@ -40,17 +40,32 @@ export const PUBLISHABLE_KEY_MESSAGE =
   "This is a publishable key (grvPub_). Publishable keys cannot call the Gravv API. " +
   "Set GRAVV_API_KEY to a secret key starting grvSec_sandbox_ or grvSec_live_.";
 
+export interface GravvApiErrorDetails {
+  /** The Idempotency-Key the failed call sent, so it can be traced or resent. */
+  idempotencyKey?: string;
+  /** The gateway answered with a stored response instead of running the request. */
+  replayed?: boolean;
+  /** The call may or may not have taken effect: look the result up before resending. */
+  outcomeUnknown?: boolean;
+}
+
 export class GravvApiError extends Error {
   readonly status: number;
   readonly body: unknown;
   readonly hint: string | undefined;
+  readonly idempotencyKey: string | undefined;
+  readonly replayed: boolean;
+  readonly outcomeUnknown: boolean;
 
-  constructor(message: string, status: number, body: unknown, hint?: string) {
+  constructor(message: string, status: number, body: unknown, hint?: string, details: GravvApiErrorDetails = {}) {
     super(message);
     this.name = "GravvApiError";
     this.status = status;
     this.body = body;
     this.hint = hint;
+    this.idempotencyKey = details.idempotencyKey;
+    this.replayed = details.replayed ?? false;
+    this.outcomeUnknown = details.outcomeUnknown ?? false;
   }
 }
 
@@ -247,9 +262,13 @@ export class GravvClient {
       } catch (err) {
         clearTimeout(timer);
         if ((err as Error)?.name === "AbortError") {
-          throw new GravvApiError(`Request to ${tool.name} timed out after ${this.timeoutMs}ms`, 408, null);
+          throw new GravvApiError(`Request to ${tool.name} timed out after ${this.timeoutMs}ms`, 408, null, undefined, {
+            idempotencyKey,
+          });
         }
-        throw new GravvApiError(`Network error calling ${tool.name}: ${(err as Error).message}`, 0, null);
+        throw new GravvApiError(`Network error calling ${tool.name}: ${(err as Error).message}`, 0, null, undefined, {
+          idempotencyKey,
+        });
       }
       clearTimeout(timer);
 
@@ -276,7 +295,7 @@ export class GravvClient {
       // such as a client_reference already used for a different transfer.
       if (res.status === 409 && attempt < maxAttempts && IN_FLIGHT_CODES.has(errorCode(parsed) ?? "")) {
         await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 1));
-        lastError = new GravvApiError(apiMessage, 409, parsed);
+        lastError = new GravvApiError(apiMessage, 409, parsed, undefined, { idempotencyKey });
         continue;
       }
 
@@ -289,7 +308,7 @@ export class GravvClient {
       const rateLimited = res.status === 429 && attempt < maxAttempts;
       if (rateLimited && (idempotencyKey === undefined || (!keySupplied && isGatewayRateLimit(apiMessage)))) {
         await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 6));
-        lastError = new GravvApiError(String(apiMessage), 429, parsed);
+        lastError = new GravvApiError(String(apiMessage), 429, parsed, undefined, { idempotencyKey });
         if (idempotencyKey !== undefined) {
           idempotencyKey = randomUUID();
           headers["Idempotency-Key"] = idempotencyKey;
@@ -302,7 +321,7 @@ export class GravvClient {
       if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
         hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
       }
-      throw new GravvApiError(apiMessage, res.status, parsed, hint);
+      throw new GravvApiError(apiMessage, res.status, parsed, hint, { idempotencyKey });
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
