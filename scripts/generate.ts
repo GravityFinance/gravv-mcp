@@ -146,18 +146,39 @@ function deref(node: any, doc: Json, seen: Set<string> = new Set(), depth = 0): 
   return out;
 }
 
-/** Strip keywords that add tokens without helping the model produce valid input. */
+/**
+ * Strip keywords that add tokens without helping the model produce valid input.
+ *
+ * Spec extensions (`x-*`) go too. Two of them change the schema first: a property marked
+ * `x-not-yet-live: true` is removed (and dropped from `required`), and enum values listed in
+ * `x-not-yet-live-values` are removed, because the API does not accept them yet and a tool
+ * must not offer what would fail.
+ */
 function slim(schema: any, depth = 0): any {
   if (schema === null || typeof schema !== "object" || depth > 25) return schema;
   if (Array.isArray(schema)) return schema.map((s) => slim(s, depth + 1));
 
   const DROP = new Set(["xml", "externalDocs", "discriminator", "readOnly", "writeOnly", "deprecated", "$schema"]);
+  const notYetLive = (s: any) => s !== null && typeof s === "object" && s["x-not-yet-live"] === true;
   const out: Json = {};
   for (const [k, v] of Object.entries(schema)) {
-    if (DROP.has(k)) continue;
+    if (DROP.has(k) || k.startsWith("x-")) continue;
     if (k === "example" && "examples" in schema) continue;
+    if (k === "properties" && v !== null && typeof v === "object" && !Array.isArray(v)) {
+      // A map of names to schemas, not a schema: its keys are field names, never keywords.
+      const props: Json = {};
+      for (const [name, sub] of Object.entries(v as Json)) if (!notYetLive(sub)) props[name] = slim(sub, depth + 1);
+      out.properties = props;
+      continue;
+    }
     out[k] = slim(v, depth + 1);
   }
+  if (Array.isArray(out.required) && out.properties) {
+    const gone = Object.keys(schema.properties ?? {}).filter((name) => notYetLive(schema.properties[name]));
+    out.required = out.required.filter((r: string) => !gone.includes(r));
+  }
+  const pending = schema["x-not-yet-live-values"];
+  if (Array.isArray(out.enum) && Array.isArray(pending)) out.enum = out.enum.filter((e: unknown) => !pending.includes(e));
   return out;
 }
 
