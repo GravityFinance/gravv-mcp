@@ -120,3 +120,18 @@ not "Unknown tool".
   another host.
 - When a refresh of the docs index fails, the documentation tools keep answering from the
   last copy, with a note saying so, instead of failing.
+
+### Development
+
+- The requests in the integration scenarios are test fixtures. Each is checked against
+  the schema of the tool for its route, and every outcome is pinned, so a spec sync or a
+  curation change that alters one fails the tests until it is reviewed
+  (`npm run scenarios`).
+- A nightly workflow checks `specs/` against the specification source, and that every
+  docs link the server hands out still resolves (`npm run docs-links`). A failed nightly
+  run opens an issue.
+- A manual sandbox replay (`npm run sandbox-replay`) runs a fixed set of calls through the
+  server with a sandbox key, compares the answers with an earlier run, and lists what it
+  created.
+- `npm run typecheck` also covers the tests and scripts.
+- `specs/collections.yaml` and `specs/risk.yaml` are re-synced. No tool changes.
