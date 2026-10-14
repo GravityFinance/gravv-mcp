@@ -16,9 +16,13 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import { MANUAL_TOOLS } from "../src/manual-tools.ts";
 import {
   NAMES,
   BLOCKED,
+  BLOCKED_TOOL_NAMES,
+  OUTCOME_LOOKUPS,
+  UPPER_CASE_ARGS,
   PREREQUISITES,
   ENUM_RESTRICTIONS,
   DESCRIPTION_OVERRIDES,
@@ -292,6 +296,11 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         unmapped.push(`${file}: ${key}`);
         continue;
       }
+      // The specs' operationIds are the tool names (docs Phase 3 set them so). A curation
+      // name that differs is two names for one route, in the docs and in the tools.
+      if (typeof op.operationId === "string" && op.operationId !== curated.name) {
+        problems.push(`${key}: curation names it "${curated.name}", but the spec operationId is "${op.operationId}"`);
+      }
 
       // ---- description --------------------------------------------------------
       const summary = (op.summary ?? "").trim();
@@ -331,7 +340,13 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       let bodyMode: "inline" | "wrapped" | "none" = "none";
       const bodyProps: string[] = [];
       const alsoInBody: string[] = [];
-      const bodySchemaRaw = op.requestBody?.content?.["application/json"]?.schema;
+      const bodyContent = op.requestBody?.content;
+      if (bodyContent && !bodyContent["application/json"]) {
+        // The client sends JSON only. Without this a multipart or form body silently
+        // became a tool with no body, which fails on every call.
+        problems.push(`${key}: the request body is ${Object.keys(bodyContent).join(", ")}, not application/json`);
+      }
+      const bodySchemaRaw = bodyContent?.["application/json"]?.schema;
       if (bodySchemaRaw) {
         const body = slim(deref(bodySchemaRaw, doc));
 
@@ -355,10 +370,9 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
             properties[k] = v;
             bodyProps.push(k);
           }
-          if (Array.isArray(body.required)) {
-            // A body-required field that is supplied via the path is already required.
-            required.push(...body.required.filter((r: string) => !alsoInBody.includes(r) || true));
-          }
+          // A body-required field supplied through the path is already required; the
+          // duplicate goes when `required` is de-duplicated below.
+          if (Array.isArray(body.required)) required.push(...body.required);
         } else {
           // oneOf/anyOf (e.g. CreateCustomerRequest: individual vs business) or a
           // non-object body. Keep the construct intact under `body` rather than
@@ -506,10 +520,31 @@ for (const [set, label] of [
   }
 }
 
-for (const [map, label] of [[UPLOADS, "UPLOADS"], [DOWNLOADS, "DOWNLOADS"]] as const) {
+// Every curation map keyed by tool name must name a tool. A key that names nothing is a
+// hint, lookup or rule that no tool carries, so a rename or a removal would otherwise
+// drop it silently.
+for (const [map, label] of [
+  [UPLOADS, "UPLOADS"],
+  [DOWNLOADS, "DOWNLOADS"],
+  [PREREQUISITES, "PREREQUISITES"],
+  [ENUM_RESTRICTIONS, "ENUM_RESTRICTIONS"],
+  [OUTCOME_LOOKUPS, "OUTCOME_LOOKUPS"],
+  [UPPER_CASE_ARGS, "UPPER_CASE_ARGS"],
+] as const) {
   for (const name of Object.keys(map)) {
     if (!byName.has(name)) problems.push(`${label} names "${name}", which is not a generated tool`);
   }
+}
+
+// A blocked name explains a tool that does not exist; it must not shadow one that does.
+const manualNames = new Set(MANUAL_TOOLS.map((t) => t.name));
+for (const name of Object.keys(BLOCKED_TOOL_NAMES)) {
+  if (byName.has(name) || manualNames.has(name)) {
+    problems.push(`BLOCKED_TOOL_NAMES lists "${name}", which is a tool: delete the entry`);
+  }
+}
+for (const name of manualNames) {
+  if (byName.has(name)) problems.push(`manual tool "${name}" has the same name as a generated tool`);
 }
 
 for (const name of Object.keys(DESCRIPTION_OVERRIDES)) {
@@ -521,10 +556,9 @@ console.log(`operations: ${operationCount}`);
 console.log(`blocked:    ${blockedSeen.length}`);
 console.log(`tools:      ${tools.length}`);
 
-if (unmapped.length) {
-  console.error(`\n${unmapped.length} operation(s) have no name in curation.ts and were skipped:`);
-  for (const u of unmapped) console.error(`  ${u}`);
-}
+// An operation with neither a name nor a BLOCKED reason is a route the specs document and
+// the server silently does not serve. That is a decision to make, not a warning to scroll.
+for (const u of unmapped) problems.push(`${u}: no name in curation.ts NAMES and no BLOCKED reason`);
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
