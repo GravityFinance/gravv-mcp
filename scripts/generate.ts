@@ -400,11 +400,16 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
           );
         }
         for (const [prop, text] of Object.entries(override.params ?? {})) {
-          if (!(prop in properties)) {
+          // A dotted name reaches a nested property: `source.methods`.
+          const parts = prop.split(".");
+          let holder: Json | undefined = properties;
+          for (const part of parts.slice(0, -1)) holder = (holder?.[part] as Json | undefined)?.properties;
+          const last = parts[parts.length - 1]!;
+          if (!holder || !(last in holder)) {
             problems.push(`${curated.name}: DESCRIPTION_OVERRIDES names property "${prop}", which the tool does not have`);
             continue;
           }
-          properties[prop] = { ...(properties[prop] as Json), description: squash(text) };
+          holder[last] = { ...(holder[last] as Json), description: squash(text) };
         }
       }
 

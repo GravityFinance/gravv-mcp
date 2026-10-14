@@ -1590,7 +1590,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v2/accounts",
-    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call `GET /v1/accounts/capabilities` to choose `bank_code`, `currency` and `account_type`, then `GET /v2/accounts/requirements` to build `data`. The response has only `account_id` and `status: pending`. Get the account for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected. When you retry, reuse the same Idempotency-Key.",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2426,7 +2426,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections",
-    "description": "Initiate a collection — Starts a collection from a payer. Card methods return a `payment_link` for the payer. `bank_transfer` returns payment instructions and bank details. The funds settle in stablecoin to the destination. Card amounts are charged in USD. Bank transfer works in BJ, BW, BF, CM, CI, CG, GA, ML, MW, NG, RW, ZA, TZ, TG, UG and ZM, chosen by the customer's address country. For saved cards and repeat charges, use payment intents.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
+    "description": "Initiate a collection — Starts a bank-transfer collection from a payer. The response carries the payment instructions and bank details. The funds settle in stablecoin to the destination. Bank transfer works in BJ, BW, BF, CM, CI, CG, GA, ML, MW, NG, RW, ZA, TZ, TG, UG and ZM, chosen by the customer's address country.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2443,7 +2443,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "amount": {
           "type": "string",
-          "description": "Amount in major units, as a string with at most 2 decimal places. For card methods it is a USD amount, whatever `currency` you send.",
+          "description": "Amount in major units, as a string with at most 2 decimal places.",
           "example": "50.00"
         },
         "currency": {
@@ -2479,12 +2479,12 @@ export const TOOLS: GeneratedTool[] = [
         "is_anonymous": {
           "type": "boolean",
           "default": false,
-          "description": "When true, the payer's name and email are not sent to the card checkout"
+          "description": "Applies to the card checkout, which this tool does not offer. Leave it out."
         },
         "save_card": {
           "type": "boolean",
           "default": false,
-          "description": "Ask the card checkout to save the card"
+          "description": "Applies to the card checkout, which this tool does not offer. Leave it out."
         },
         "metadata": {
           "type": "object",
@@ -2519,7 +2519,7 @@ export const TOOLS: GeneratedTool[] = [
             "methods": {
               "type": "array",
               "minItems": 1,
-              "description": "Payment methods to offer. Send one group only: `card`, `apple_pay` and `google_pay` together, or `bank_transfer` alone. `pix` and `mobile_money` are not available in any country, so a request with them is rejected. Availability depends on the customer's address country.",
+              "description": "Payment methods to offer. This tool takes `bank_transfer` alone: pix and mobile_money are rejected in every country, and card payments go through createCardPaymentIntent. Availability depends on the customer's address country.",
               "items": {
                 "type": "string",
                 "enum": [
@@ -3902,7 +3902,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. Reuse the `Idempotency-Key` to retry. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
+    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -10627,7 +10627,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from a card — Moves money from an `active` card back to its card account. Some cards, including every new sandbox card, answer `this card withdraws by transfer`; for those, send a `POST /v1/transfer` from the card to its card account. Retry a failed call with the same Idempotency-Key. The result is also sent as the `cards.transaction.withdraw` webhook.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+    "description": "Withdraw from a card — Moves money from an `active` card back to its card account. Some cards, including every new sandbox card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card account. The result is also sent as the `cards.transaction.withdraw` webhook.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
     "inputSchema": {
       "type": "object",
       "properties": {

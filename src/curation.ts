@@ -402,7 +402,7 @@ export interface DescriptionOverride {
   whileSpecSays: string;
   /** Replaces the spec `description`, the part after the summary. */
   description?: string;
-  /** Replaces the description of the named input properties. */
+  /** Replaces the description of the named input properties (dotted for a nested one). */
   params?: Record<string, string>;
 }
 
@@ -410,6 +410,56 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
   // The ten overrides for the pre-Phase 3 specs (customers, external accounts,
   // transactions, collections, cards and fx) were deleted when the specs were fixed at
   // source and synced; generation reported each as stale.
+
+  // ---- retry advice --------------------------------------------------------
+  // Three Phase 3 descriptions say to retry a failed call with the same key. A 4xx is
+  // kept for 24 hours under its key, so that only replays the failure; the key is for a
+  // call whose outcome is unknown, as the idempotency_key argument says.
+  createAccountV2: {
+    whileSpecSays: "When you retry, reuse the same Idempotency-Key.",
+    description:
+      "Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is " +
+      "completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then " +
+      "getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the " +
+      "account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait " +
+      "for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown " +
+      "fields are rejected.",
+  },
+  createWallet: {
+    whileSpecSays: "Reuse the `Idempotency-Key` to retry.",
+    description:
+      "Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the " +
+      "address. Every call creates a new wallet with a new address, even for the same customer and network. A " +
+      "Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can " +
+      "hold USDC.",
+  },
+  withdrawFromCard: {
+    whileSpecSays: "Retry a failed call with the same Idempotency-Key.",
+    description:
+      "Moves money from an `active` card back to its card account. Some cards, including every new sandbox " +
+      "card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card " +
+      "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
+  },
+
+  // ---- collections ---------------------------------------------------------
+  // The route takes card methods, but this tool offers bank_transfer only
+  // (ENUM_RESTRICTIONS), so the card sentences describe a call the tool cannot make.
+  createCollection: {
+    whileSpecSays: "Card methods return a `payment_link`",
+    description:
+      "Starts a bank-transfer collection from a payer. The response carries the payment instructions and bank " +
+      "details. The funds settle in stablecoin to the destination. Bank transfer works in BJ, BW, BF, CM, CI, " +
+      "CG, GA, ML, MW, NG, RW, ZA, TZ, TG, UG and ZM, chosen by the customer's address country.",
+    params: {
+      amount: "Amount in major units, as a string with at most 2 decimal places.",
+      is_anonymous: "Applies to the card checkout, which this tool does not offer. Leave it out.",
+      save_card: "Applies to the card checkout, which this tool does not offer. Leave it out.",
+      "source.methods":
+        "Payment methods to offer. This tool takes `bank_transfer` alone: pix and mobile_money are rejected in " +
+        "every country, and card payments go through createCardPaymentIntent. Availability depends on the " +
+        "customer's address country.",
+    },
+  },
 };
 
 /**
