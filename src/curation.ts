@@ -378,6 +378,12 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/fx/orders",
   "POST /v1/collections",
   "POST /v1/collections/cards/payment-intents/charge",
+  // With a card_token the intent charges the saved card at once, with no payer step.
+  // Without one it only makes a payment link, but the gate is per route, so both ask.
+  "POST /v1/collections/cards/payment-intents",
+  // Cancelling does not return funds already debited, and API-key orders are debited
+  // when they are placed, so a cancel cannot be undone.
+  "POST /v1/fx/orders/{order_id}/cancel",
 ]);
 
 /**
@@ -424,6 +430,12 @@ export const PREREQUISITES: Record<string, string> = {
     "Orders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
 
   withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
+
+  cancelFxOrder:
+    "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
+
+  createCardPaymentIntent:
+    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
 
   createCollection:
     "MOVES MONEY: initiates a collection from a payer. Requires confirm: true.",

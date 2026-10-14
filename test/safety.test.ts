@@ -64,6 +64,30 @@ describe("money-movement gating", () => {
   });
 });
 
+describe("previews for the newly gated tools", () => {
+  test("a payment intent with a card token says it charges now", () => {
+    const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    const body = { amount: "50", currency: "USD", card_token: "tokn_1" };
+    const result = gate().check(intent, body, { method: "POST", path: intent.path, body });
+    assert.match(result!.willDo, /Charge 50 USD to saved card token tokn_1 now/);
+  });
+
+  test("a payment intent without a token says no money moves yet", () => {
+    const intent = TOOLS_BY_NAME.get("createCardPaymentIntent")!;
+    const body = { amount: "50", currency: "USD" };
+    const result = gate().check(intent, body, { method: "POST", path: intent.path, body });
+    assert.match(result!.willDo, /payment link for 50 USD/);
+    assert.match(result!.willDo, /No money moves/);
+  });
+
+  test("an FX cancel names the order and the lost refund", () => {
+    const cancel = TOOLS_BY_NAME.get("cancelFxOrder")!;
+    const result = gate().check(cancel, { order_id: "ord_1" }, { method: "POST", path: cancel.path, body: undefined });
+    assert.match(result!.willDo, /Cancel FX order ord_1/);
+    assert.match(result!.willDo, /does not return funds/);
+  });
+});
+
 describe("read-only mode", () => {
   test("hides non-GET tools from the advertised list", () => {
     const g = gate({ readOnly: true });

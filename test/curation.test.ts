@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import {
   BLOCKED_TOOL_NAMES,
   DEFAULT_TOOLSETS,
+  MONEY_OPS,
   RETIRED_TOOLSETS,
   TOOLSETS,
   UnknownToolsetError,
+  opKey,
   parseToolsets,
 } from "../src/curation.ts";
-import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
+import { TOOLS, TOOLS_BY_NAME } from "../src/generated/tools.ts";
 import { MANUAL_TOOLS } from "../src/manual-tools.ts";
 
 const advertised = new Set([...TOOLS_BY_NAME.keys(), ...MANUAL_TOOLS.map((t) => t.name)]);
@@ -91,5 +93,47 @@ describe("toolsets", () => {
 
   test("an unknown name still fails", () => {
     assert.throws(() => parseToolsets("customers,bogus"), UnknownToolsetError);
+  });
+});
+
+/**
+ * Every tool that moves money or cannot be undone, and why. The gate is the only thing
+ * between a model and a real payment, so the set is pinned both ways: a tool that loses
+ * its gate fails, and so does one that gains a gate nobody listed here.
+ */
+const GATED: Record<string, { route: string; why: string }> = {
+  createTransfer: { route: "POST /v1/transfer", why: "sends money" },
+  withdrawFromCard: { route: "POST /v1/cards/withdraw", why: "moves card funds" },
+  createFxOrder: { route: "POST /v1/fx/orders", why: "debits the source at once" },
+  cancelFxOrder: { route: "POST /v1/fx/orders/{order_id}/cancel", why: "debited funds are not returned" },
+  createCollection: { route: "POST /v1/collections", why: "takes money from a payer" },
+  createCardPaymentIntent: {
+    route: "POST /v1/collections/cards/payment-intents",
+    why: "charges at once with card_token",
+  },
+  chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
+};
+
+describe("money and irreversible tools are gated", () => {
+  for (const [name, { route, why }] of Object.entries(GATED)) {
+    test(`${name} needs confirm: ${why}`, () => {
+      const tool = TOOLS_BY_NAME.get(name);
+      assert.ok(tool, `${name} must exist`);
+      assert.equal(opKey(tool.method, tool.path), route);
+      assert.equal(tool.movesMoney, true);
+      assert.ok((tool.inputSchema as any).properties.confirm, `${name} must offer confirm`);
+    });
+  }
+
+  test("no other tool is gated", () => {
+    assert.deepEqual(
+      TOOLS.filter((t) => t.movesMoney).map((t) => t.name).sort(),
+      Object.keys(GATED).sort(),
+    );
+  });
+
+  test("MONEY_OPS names no route without a tool", () => {
+    const routes = new Set(TOOLS.map((t) => opKey(t.method, t.path)));
+    for (const key of MONEY_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
   });
 });

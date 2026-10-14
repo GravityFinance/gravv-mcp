@@ -95,13 +95,17 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders/{order_id}/cancel",
-    "description": "Cancel order — Cancels an order that hasn't executed yet. Orders that are already in a final state, or in a state that doesn't allow cancellation, can't be cancelled. The `Idempotency-Key` header is required; requests without it are rejected.",
+    "description": "Cancel order — Cancels an order that hasn't executed yet. Orders that are already in a final state, or in a state that doesn't allow cancellation, can't be cancelled. The `Idempotency-Key` header is required; requests without it are rejected.\n\nOnly an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "order_id": {
           "type": "string",
           "description": "The order reference returned when the order was created."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -116,7 +120,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
-    "movesMoney": false,
+    "movesMoney": true,
     "needsIdempotency": true,
     "spec": "fx.yaml"
   },
@@ -1598,7 +1602,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents",
-    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_",
+    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_\n\nWithout card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1709,6 +1713,10 @@ export const TOOLS: GeneratedTool[] = [
           "example": {
             "order_id": "ord_123"
           }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -1737,7 +1745,7 @@ export const TOOLS: GeneratedTool[] = [
       "metadata"
     ],
     "alsoInBody": [],
-    "movesMoney": false,
+    "movesMoney": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },

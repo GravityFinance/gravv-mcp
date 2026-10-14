@@ -168,7 +168,7 @@ export class SafetyGate {
       status: "confirmation_required",
       tool: tool.name,
       environment: this.config.environment,
-      willDo: summarise(tool, preview.body),
+      willDo: summarise(tool, preview.body, args),
       request: preview,
       next: `Show this to the user and get their agreement. Then call ${tool.name} again with the identical arguments plus confirm: true.`,
       warning: isLive
@@ -179,7 +179,7 @@ export class SafetyGate {
 }
 
 /** Plain-language summary of what a money-moving call will do, for the confirmation step. */
-function summarise(tool: GeneratedTool, body: unknown): string {
+function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unknown>): string {
   const b = (body ?? {}) as Record<string, any>;
   const amount = b.amount ?? b.value ?? b.source_amount;
   const currency = b.currency ?? b.source_currency ?? b.from_currency ?? "";
@@ -200,6 +200,12 @@ function summarise(tool: GeneratedTool, body: unknown): string {
       return `Initiate a collection of ${money} from the payer via ${b.collection_method ?? "the specified method"}.`;
     case "chargeSavedCard":
       return `Charge ${money} to saved card ${b.card_id ?? b.card_token ?? "(unspecified)"}.`;
+    case "createCardPaymentIntent":
+      return b.card_token
+        ? `Charge ${money} to saved card token ${b.card_token} now. A decline still returns HTTP 200: check data.status.`
+        : `Create a hosted payment link for ${money}. No money moves until the payer pays.`;
+    case "cancelFxOrder":
+      return `Cancel FX order ${args.order_id ?? "(unspecified)"}. Cancelling does not return funds already debited.`;
     default:
       return `Execute ${tool.method.toUpperCase()} ${tool.path} with ${money}.`;
   }
