@@ -33,8 +33,10 @@ jobs:
       - name: Require the client-docs read token
         id: token
         # client-docs is private, so the checkout below needs a token with read access to it.
-        # A PR run without the secret skips with a warning, so a PR is never red for a missing
+        # A PR run without the secret skips the comparison, so a PR is never red for a missing
         # repository setting; the nightly and manual runs still fail and open the drift issue.
+        # A skipped run is still green, so the next step says so in its name, in a warning and
+        # in the job summary, where it cannot be taken for a comparison that passed.
         env:
           CLIENT_DOCS_READ_TOKEN: ${{ secrets.CLIENT_DOCS_READ_TOKEN }}
           EVENT: ${{ github.event_name }}
@@ -46,11 +48,26 @@ jobs:
           echo "present=false" >> "$GITHUB_OUTPUT"
           message="The CLIENT_DOCS_READ_TOKEN secret is not set. Add a token with read access to GravityFinance/client-docs."
           if [ "${EVENT}" = "pull_request" ]; then
-            echo "::warning::${message} Skipping the spec drift check on this PR."
             exit 0
           fi
           echo "::error::${message}"
           exit 1
+
+      - name: "Skipped: CLIENT_DOCS_READ_TOKEN not set, specs not compared"
+        if: steps.token.outputs.present != 'true'
+        run: |
+          echo "::warning title=Spec drift check skipped::CLIENT_DOCS_READ_TOKEN is not set, so specs/ and src/docs-redirects.ts were not compared with client-docs. This green check does not mean they match."
+          {
+            echo "## Spec drift check skipped"
+            echo
+            echo "The \`CLIENT_DOCS_READ_TOKEN\` repository secret is not set, so \`specs/\` and"
+            echo "\`src/docs-redirects.ts\` were **not** compared with client-docs main."
+            echo "This run is green only so that a PR is not red for a missing repository setting;"
+            echo "it does not mean the vendored copies match."
+            echo
+            echo "To turn the check on, add a token with read access to GravityFinance/client-docs"
+            echo "as the \`CLIENT_DOCS_READ_TOKEN\` repository secret."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/checkout@v4
         if: steps.token.outputs.present == 'true'
@@ -75,8 +92,10 @@ jobs:
         run: |
           if ! npm run --silent sync-specs -- --check; then
             echo "::error::specs/ or src/docs-redirects.ts differs from client-docs main. Run GRAVV_OPENAPI_DIR=<client-docs>/openapi npm run sync-specs, then npm run generate and npm run scenarios, and commit the result."
+            echo "## Spec drift found: specs/ or src/docs-redirects.ts differs from client-docs main" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          echo "## Spec drift check passed: specs/ and src/docs-redirects.ts match client-docs main ($(git -C client-docs rev-parse --short HEAD))" >> "$GITHUB_STEP_SUMMARY"
 
   docs-links:
     name: docs links the server hands out resolve
