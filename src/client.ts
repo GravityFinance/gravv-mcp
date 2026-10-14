@@ -98,6 +98,8 @@ export interface ClientOptions {
   timeoutMs?: number;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
+  /** How the client waits before a retry. Injectable for tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface CallResult {
@@ -116,6 +118,7 @@ export class GravvClient {
   private readonly limiter: RateLimiter;
   private readonly timeoutMs: number;
   private readonly doFetch: typeof fetch;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(opts: ClientOptions) {
     this.opts = opts;
@@ -124,6 +127,7 @@ export class GravvClient {
     this.limiter = new RateLimiter(opts.ratePerMinute ?? 60, opts.rateBurst ?? 15);
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.doFetch = opts.fetchImpl ?? fetch;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
   /**
@@ -237,14 +241,14 @@ export class GravvClient {
 
       if (res.status === 409 && attempt < maxAttempts) {
         const retryAfter = Number(res.headers.get("Retry-After") ?? 1);
-        await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
+        await this.sleep(Math.max(1, retryAfter) * 1000);
         lastError = new GravvApiError(apiMessage, 409, parsed);
         continue;
       }
 
       if (res.status === 429 && attempt < maxAttempts) {
         const retryAfter = Number(res.headers.get("Retry-After") ?? 6);
-        await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
+        await this.sleep(Math.max(1, retryAfter) * 1000);
         lastError = new GravvApiError(String(apiMessage), 429, parsed);
         continue;
       }

@@ -23,8 +23,19 @@ function stub(responses: Array<{ status: number; body?: unknown; headers?: Recor
   return { calls, fetchImpl };
 }
 
+/** Every retry wait the clients below asked for, in ms. No test waits for real. */
+let waits: number[] = [];
+
 const client = (fetchImpl: typeof fetch, apiKey = "grvSec_sandbox_test") =>
-  new GravvClient({ apiKey, fetchImpl, ratePerMinute: 100_000, rateBurst: 100_000 });
+  new GravvClient({
+    apiKey,
+    fetchImpl,
+    ratePerMinute: 100_000,
+    rateBurst: 100_000,
+    sleep: async (ms) => {
+      waits.push(ms);
+    },
+  });
 
 const createCustomer = TOOLS_BY_NAME.get("createCustomer")!;
 const getAccount = TOOLS_BY_NAME.get("getAccount")!;
@@ -229,6 +240,7 @@ describe("error message extraction", () => {
 
 describe("retries", () => {
   test("retries a 409 in-flight conflict then succeeds", async () => {
+    waits = [];
     const { calls, fetchImpl } = stub([
       { status: 409, body: { error: "in flight" }, headers: { "Retry-After": "1" } },
       { status: 200, body: { data: { ok: true } } },
@@ -236,6 +248,7 @@ describe("retries", () => {
     const res = await client(fetchImpl).call(createCustomer, { body: {} });
     assert.equal(calls.length, 2);
     assert.deepEqual(res.data, { ok: true });
+    assert.deepEqual(waits, [1000], "the wait goes through the injected sleep");
   });
 
   test("gives up after repeated 409s rather than looping", async () => {
