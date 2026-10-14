@@ -90,7 +90,7 @@ export interface ClientOptions {
 
 export interface CallResult {
   data: unknown;
-  /** Present on POSTs; echoed back so a retry can reuse the same key deliberately. */
+  /** Present on POSTs; returned for tracing. Every call gets a new key. */
   idempotencyKey?: string;
   /** True when the gateway replayed a stored response rather than re-executing. */
   replayed: boolean;
@@ -237,7 +237,7 @@ export class GravvClient {
         continue;
       }
 
-      throw new GravvApiError(apiMessage, res.status, parsed, hintFor(res.status, tool, apiMessage));
+      throw new GravvApiError(apiMessage, res.status, parsed, hintFor(res.status, tool, apiMessage, parsed));
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
@@ -278,13 +278,60 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
 }
 
 /**
+ * The machine-readable code of an error body, wherever the gateway put it: inside the
+ * error object (`{"error":{"code":"idempotency_key_reused",…}}`) or at the top level
+ * beside a string error (`{"error":"…","code":"ERROR_CODE_DAILY_LIMIT_EXCEEDED"}`).
+ */
+function errorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as Record<string, unknown>;
+  const inner = b.error && typeof b.error === "object" ? (b.error as Record<string, unknown>).code : undefined;
+  if (typeof inner === "string" && inner) return inner;
+  return typeof b.code === "string" && b.code ? b.code : undefined;
+}
+
+/** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
+const LIMIT_CODES = new Set([
+  "ERROR_CODE_LIMIT_EXCEEDED",
+  "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
+  "ERROR_CODE_PER_TRANSFER_LIMIT_EXCEEDED",
+  "ERROR_CODE_MONTHLY_LIMIT_EXCEEDED",
+  "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED",
+]);
+
+/** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
+function hint422(code: string | undefined): string {
+  if (code === "idempotency_key_reused") {
+    return "The gateway saw this Idempotency-Key before with a different body. This server makes a new key for every call, so calling the tool again sends a fresh one.";
+  }
+  if (code && LIMIT_CODES.has(code)) {
+    return "Not an idempotency problem. The transfer is over a sender limit (see window and details). Reduce the amount or wait for the window to reset. Retrying the same call will not help.";
+  }
+  switch (code) {
+    case "ERROR_CODE_SUBJECT_BLOCKED":
+      return "Transfers are not permitted for this sender. Contact Gravv compliance; do not retry.";
+    case "ERROR_CODE_REMITTER_INFORMATION_REQUIRED":
+      return "More sender information is needed. Add the remitter details in additional_information and call again.";
+    case "ERROR_CODE_SUPPORTING_DOCUMENT_REQUIRED":
+      return "This transfer needs a supporting document. Upload one and pass its id in supporting_document_ids. Search the docs for 'transfer supporting documents'.";
+    default:
+      return "The API could not process the request. Read the error and its code; this is not an idempotency problem.";
+  }
+}
+
+/**
  * Turn the statuses merchants actually hit into something actionable.
  *
- * `message` is consulted so the hint does not contradict the API. A 400 saying
- * "missing field `client_reference`" needs no speculation about idempotency headers —
- * guessing there sends the model chasing the wrong thing.
+ * `message` and the body's error code are consulted so the hint does not contradict the
+ * API. A 400 saying "missing field `client_reference`" needs no speculation about
+ * idempotency headers — guessing there sends the model chasing the wrong thing.
  */
-function hintFor(status: number, tool: GeneratedTool, message = ""): string | undefined {
+export function hintFor(
+  status: number,
+  tool: GeneratedTool,
+  message = "",
+  body: unknown = null,
+): string | undefined {
   const mentionsIdempotency = /idempotenc/i.test(message);
 
   // Not every 400 is a malformed request. Several are business preconditions — the
@@ -317,7 +364,7 @@ function hintFor(status: number, tool: GeneratedTool, message = ""): string | un
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
     case 422:
-      return "This idempotency key was already used with a different payload. Retrying the same operation must reuse the key with an identical body; a genuinely new operation needs a new key.";
+      return hint422(errorCode(body));
     case 429:
       return "Rate limited. The client throttles locally, so repeated 429s suggest the configured ceiling is above the real one — lower GRAVV_RATE_PER_MINUTE.";
     default:
