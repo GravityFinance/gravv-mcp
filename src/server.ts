@@ -106,8 +106,8 @@ export interface ServerConfig {
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
   const wanted = toolsets === "all" ? null : new Set(toolsets);
-  // Approval tools have no OpenAPI specification, so they are hand-authored and merged
-  // in here rather than generated.
+  // Tools for routes no OpenAPI specification covers are hand-authored and merged in
+  // here rather than generated.
   const candidates: GeneratedTool[] = [...TOOLS, ...MANUAL_TOOLS];
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
@@ -135,7 +135,9 @@ function instructions(
 
   if (hasApiKey) {
     lines.push(
-      `${tools.length} API tools loaded across: ${sets.join(", ")}.`,
+      tools.length > 0
+        ? `${tools.length} API tools loaded across: ${sets.join(", ")}.`
+        : "No API tools loaded: the --toolsets selection matched none. Restart with --toolsets=all, or name the toolsets you need.",
       "",
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",

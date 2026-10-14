@@ -55,7 +55,9 @@ async function main() {
 
   let toolsets: Toolset[] | "all";
   try {
-    toolsets = parseToolsets(arg("toolsets") ?? process.env.GRAVV_TOOLSETS);
+    toolsets = parseToolsets(arg("toolsets") ?? process.env.GRAVV_TOOLSETS, (message) =>
+      process.stderr.write(`warning: ${message}\n`),
+    );
   } catch (err) {
     if (!(err instanceof UnknownToolsetError)) throw err;
     process.stderr.write(`error: ${err.message}\n`);

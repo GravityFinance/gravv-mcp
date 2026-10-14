@@ -28,7 +28,6 @@ export const TOOLSETS = [
   "customers",
   "accounts",
   "account-applications",
-  "approvals",
   "transfers",
   "transactions",
   "external-accounts",
@@ -43,6 +42,15 @@ export const TOOLSETS = [
 ] as const;
 
 export type Toolset = (typeof TOOLSETS)[number];
+
+/**
+ * Toolset names that existed in earlier releases. Saved configurations still name them
+ * (`--toolsets=approvals`, `GRAVV_TOOLSETS=...`), so they are accepted with a warning and
+ * ignored rather than refused: refusing them would stop those servers from starting.
+ */
+export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
+  approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
+};
 
 /** Toolsets that load only when named, or with --toolsets=all. */
 export const OPT_IN_TOOLSETS: ReadonlySet<Toolset> = new Set<Toolset>(["account-applications"]);
@@ -72,17 +80,38 @@ export class UnknownToolsetError extends Error {
 
 /**
  * Parse a --toolsets / GRAVV_TOOLSETS value. No value means the default set; "all" means
- * every toolset. An unknown name throws, so a typo fails loudly instead of silently
- * loading less than was asked for.
+ * every toolset. A retired name is dropped with a warning. An unknown name throws, so a
+ * typo fails loudly instead of silently loading less than was asked for.
+ *
+ * When only retired names were given, the result is empty: the server starts with the
+ * documentation tools alone. Falling back to the default set would load tools, money
+ * movement among them, that the operator never asked for.
  */
-export function parseToolsets(raw: string | undefined): Toolset[] | "all" {
+export function parseToolsets(
+  raw: string | undefined,
+  warn: (message: string) => void = () => {},
+): Toolset[] | "all" {
   if (!raw) return DEFAULT_TOOLSETS;
   if (raw === "all") return "all";
 
   const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const bad = requested.filter((t) => !(TOOLSETS as readonly string[]).includes(t));
+  const bad = requested.filter(
+    (t) => !(TOOLSETS as readonly string[]).includes(t) && !Object.hasOwn(RETIRED_TOOLSETS, t),
+  );
   if (bad.length) throw new UnknownToolsetError(bad);
-  return requested as Toolset[];
+
+  const kept: Toolset[] = [];
+  for (const t of requested) {
+    if (Object.hasOwn(RETIRED_TOOLSETS, t)) {
+      warn(`toolset "${t}" was removed in 0.3.2 (${RETIRED_TOOLSETS[t]}); ignoring it.`);
+      continue;
+    }
+    kept.push(t as Toolset);
+  }
+  if (kept.length === 0 && requested.length > 0) {
+    warn("no API toolsets left to load; starting with the documentation tools only.");
+  }
+  return kept;
 }
 
 interface Op {
@@ -214,7 +243,7 @@ export const NAMES: Record<string, Op> = {
 };
 
 /**
- * Never exposed as tools, with the reason. Two categories:
+ * Never exposed as tools, with the reason. The categories:
  *
  *  - Cardholder data. These return PAN, CVV, and PIN. That must not enter a model's
  *    context under any configuration, so there is no flag to enable them. Merchants
@@ -224,6 +253,10 @@ export const NAMES: Record<string, Op> = {
  *  - Superseded KYC. /v1/risk/* is replaced by /v1/customers/kyc/*. Exposing both
  *    gives the model two plausible paths for the same job and it will sometimes pick
  *    the deprecated one.
+ *
+ *  - Dashboard-only. These routes refuse API keys, so a tool for them fails on every
+ *    call. They are in no specification, so the generator never meets them; the
+ *    entries are the written record of why they are absent.
  */
 export const BLOCKED: Record<string, string> = {
   "GET /v1/cards/{card_id}/sensitive-details":
@@ -236,6 +269,20 @@ export const BLOCKED: Record<string, string> = {
   "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
   "POST /v1/risk/upload-document":
     "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
+  "POST /v1/transfer/{id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
+  "POST /v1/transfer/{id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
+  "POST /v1/external-accounts/{id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject recipients in the Gravv Dashboard.",
+  "POST /v1/external-accounts/{id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject recipients in the Gravv Dashboard.",
+  "POST /v1/fx/orders/{order_id}/approve":
+    "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
+  "POST /v1/fx/orders/{order_id}/reject":
+    "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
+  "GET /v1/webhooks/ingestion/search":
+    "Dashboard only: an internal route that API keys cannot call. Check your own deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
 };
 
 /**
@@ -278,6 +325,20 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
   startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
   uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
+  approveTransfer:
+    "Not available over MCP: approving a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  rejectTransfer:
+    "Not available over MCP: rejecting a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  approveExternalAccount:
+    "Not available over MCP: approving a recipient is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  rejectExternalAccount:
+    "Not available over MCP: rejecting a recipient is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  approveFxOrder:
+    "Not available over MCP: approving an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard. Orders placed with an API key need no approval: they run at once.",
+  rejectFxOrder:
+    "Not available over MCP: rejecting an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
+  searchWebhookIngestion:
+    "Not available over MCP: this is an internal Dashboard route that API keys cannot call. Check your own webhook deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
 };
 
 /**
@@ -294,10 +355,6 @@ export const MONEY_OPS = new Set<string>([
   "POST /v1/fx/orders",
   "POST /v1/collections",
   "POST /v1/collections/cards/payment-intents/charge",
-  // Approving releases a held instruction for execution, so it moves money just as
-  // surely as initiating one. Rejecting does not, and is not gated.
-  "POST /v1/transfer/{id}/approve",
-  "POST /v1/fx/orders/{order_id}/approve",
 ]);
 
 /**
