@@ -30,6 +30,7 @@ import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
 import { VERSION } from "./version.ts";
 import { PROMPTS, PROMPTS_BY_NAME, renderPrompt } from "./prompts.ts";
+import { nextStepFor } from "./fix-hints.ts";
 
 
 /**
@@ -163,7 +164,7 @@ export function instructions(
       "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
       "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
       "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",
-      "- An HTTP 200 is not always done. `transfer_status: paused` is not a failure: read `requirements` and resume the transfer; never send it again.",
+      "- An HTTP 200 is not always done. `transfer_status: paused` is not a failure: read `requirements` and resume the transfer; never send it again. When a result carries `next_step`, do that next.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -389,8 +390,12 @@ export function createServer(config: ServerConfig) {
 
       const result = await client!.call(tool, callArgs, { idempotencyKey: suppliedKey ?? undefined });
 
+      // A 200 that is not done (a paused transfer, a declined card) says what to do next,
+      // ahead of data so a cut answer keeps it.
+      const nextStep = nextStepFor(tool.name, result.data);
       const payload: Record<string, unknown> = {
         environment,
+        ...(nextStep ? { next_step: nextStep } : {}),
         data: redact(saveDownload(tool.name, callArgs, result.data, config.downloadDir ?? defaultDownloadDir())),
       };
       const ignored = ignoredArguments(tool, callArgs);

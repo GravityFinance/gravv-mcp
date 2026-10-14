@@ -1,8 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { GravvClient, GravvApiError, hintFor } from "../src/client.ts";
-import { ERROR_FIXES, errorFixFor } from "../src/fix-hints.ts";
+import { ERROR_FIXES, RESULT_STEPS, errorFixFor, nextStepFor } from "../src/fix-hints.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
+import { createServer } from "../src/server.ts";
 import { FALSE_TEXT } from "./false-text.ts";
 
 /**
@@ -194,5 +197,143 @@ describe("fix hints", () => {
     const hint = hintFor(400, fx, "quote is invalid or expired", null, { replayed: true }) ?? "";
     assert.match(hint, /^This is the stored answer to an earlier call/);
     assert.match(hint, /without idempotency_key\. Nothing was ordered/);
+  });
+});
+
+/** One 200 answer per next step, as `data` (the gateway's wrapper removed). */
+const RESULTS: Record<string, { tool: string; data: unknown; says: RegExp }> = {
+  "transfer-paused": {
+    tool: "createTransfer",
+    data: {
+      transfer_status: "paused",
+      reference: "7c1d2e3f-0000-4000-8000-000000000001",
+      pause_reason: "supporting_document_required",
+      requirements: [{ type: "supporting_document", description: "An invoice for this payment" }],
+      expires_at: "2026-10-21T10:00:00Z",
+    },
+    says: /Not a failure: the transfer is paused \(supporting_document_required\)[^]*uploadTransferDocument[^]*resumeTransfer with id set to the transfer `reference`/,
+  },
+  "transfer-waiting-approval": {
+    tool: "createTransfer",
+    data: { transfer_status: "waiting_approval", status: "pending" },
+    says: /Waiting for approval in the Gravv Dashboard/,
+  },
+  "transaction-paused": {
+    tool: "getTransaction",
+    data: { id: "t1", status: "paused", reference: "7c1d2e3f-0000-4000-8000-000000000001" },
+    says: /Paused, not failed[^]*this row's `reference`/,
+  },
+  "manual-review": {
+    tool: "getWebhookHistory",
+    data: {
+      items: [
+        { event_type: "transfer.status.failed", event_data: { transfer_status: "manual_processing_required" } },
+      ],
+    },
+    says: /held for manual review[^]*not lost/,
+  },
+  "intent-charge-failed": {
+    tool: "createCardPaymentIntent",
+    data: { status: "charge_failed", message: "card declined" },
+    says: /a decline, not an error[^]*at most 5 attempts within 24 hours/,
+  },
+  "intent-requires-action": {
+    tool: "chargeSavedCard",
+    data: { status: "requires_action", next_action_url: "https://checkout.test/3ds" },
+    says: /next_action_url/,
+  },
+  "card-kyc-upload-error": {
+    tool: "uploadCardholderKycDocument",
+    data: { status: "error", error_code: "DOCUMENT_ERROR" },
+    says: /The file was refused/,
+  },
+  "card-kyc-s2s-code": {
+    tool: "startCardholderKycS2S",
+    data: { code: "MISSING_DOCUMENTS", details: { missing_documents: ["SELFIE"] } },
+    says: /details\.missing_documents/,
+  },
+  "feature-liveness": {
+    tool: "activateFeature",
+    data: { status: "pending_liveness", websdk_url: "https://liveness.test/x" },
+    says: /websdk_url[^]*activateFeature again/,
+  },
+  "application-null": { tool: "getAccountApplication", data: null, says: /No application has this id/ },
+  "account-v2-action": {
+    tool: "getAccountV2",
+    data: { status: "pending", requires_user_action: true, status_reason: "documents_required", application_id: "a1" },
+    says: /updateAccountApplicationV2/,
+  },
+  "payee-pending": { tool: "createExternalAccount", data: { id: "p1", status: "pending" }, says: /until `active`/ },
+  "limits-default-tier": {
+    tool: "getRemitterLimits",
+    data: { remitter_id: "r1", tier_assignment: "default", mode: "enforce" },
+    says: /default tier/,
+  },
+  "limits-shadow": { tool: "getCustomerLimits", data: { mode: "shadow", windows: [] }, says: /measured, not enforced/ },
+};
+
+describe("next steps on 200 answers", () => {
+  test("each step names scenarios and real tools, and has a fixture", () => {
+    for (const s of RESULT_STEPS) {
+      assert.ok(s.scenarios.length > 0, s.id);
+      for (const t of s.tools) assert.ok(KNOWN.has(t), `${s.id}: ${t} is not a tool`);
+      assert.ok(RESULTS[s.id], `${s.id} needs a fixture`);
+    }
+  });
+
+  for (const [id, r] of Object.entries(RESULTS)) {
+    test(`${id}: the answer gets its step, and every tool it names is real`, () => {
+      const step = nextStepFor(r.tool, r.data) ?? "";
+      assert.match(step, r.says);
+      for (const m of step.replace(/`[^`]*`/g, "").matchAll(/\b[a-z]+[A-Z][A-Za-z0-9]*\b/g)) {
+        assert.ok(KNOWN.has(m[0]), `${id}: "${m[0]}" is not a tool`);
+      }
+      for (const [pattern, why] of FALSE_TEXT) assert.doesNotMatch(step, pattern, `${id}: ${why}`);
+    });
+  }
+
+  test("each pause reason gets its own ask", () => {
+    const step = (pause_reason: string) => nextStepFor("createTransfer", { transfer_status: "paused", pause_reason }) ?? "";
+    assert.match(step("sender_details_required"), /additional_information/);
+    assert.match(step("weekly"), /getCustomerLimits or getRemitterLimits/);
+    assert.match(step("screening"), /nothing to send/);
+    assert.match(nextStepFor("resumeTransfer", { resumed: false, requirements: [] }) ?? "", /still|paused/);
+  });
+
+  test("an answer that is done gets no step", () => {
+    assert.equal(nextStepFor("createTransfer", { transfer_status: "pending" }), undefined);
+    assert.equal(nextStepFor("getTransaction", { status: "completed" }), undefined);
+    assert.equal(nextStepFor("resumeTransfer", { resumed: true }), undefined);
+    assert.equal(nextStepFor("getExternalAccount", { status: "active" }), undefined);
+    assert.equal(nextStepFor("getAccount", null), undefined, "only the v1 application read means data null");
+  });
+
+  test("the server returns next_step ahead of data", async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({ data: { resumed: false, transfer_status: "paused", pause_reason: "sender_details_required" }, error: null }),
+        { status: 200 },
+      )) as unknown as typeof fetch;
+    const { server } = createServer({
+      apiKey: "grvSec_sandbox_next",
+      toolsets: "all",
+      readOnly: false,
+      allowLiveWrites: false,
+      fetchImpl,
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "next-step", version: "1.0.0" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    try {
+      const res = (await client.callTool({
+        name: "resumeTransfer",
+        arguments: { id: "7c1d2e3f-0000-4000-8000-000000000001", confirm: true },
+      })) as any;
+      const payload = JSON.parse(res.content[0].text);
+      assert.deepEqual(Object.keys(payload).slice(0, 3), ["environment", "next_step", "data"]);
+      assert.match(payload.next_step, /sender details/);
+    } finally {
+      await client.close();
+    }
   });
 });

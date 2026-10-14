@@ -286,3 +286,208 @@ export function errorFixFor(tool: string, status: number, message: string, body:
       (f.codes ?? []).some((c) => new RegExp(`\\b${c}\\b`).test(text)) || (f.messages ?? []).some((m) => m.test(message)),
   );
 }
+
+/**
+ * Next steps for answers that succeed but are not done.
+ *
+ * An HTTP 200 can be a paused transfer, a declined card, a file the card KYC refused, or an
+ * application id that does not exist. The data says so, in a field a model can miss; the
+ * server returns the matching step as `next_step`, ahead of `data` so a cut answer keeps it.
+ */
+export interface ResultStep {
+  id: string;
+  scenarios: string[];
+  tools: string[];
+  /** The step for this answer, or undefined when it does not apply. */
+  step: (data: unknown) => string | undefined;
+}
+
+type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
+
+/** True when any object in `v`, at any depth, has `key` set to `value`. */
+function hasDeep(v: unknown, key: string, value: unknown, depth = 0): boolean {
+  if (depth > 6 || !v || typeof v !== "object") return false;
+  if (Array.isArray(v)) return v.some((x) => hasDeep(x, key, value, depth + 1));
+  const o = v as Obj;
+  if (o[key] === value) return true;
+  return Object.values(o).some((x) => hasDeep(x, key, value, depth + 1));
+}
+
+const LIMIT_WINDOWS = new Set(["per_transfer", "daily", "weekly", "monthly", "annual"]);
+
+/** What a paused transfer needs, by pause_reason. */
+function pauseAsk(reason: unknown): string {
+  if (reason === "supporting_document_required") {
+    return "Upload the document with uploadTransferDocument (PDF, PNG or JPEG under 500 KB) and pass its id in supporting_document_ids.";
+  }
+  if (reason === "sender_details_required") {
+    return "Ask the user for exactly the sender details listed and send them in additional_information; for `customer_email`, updateCustomer first.";
+  }
+  if (typeof reason === "string" && LIMIT_WINDOWS.has(reason)) {
+    return "It is over a limit window (`breached_window`, `remaining_usd`): getCustomerLimits or getRemitterLimits shows what is left. Send real verification details only, never invented ones.";
+  }
+  if (reason === "annual_requires_approval" || reason === "screening") {
+    return "Gravv reviews it, so there is nothing to send: follow it with getTransaction.";
+  }
+  return "Ask the user for exactly what `requirements` lists.";
+}
+
+export const RESULT_STEPS: ResultStep[] = [
+  {
+    id: "transfer-paused",
+    scenarios: ["S-PAY-06", "S-PAY-11", "S-CUS-07", "S-REM-02", "S-REM-10", "S-TXN-05"],
+    tools: ["createTransfer", "resumeTransfer"],
+    step: (data) => {
+      const d = obj(data);
+      if (d.transfer_status !== "paused" && d.resumed !== false) return undefined;
+      return (
+        `Not a failure: the transfer is paused${typeof d.pause_reason === "string" ? ` (${d.pause_reason})` : ""} and ` +
+        `needs what \`requirements\` lists. ${pauseAsk(d.pause_reason)} Then call resumeTransfer with id set to the ` +
+        "transfer `reference`, before `expires_at`, after the user agrees. Never send the transfer again."
+      );
+    },
+  },
+  {
+    id: "transfer-waiting-approval",
+    scenarios: ["S-TXN-05"],
+    tools: ["createTransfer", "getTransaction"],
+    step: (data) => {
+      const d = obj(data);
+      if (d.transfer_status !== "waiting_approval" && d.status !== "waiting_approval") return undefined;
+      return "Waiting for approval in the Gravv Dashboard: there is nothing to send, and it must not be sent again. Follow it with getTransaction.";
+    },
+  },
+  {
+    id: "transaction-paused",
+    scenarios: ["S-TXN-05", "S-REM-10"],
+    tools: ["getTransaction"],
+    step: (data) =>
+      obj(data).status === "paused"
+        ? "Paused, not failed. The requirements are in the createTransfer answer, or in the `transfer.requires_information` event (getWebhookHistory with transaction_id). Resume it with resumeTransfer, id set to this row's `reference`. Never send it again."
+        : undefined,
+  },
+  {
+    id: "manual-review",
+    scenarios: ["S-PAY-12", "S-REM-10", "S-TXN-05"],
+    tools: ["getWebhookHistory", "getWebhookEventDetail"],
+    step: (data) =>
+      hasDeep(data, "transfer_status", "manual_processing_required")
+        ? "An event here says `manual_processing_required`: the transfer is held for manual review, and its transaction stays pending. The money is not lost and the outcome is not final. Do not send it again; escalate to support if it stays held."
+        : undefined,
+  },
+  {
+    id: "intent-charge-failed",
+    scenarios: ["S-COL-04"],
+    tools: ["createCardPaymentIntent"],
+    step: (data) =>
+      obj(data).status === "charge_failed"
+        ? "The card was declined: a decline, not an error. Tell the payer, and ask before trying again. A payment intent takes at most 5 attempts within 24 hours; after that, create a new one."
+        : undefined,
+  },
+  {
+    id: "intent-requires-action",
+    scenarios: ["S-COL-03", "S-COL-04"],
+    tools: ["createCardPaymentIntent", "chargeSavedCard"],
+    step: (data) =>
+      obj(data).status === "requires_action"
+        ? "The payer must complete a 3-D Secure check: give them `next_action_url`, then follow with getCollection (its `transaction_id`) and the collection webhooks."
+        : undefined,
+  },
+  {
+    id: "card-kyc-upload-error",
+    scenarios: ["S-CRD-02"],
+    tools: ["uploadCardholderKycDocument"],
+    step: (data) =>
+      obj(data).status === "error"
+        ? "The file was refused (`error_code`), although the call answered 200. Use a JPEG, PNG or PDF under 500 KB with its extension in the filename, and a 3-letter country code (a selfie needs one too). Upload again without idempotency_key."
+        : undefined,
+  },
+  {
+    id: "card-kyc-s2s-code",
+    scenarios: ["S-CRD-02"],
+    tools: ["startCardholderKycS2S"],
+    step: (data) => {
+      const d = obj(data);
+      if (d.code === "MISSING_DOCUMENTS") {
+        return "Nothing was started: upload the documents in `details.missing_documents` with uploadCardholderKycDocument, then call again without idempotency_key.";
+      }
+      if (d.code === "KYC_ALREADY_COMPLETED") {
+        return "The cardholder is already verified: go on to activateFeature. Do not start KYC again.";
+      }
+      if (d.status === "partial_success") {
+        return "Some documents failed (`failed_documents`): give the cardholder `web_url` to finish on the hosted page.";
+      }
+      return undefined;
+    },
+  },
+  {
+    id: "feature-liveness",
+    scenarios: ["S-CRD-02"],
+    tools: ["activateFeature"],
+    step: (data) =>
+      obj(data).status === "pending_liveness"
+        ? "Give the cardholder `websdk_url` for the liveness check, then call activateFeature again without idempotency_key."
+        : undefined,
+  },
+  {
+    id: "application-null",
+    scenarios: ["S-ACC1-08"],
+    tools: ["getAccountApplication"],
+    step: (data) =>
+      data === null
+        ? "No application has this id in this environment (sandbox and live hold separate data). Check the id, or list them with listAccountApplications."
+        : undefined,
+  },
+  {
+    id: "account-v2-action",
+    scenarios: ["S-ACC2-09"],
+    tools: ["getAccountV2"],
+    step: (data) =>
+      obj(data).requires_user_action === true
+        ? "The bank needs something (`status_reason`). getAccountApplicationV2 with `application_id` lists it: send `required_documents` and `required_fields` in one updateAccountApplicationV2 call, or, for `tos_pending` or `kyc_pending`, give the user `required_action_url`."
+        : undefined,
+  },
+  {
+    id: "payee-pending",
+    scenarios: ["S-PAY-01", "S-PAY-09"],
+    tools: ["createExternalAccount", "updateExternalAccount", "getExternalAccount"],
+    step: (data) => {
+      const s = obj(data).status;
+      if (s === "pending") return "Not ready for transfers yet: poll getExternalAccount until `active`, and stop on `setup_failed`.";
+      if (s === "setup_failed") {
+        return "Setup failed (`error_message`): ask the user which detail is wrong and fix it with updateExternalAccount, sending only the changed fields.";
+      }
+      return undefined;
+    },
+  },
+  {
+    id: "limits-default-tier",
+    scenarios: ["S-TXN-06"],
+    tools: ["getRemitterLimits"],
+    step: (data) =>
+      hasDeep(data, "tier_assignment", "default")
+        ? "This remitter is on the default tier, which is also what an unknown remitter id gets: check the id is right."
+        : undefined,
+  },
+  {
+    id: "limits-shadow",
+    scenarios: ["S-TXN-06", "S-CUS-06"],
+    tools: ["getCustomerLimits", "getRemitterLimits"],
+    step: (data) =>
+      hasDeep(data, "mode", "shadow")
+        ? "These limits are measured, not enforced (`mode: shadow`): no transfer is paused or refused for them."
+        : undefined,
+  },
+];
+
+const STEPS_BY_TOOL = new Map<string, ResultStep[]>();
+for (const s of RESULT_STEPS) {
+  for (const t of s.tools) STEPS_BY_TOOL.set(t, [...(STEPS_BY_TOOL.get(t) ?? []), s]);
+}
+
+/** The next step for a successful answer, or undefined when the answer needs none. */
+export function nextStepFor(tool: string, data: unknown): string | undefined {
+  const steps = (STEPS_BY_TOOL.get(tool) ?? []).map((s) => s.step(data)).filter((s): s is string => Boolean(s));
+  return steps.length > 0 ? steps.join(" ") : undefined;
+}
