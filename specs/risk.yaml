@@ -534,6 +534,7 @@ paths:
     post:
       tags:
       - Risk (deprecated)
+      deprecated: true
       summary: Start KYC verification
       description: Initiates KYC verification for a customer.
       parameters:
@@ -565,6 +566,7 @@ paths:
     post:
       tags:
       - Risk (deprecated)
+      deprecated: true
       summary: Upload document
       description: "Upload a customer document for KYC or KYB verification. This is\
         \ the first step of the server-to-server verification flow.\n\nDocuments are\
@@ -819,6 +821,7 @@ paths:
     post:
       tags:
       - Risk (deprecated)
+      deprecated: true
       summary: Initiate server-to-server KYC verification
       description: "Initiates KYC verification for a customer using previously uploaded\
         \ documents in a server-to-server (s2s) flow.\nThis is step 2 of the S2S KYC\

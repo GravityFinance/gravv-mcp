@@ -203,7 +203,24 @@ components:
                   example: USD
                 onramp_status:
                   type: string
+                  description: >-
+                    The step the collection is at. Until the status label change (on or after
+                    2026-10-31T23:59:59Z), this carries the legacy label (for example
+                    provider_success); after it, the new label (for example payment_succeeded).
+                    Read new_onramp_status to get the new label today.
                   example: initialized
+                new_onramp_status:
+                  type: string
+                  description: >-
+                    The step the collection is at, with the new label. Sent until the status
+                    label change, after which onramp_status carries the same value.
+                  example: initialized
+                status_transition_deadline:
+                  type: string
+                  format: date-time
+                  description: >-
+                    When onramp_status switches to the new labels. Sent until the change.
+                  example: '2026-10-31T23:59:59Z'
                 payment_link:
                   type: string
                   format: uri
@@ -276,7 +293,24 @@ components:
               example: created
             onramp_status:
               type: string
+              description: >-
+                The step the collection is at. Until the status label change (on or after
+                2026-10-31T23:59:59Z), this carries the legacy label (for example
+                provider_success); after it, the new label (for example payment_succeeded).
+                Read new_onramp_status to get the new label today.
               example: initialized
+            new_onramp_status:
+              type: string
+              description: >-
+                The step the collection is at, with the new label. Sent until the status
+                label change, after which onramp_status carries the same value.
+              example: initialized
+            status_transition_deadline:
+              type: string
+              format: date-time
+              description: >-
+                When onramp_status switches to the new labels. Sent until the change.
+              example: '2026-10-31T23:59:59Z'
             amount:
               type: string
               example: '50'
@@ -724,6 +758,8 @@ paths:
                       country: KE
                       currency: USD
                       onramp_status: initialized
+                      new_onramp_status: initialized
+                      status_transition_deadline: '2026-10-31T23:59:59Z'
                       payment_link: >-
                         https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
                       raw_payment_link: https://provider.example/checkout/polygon/purchase...
@@ -740,6 +776,8 @@ paths:
                     transaction_id: e07aa829-cda4-4c51-bd43-09a2f1e6604d
                     status: created
                     onramp_status: initialized
+                    new_onramp_status: initialized
+                    status_transition_deadline: '2026-10-31T23:59:59Z'
                     amount: '50'
                     currency: ETB
                     country: ET
@@ -751,6 +789,8 @@ paths:
                     transaction_id: e07aa829-cda4-4c51-bd43-09a2f1e6604d
                     status: created
                     onramp_status: initialized
+                    new_onramp_status: initialized
+                    status_transition_deadline: '2026-10-31T23:59:59Z'
                     amount: '50'
                     currency: ETB
                     country: ET
@@ -826,13 +866,32 @@ paths:
                     example: polygon
                   onramp_status:
                     type: string
+                    description: >-
+                      The step the collection is at. Until the status label change (on or after
+                      2026-10-31T23:59:59Z), this carries the legacy label (for example
+                      provider_success); after it, the new label (for example payment_succeeded).
+                      Read new_onramp_status to get the new label today.
                     example: initialized
+                  new_onramp_status:
+                    type: string
+                    description: >-
+                      The step the collection is at, with the new label. Sent until the status
+                      label change, after which onramp_status carries the same value.
+                    example: initialized
+                  status_transition_deadline:
+                    type: string
+                    format: date-time
+                    description: >-
+                      When onramp_status switches to the new labels. Sent until the change.
+                    example: '2026-10-31T23:59:59Z'
               example:
                 transaction_status: pending
                 amount: '50'
                 asset: USDC
                 network: polygon
                 onramp_status: initialized
+                new_onramp_status: initialized
+                status_transition_deadline: '2026-10-31T23:59:59Z'
                 payment_link: >-
                   https://pay-staging.gravv.xyz?transaction_id=07b655cc-3dbd-4f6c-a16c-4657946d2e08
   /v1/collections/cards/payment-intents:
