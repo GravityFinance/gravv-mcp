@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -31,13 +31,13 @@ components:
           type:
             - string
             - 'null'
-          description: Null for `per_transfer`, and when usage could not be read
+          description: Null for the `per_transfer` window, and when usage could not be read
           example: '1250.00'
         remaining_usd:
           type:
             - string
             - 'null'
-          description: Headroom left in the window. `0.00` for a blocked sender.
+          description: The amount left to send in the window. `0.00` for a blocked sender.
           example: '3750.00'
     TierCaps:
       type: object
@@ -112,7 +112,7 @@ components:
           description: True when the sender may not send transfers
         usage_available:
           type: boolean
-          description: False when usage could not be read; `used_usd` is then null
+          description: False when usage could not be read. `used_usd` is then null.
         as_of:
           type:
             - string
@@ -121,8 +121,8 @@ components:
         windows:
           type: object
           description: >-
-            Daily, weekly and monthly windows follow the UTC calendar; annual is
-            the last 12 months.
+            Daily, weekly and monthly windows follow the UTC calendar. The
+            annual window is the last 12 months.
           properties:
             per_transfer:
               $ref: '#/components/schemas/Window'
@@ -193,8 +193,8 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: >-
-        The subject is not yours, or you have no limits policy. No policy does
-        not mean no limits apply.
+        The subject is not yours, or you have no limits policy. Having no policy
+        does not mean that no limits apply.
       content:
         application/json:
           schema:
@@ -203,7 +203,7 @@ components:
             data: null
             error: 'not found: no limits policy applies'
     Unavailable:
-      description: Limits cannot be read right now. Retry.
+      description: Gravv cannot read limits right now. Retry.
       content:
         application/json:
           schema:

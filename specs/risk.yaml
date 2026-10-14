@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -105,7 +105,7 @@ components:
           format: byte
           description: >-
             The file as plain standard base64. The decoded file must be a JPEG,
-            PNG or PDF. Keep files under 5 MB; larger files fail with a 400.
+            PNG or PDF. Keep files under 5 MB. Larger files fail with a 400.
           example: >-
             iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
         filename:
@@ -129,7 +129,7 @@ components:
             `selfie` plus one of `passport`, `id_card` or `drivers_license`.
             Business customers need one of `company_doc`,
             `registration_certificate` or `formation_document`. These names
-            differ from the customer KYC upload; do not mix the two upload flows
+            differ from the customer KYC upload. Do not mix the two upload flows
             for one customer.
           enum:
             - passport
@@ -262,7 +262,7 @@ components:
       type: object
       description: >-
         A validation or storage failure, returned with HTTP 200. The message is
-        generic; check the request against the rules on this page.
+        generic, so check the request against the rules on this page.
       required:
         - status
         - error_code
@@ -319,9 +319,8 @@ components:
         status:
           type: string
           description: >-
-            `pending` when every document was sent for review.
-            `partial_success` when some documents failed; the customer finishes
-            on `web_url`.
+            `pending` when every document was sent for review. `partial_success`
+            when some documents failed. The customer then finishes on `web_url`.
           enum:
             - pending
             - partial_success
@@ -405,7 +404,7 @@ paths:
     post:
       tags:
         - Card KYC
-      summary: Start KYC verification
+      summary: Start cardholder KYC verification
       operationId: startCardholderKyc
       description: >
         Starts hosted verification for a cardholder, with a liveness check, and
@@ -482,7 +481,7 @@ paths:
     post:
       tags:
         - Card KYC
-      summary: Upload document
+      summary: Upload a cardholder KYC document
       operationId: uploadCardholderKycDocument
       description: >
         Stores one document file for a cardholder. This is step 1 of
@@ -498,7 +497,7 @@ paths:
 
         Every upload is stored as a front image. Send the back of a card as a
         second upload with `idDocSubType: BACK_SIDE`. Uploading the same type
-        and sub-type again replaces the earlier file. Keep files under 5 MB.
+        and subtype again replaces the earlier file. Keep files under 5 MB.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -671,7 +670,7 @@ paths:
     post:
       tags:
         - Card KYC
-      summary: Initiate server-to-server KYC verification
+      summary: Start server-to-server cardholder KYC verification
       operationId: startCardholderKycS2S
       description: >
         Sends the documents you uploaded for a cardholder for review. This is

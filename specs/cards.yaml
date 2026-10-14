@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -171,7 +171,7 @@ components:
         - annual_remuneration
         - estimated_monthly_limit
         - ip_address
-      description: Unknown fields are ignored. Send the numbers as JSON numbers.
+      description: The API ignores unknown fields. Send the numbers as JSON numbers.
       properties:
         customer_id:
           type: string
@@ -405,8 +405,8 @@ components:
   responses:
     BadRequest:
       description: >-
-        The request failed. Every card error is a 400, including not-found;
-        read `error`.
+        The request failed. Every card error is a 400, including not-found.
+        Read `error`.
       content:
         application/json:
           schema:
@@ -499,9 +499,9 @@ paths:
       operationId: listCardApplications
       description: >-
         Lists your card applications, newest first, with `application_status`.
-        This is the only route that returns it: poll it until the status is
-        `approved`, or wait for the `cards.application.update` webhook. There
-        are no filters.
+        This is the only route that returns it. Poll it until the status is
+        `approved`, or wait for the `cards.application.update` webhook. It
+        takes no filters.
       parameters:
         - in: query
           name: page
@@ -624,7 +624,7 @@ paths:
         Issues a virtual or physical card once the customer's application is
         `approved`. The first card gets the application's ID. Each further card
         needs a new Idempotency-Key; a customer can hold 10 cards, not counting
-        blocked ones. A PIN is set for you; read it with `GET
+        blocked ones. Gravv sets a PIN for you; read it with `GET
         /v1/cards/{card_id}/pin`. Fund the card with a transfer whose
         destination is the card.
       parameters:
@@ -640,7 +640,7 @@ paths:
                 - card_limit
                 - card_type
                 - name_on_card
-              description: Unknown fields are ignored. Only the first problem is reported.
+              description: The API ignores unknown fields and reports only the first problem.
               properties:
                 customer_id:
                   type: string
@@ -988,15 +988,15 @@ paths:
       operationId: updateCardStatus
       description: >-
         Freezes, unfreezes or blocks a card, and sets its daily limit. Always
-        send `limit` with `status`: a call without `limit` sets the limit to 0,
-        which stops the card spending on live cards. To change only the limit,
-        send the current status with the new limit.
+        send `limit` with `status`. A call without `limit` sets the limit to 0,
+        which stops a live card from spending. To change only the limit, send
+        the current status with the new limit.
 
 
         `blocked` is permanent. Allowed changes are `active` to `freeze` or
         `blocked`, `freeze` to `active` or `blocked`, and `inactive` to
-        `active` or `blocked`. A status change sends the `cards.status.update`
-        webhook. This route needs no Idempotency-Key.
+        `active` or `blocked`. Gravv sends the `cards.status.update` webhook
+        when the status changes. This route needs no Idempotency-Key.
       parameters:
         - $ref: '#/components/parameters/CardIdPath'
       requestBody:
@@ -1032,7 +1032,7 @@ paths:
                   status: active
                   limit: 200
               Block:
-                summary: Block a card for good
+                summary: Block a card permanently
                 value:
                   status: blocked
                   limit: 200
@@ -1062,10 +1062,10 @@ paths:
       operationId: withdrawFromCard
       description: >-
         Moves money from an `active` card back to its card account. Some cards,
-        including every new sandbox card, answer `this card withdraws by
-        transfer`; for those, send a `POST /v1/transfer` from the card to its
-        card account. Retry a failed call with the same Idempotency-Key. The
-        result is also sent as the `cards.transaction.withdraw` webhook.
+        including every new sandbox card, return the error `this card withdraws
+        by transfer`. For those, send a `POST /v1/transfer` from the card to its
+        card account. Retry a failed call with the same Idempotency-Key. Gravv
+        also sends the result as the `cards.transaction.withdraw` webhook.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:

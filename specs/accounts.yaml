@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -40,8 +40,8 @@ components:
   responses:
     BadRequest:
       description: >-
-        Request failed. These account routes return every error, including not
-        found, as HTTP 400. Read the message.
+        The request failed. These account routes return every error as HTTP 400,
+        including not found. Read the error message for the cause.
       content:
         application/json:
           schema:
@@ -158,7 +158,7 @@ components:
           example: polygon
         type:
           type: string
-          description: Account kind.
+          description: Type of account.
           enum:
             - regular
             - savings
@@ -242,7 +242,7 @@ components:
           example: false
         inflow_behavior:
           type: string
-          description: NGN accounts only
+          description: Set for NGN accounts only
           enum:
             - settle
             - auto_onramp
@@ -461,7 +461,8 @@ components:
               description: >-
                 Whether the data passes the checks of the bank this application
                 would be sent to. It checks only the data you send, so fields
-                that create fills from the customer record can show as missing.
+                that the create call fills from the customer record can show as
+                missing.
             validation_errors:
               type:
                 - array
@@ -521,11 +522,11 @@ components:
       properties:
         street_line_1:
           type: string
-          description: Street address, PO box, company name, c/o
+          description: Street address, PO box, company name or c/o
           example: 123 Main St
         street_line_2:
           type: string
-          description: Apartment, suite, unit, building, floor, etc.
+          description: Apartment, suite, unit, building or floor
           example: Apt 4B
         city:
           type: string
@@ -533,7 +534,7 @@ components:
           example: San Francisco
         state:
           type: string
-          description: State, province, county
+          description: State, province or county
           example: CA
         postal_code:
           type: string
@@ -545,7 +546,7 @@ components:
           example: US
     UnifiedAssociatedPerson:
       type: object
-      description: Standardized associated person (UBO, control person, etc.)
+      description: A person linked to the business, such as an ultimate beneficial owner (UBO) or a control person
       properties:
         first_name:
           type: string
@@ -594,20 +595,19 @@ components:
         has_ownership:
           type: boolean
           description: >-
-            Indicates whether the person holds an ownership stake in the
-            business.
+            Whether the person holds an ownership stake in the business.
           example: true
         has_control:
           type: boolean
-          description: Indicates whether the person has control over the business.
+          description: Whether the person has control over the business.
           example: true
         is_signer:
           type: boolean
-          description: Indicates whether the person is an authorized signer on the account.
+          description: Whether the person is an authorized signer on the account.
           example: true
         is_director:
           type: boolean
-          description: Indicates whether the person is a director of the business.
+          description: Whether the person is a director of the business.
           example: true
         ownership_percentage:
           type: integer
@@ -771,8 +771,7 @@ components:
         source_of_wealth_other_description:
           type: string
           description: >-
-            Free-text description of the source of wealth when not covered by
-            the standard options.
+            The source of wealth in free text, when no standard option fits.
           example: Salary from tech job
         account_purposes:
           type: array
@@ -786,8 +785,7 @@ components:
         account_purposes_other_description:
           type: string
           description: >-
-            Free-text description of account purposes when not covered by the
-            standard options.
+            The account purposes in free text, when no standard option fits.
           example: Personal savings
         source_of_funds_list:
           type: array
@@ -801,8 +799,7 @@ components:
         source_of_funds_other_description:
           type: string
           description: >-
-            Free-text description of the source of funds when not covered by the
-            standard options.
+            The source of funds in free text, when no standard option fits.
           example: Income
         expected_counterparty_countries:
           type: array
@@ -944,11 +941,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UnifiedAssociatedPerson'
-          description: Provide at least one associated person.
+          description: Send at least one associated person.
         has_material_intermediary_ownership:
           type: boolean
           description: >-
-            Indicates whether the business has ownership held through a material
+            Whether the business has ownership held through a material
             intermediary.
           example: false
         formation_document:
@@ -974,8 +971,8 @@ components:
         is_dao:
           type: boolean
           description: >-
-            Indicates whether the business is a decentralized autonomous
-            organization (DAO).
+            Whether the business is a decentralized autonomous organization
+            (DAO).
           example: false
         account_purpose:
           type: string
@@ -991,17 +988,16 @@ components:
           example: revenue
         industry_financial_services_subtype:
           type: string
-          description: Subtype of financial services industry, if applicable.
+          description: Subtype of the financial services industry, if the business is in it.
           example: none
         industry_crypto_subtype:
           type: string
-          description: Subtype of crypto industry, if applicable.
+          description: Subtype of the crypto industry, if the business is in it.
           example: none
         industry_other_description:
           type: string
           description: >-
-            Description of the industry when it does not fit a standard
-            category.
+            The industry in words, when it does not fit a standard category.
           example: Software dev
         expected_counterparty_countries:
           type: array
@@ -1025,8 +1021,7 @@ components:
         source_of_funds_other_description:
           type: string
           description: >-
-            Free-text description of the source of funds when not covered by the
-            standard options.
+            The source of funds in free text, when no standard option fits.
           example: Sales revenue
         tin_verification_document:
           type: string
@@ -1042,7 +1037,7 @@ components:
           example: data:application/pdf;base64,...
         is_msb:
           type: boolean
-          description: Indicates whether the business is a money services business (MSB).
+          description: Whether the business is a money services business (MSB).
           example: false
         account_purposes:
           type: array
@@ -1056,8 +1051,7 @@ components:
         account_purposes_other_description:
           type: string
           description: >-
-            Free-text description of account purposes when not covered by the
-            standard options.
+            The account purposes in free text, when no standard option fits.
           example: Operations
         primary_target_market:
           type: string
@@ -1066,8 +1060,8 @@ components:
         primary_target_market_other_description:
           type: string
           description: >-
-            Free-text description of the primary target market when not covered
-            by the standard options.
+            The primary target market in free text, when no standard option
+            fits.
           example: US market
         expected_fiat_monthly_volume:
           type: string
@@ -1099,8 +1093,8 @@ components:
     UnifiedApplicationData:
       type: object
       description: >-
-        Application data. Unknown keys are dropped. On create, empty fields are
-        filled from the customer record. The bank the application is routed to
+        Application data. Gravv drops unknown keys. On create, Gravv fills empty
+        fields from the customer record. The bank the application is routed to
         decides which other fields are required, and reports what is missing in
         `validation_errors`.
       required:
@@ -1120,9 +1114,9 @@ components:
             - auto_sweep
             - collection
           description: >-
-            Kind of account to open. This is the account type, not the customer
-            type; use `application_type` for individual or business. A customer
-            can have one `card` account.
+            Type of account to open. This is the account type, not the customer
+            type. Use `application_type` to choose individual or business. A
+            customer can have one `card` account.
           example: regular
         currency:
           type: string
@@ -1162,22 +1156,21 @@ components:
         tos_link:
           type: string
           description: >-
-            Set by Gravv on create when the end customer must accept the bank's
-            terms of service. Show it to them before you submit.
+            Gravv sets this on create when the end customer must accept the
+            bank's terms of service. Show it to them before you submit.
           example: https://example.com/tos
         metadata:
           type: object
           additionalProperties: true
           description: >-
-            Arbitrary key-value pairs for storing additional information about
-            the application.
+            Key-value pairs you can store with the application.
           example:
             source: web
     UpdateApplicationData:
       type: object
       description: >-
         The parts of an application's `data` to change. The fields and types are
-        those of UnifiedApplicationData, and none is required: send only what
+        those of UnifiedApplicationData, and none is required. Send only what
         changes. The update merges into the stored data, so an empty value never
         clears a field and `true` cannot be set back to `false`.
       properties:
@@ -1194,9 +1187,9 @@ components:
             - auto_sweep
             - collection
           description: >-
-            Kind of account to open. This is the account type, not the customer
-            type; use `application_type` for individual or business. A customer
-            can have one `card` account.
+            Type of account to open. This is the account type, not the customer
+            type. Use `application_type` to choose individual or business. A
+            customer can have one `card` account.
           example: regular
         currency:
           type: string
@@ -1236,15 +1229,14 @@ components:
         tos_link:
           type: string
           description: >-
-            Set by Gravv on create when the end customer must accept the bank's
-            terms of service. Show it to them before you submit.
+            Gravv sets this on create when the end customer must accept the
+            bank's terms of service. Show it to them before you submit.
           example: https://example.com/tos
         metadata:
           type: object
           additionalProperties: true
           description: >-
-            Arbitrary key-value pairs for storing additional information about
-            the application.
+            Key-value pairs you can store with the application.
           example:
             source: web
     CreateAccountApplicationRequest:
@@ -1269,8 +1261,8 @@ components:
         data:
           $ref: '#/components/schemas/UnifiedApplicationData'
           description: >-
-            Application data including KYC information and account
-            configuration.
+            Application data, with the customer's KYC information and the
+            account settings.
     ValidateApplicationRequest:
       type: object
       required:
@@ -1286,7 +1278,7 @@ components:
           example: individual
         data:
           $ref: '#/components/schemas/UnifiedApplicationData'
-          description: Application data to validate. Not persisted.
+          description: Application data to validate. Gravv does not save it.
     UpdateApplicationRequest:
       type: object
       required:
@@ -1300,7 +1292,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Unique identifier for the application.
+          description: ID of the application.
           example: 550e8400-e29b-41d4-a716-446655440001
         tenant_id:
           type: string
@@ -1328,8 +1320,8 @@ components:
             - expired
           description: >-
             Current status, in lower case. `draft` can be updated, submitted or
-            deleted. `submitted` waits for process. `processing` means the bank
-            is setting the account up. `approved` has the account ID in
+            deleted. `submitted` waits for the process call. `processing` means
+            the bank is setting the account up. `approved` has the account ID in
             `metadata.internal_account_id`. `rejected` can be updated and
             submitted again. `manual_review` is resolved by Gravv, not by the
             API. `creating_account` is brief and deprecated, and `expired` is
@@ -1340,14 +1332,14 @@ components:
         metadata:
           type: object
           additionalProperties: true
-          description: Arbitrary key-value pairs attached to the application.
+          description: Key-value pairs attached to the application.
           example:
             source: web
         validation_errors:
           type: array
           description: >-
-            List of validation errors returned when the application data does
-            not meet provider requirements.
+            Validation errors, listed when the application data does not meet
+            the bank's requirements.
           items:
             $ref: '#/components/schemas/ValidationError'
         submitted_at:
@@ -1359,8 +1351,8 @@ components:
           type: string
           format: date-time
           description: >-
-            Timestamp when the application was processed by the provider, in ISO
-            8601 format.
+            Timestamp when the bank processed the application, in ISO 8601
+            format.
           example: '2025-12-08T13:01:22.123456Z'
         created_at:
           type: string
@@ -1377,7 +1369,7 @@ components:
             - string
             - 'null'
           format: date-time
-          description: Timestamp when the application was soft-deleted, if applicable.
+          description: Timestamp when the application was soft-deleted, if it was.
           example: null
     CreateAccountRequest:
       type: object
@@ -1497,11 +1489,11 @@ components:
           properties:
             country:
               type: string
-              description: The alpha-2 residence country used
+              description: The residence country Gravv used, as an alpha-2 code
               example: US
             subdivision:
               type: string
-              description: The ISO 3166-2 subdivision used, or empty
+              description: The ISO 3166-2 subdivision Gravv used, or empty
               example: US-CA
             customer_type:
               type: string
@@ -1560,7 +1552,7 @@ components:
               - multi_currency
         features:
           type: object
-          description: What accounts of this option support
+          description: Features that accounts of this option support
           properties:
             collections:
               type: boolean
@@ -1590,13 +1582,13 @@ components:
           type:
             - integer
             - 'null'
-          description: Most accounts one customer can open. Null means no limit.
+          description: The maximum number of accounts one customer can open. Null means no limit.
         requires_customer_record:
           type: boolean
           description: True when the customer must first be registered with the bank
         rails:
           type: array
-          description: Ways to move money in and out
+          description: Rails for moving money in and out of the account
           items:
             type: object
             properties:
@@ -1659,7 +1651,7 @@ components:
           example: 373556ec-74e5-4cde-909c-b94d864915db
     USBanksRecipient:
       type: object
-      title: US Bank Account Recipient
+      title: US bank account recipient
       required:
         - payee_type
         - account_number
@@ -1714,8 +1706,8 @@ components:
           $ref: '#/components/schemas/ExtRecipientAddress'
     SepaRecipient:
       type: object
-      title: Sepa Recipient
-      description: Sepa recipient
+      title: SEPA recipient
+      description: SEPA recipient
       required:
         - payee_type
         - account_owner_type
@@ -1740,7 +1732,7 @@ components:
           example: individual
         iban:
           type: string
-          description: International Bank Account Number
+          description: International Bank Account Number (IBAN)
           example: '1776218486'
           maxLength: 50
         account_name:
@@ -1793,7 +1785,7 @@ components:
           example: US
     SwiftRecipient:
       type: object
-      title: Swift Recipient
+      title: SWIFT recipient
       allOf:
         - required:
             - payee_type
@@ -1822,7 +1814,7 @@ components:
               example: '1245909283'
             iban:
               type: string
-              description: International Bank Account Number
+              description: International Bank Account Number (IBAN)
               example: GB33BUKB20201555555555
               maxLength: 34
             bic:
@@ -1872,7 +1864,7 @@ components:
           example: US
     GlobalBankRecipient:
       type: object
-      title: Global Bank Recipient
+      title: Global bank recipient
       required:
         - payee_type
         - currency
@@ -1896,7 +1888,7 @@ components:
           maxLength: 100
         iban:
           type: string
-          description: International Bank Account Number
+          description: International Bank Account Number (IBAN)
           example: GB33BUKB20201555555555
         institution_id:
           type: string
@@ -1951,7 +1943,7 @@ components:
             - ZWL
     GlobalMobileMoneyRecipient:
       type: object
-      title: Global Mobile Money Recipient
+      title: Global mobile money recipient
       required:
         - payee_type
         - phone_number
@@ -2023,7 +2015,7 @@ security:
   - ApiKeyAuth: []
 tags:
   - name: Accounts
-    description: Manage internal accounts
+    description: Internal accounts and the applications that open them
 paths:
   /v1/accounts/capabilities:
     get:
@@ -2035,13 +2027,14 @@ paths:
         Lists the accounts a customer can open from their country: bank,
         currency, account types, token wallets, rails and the per-customer
         limit. Call it before you create an account or an application. Send
-        `customer_id`, or `country` with `customer_type`. Send `customer_type`
-        with `customer_id` too, or options for both types come back.
+        `customer_id`, or `country` with `customer_type`. If you send
+        `customer_id` without `customer_type`, the response lists options for
+        both types.
 
 
-        The answer uses the v2 account rules. A v1 create picks a bank with its
-        own rules, so an option here does not promise that the same v1 create
-        succeeds. Unknown query parameters are rejected.
+        The response uses the v2 account rules. A v1 create picks a bank with
+        its own rules, so an option here does not promise that the same v1
+        create succeeds. Unknown query parameters are rejected.
       parameters:
         - in: query
           name: customer_id
@@ -2155,13 +2148,12 @@ paths:
     post:
       tags:
         - Accounts
-      summary: Create account application
+      summary: Create an account application
       description: >-
-        Create a new account application for a given customer.
+        Creates an account application for a customer.
 
 
-        For sandbox and testing integrations, use `polygon` as the
-        `blockchain_network`.
+        In sandbox, use `polygon` as the `blockchain_network`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2367,8 +2359,8 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Get account applications
-      description: Retrieve a list of applications with optional filters and pagination.
+      summary: List account applications
+      description: Lists account applications. Filter by customer or status, and page through the results.
       parameters:
         - in: query
           name: page
@@ -2417,12 +2409,12 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Get pending applications
+      summary: List pending applications
       description: >-
-        Returns up to 10 applications in status `submitted`, oldest first.
-        These are submitted applications that were never processed;
-        `processing` applications are not included. The route takes no
-        parameters; a `limit` parameter makes it fail.
+        Returns up to 10 applications in status `submitted`, oldest first. These
+        are submitted applications that were never processed. `processing`
+        applications are not included. The route takes no parameters, and a
+        `limit` parameter makes it fail.
       responses:
         '200':
           description: List of pending applications
@@ -2436,8 +2428,8 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Get account application
-      description: Retrieve details of a single application by ID.
+      summary: Get an account application
+      description: Returns one application by ID.
       parameters:
         - in: path
           name: id
@@ -2457,8 +2449,8 @@ paths:
     put:
       tags:
         - Accounts
-      summary: Update account application
-      description: Update data for a draft or rejected application.
+      summary: Update an account application
+      description: Updates the data of a `draft` or `rejected` application.
       parameters:
         - in: path
           name: id
@@ -2647,8 +2639,8 @@ paths:
     delete:
       tags:
         - Accounts
-      summary: Delete account application
-      description: Delete a single application.
+      summary: Delete an account application
+      description: Deletes one application.
       parameters:
         - in: path
           name: id
@@ -2669,8 +2661,8 @@ paths:
     post:
       tags:
         - Accounts
-      summary: Submit account application
-      description: Mark the application as submitted for provider processing.
+      summary: Submit an account application
+      description: Marks the application as `submitted`. It then waits for the process call.
       parameters:
         - in: path
           name: id
@@ -2692,8 +2684,8 @@ paths:
     post:
       tags:
         - Accounts
-      summary: Process account application
-      description: Process the submitted application with the relevant provider.
+      summary: Process an account application
+      description: Sends a `submitted` application to the bank it is routed to for processing.
       parameters:
         - in: path
           name: id
@@ -2715,8 +2707,8 @@ paths:
     post:
       tags:
         - Accounts
-      summary: Submit and process application
-      description: Combine submission and processing into a single call.
+      summary: Submit and process an application
+      description: Submits and processes the application in one call.
       parameters:
         - in: path
           name: id
@@ -2739,7 +2731,7 @@ paths:
       tags:
         - Accounts
       summary: Get application history
-      description: Get the audit log or history of an application.
+      description: Returns the history of an application. Each entry records an action, who performed it and the fields that changed.
       parameters:
         - in: path
           name: id
@@ -2760,10 +2752,10 @@ paths:
     post:
       tags:
         - Accounts
-      summary: Complete TOS acceptance
+      summary: Accept the terms of service
       description: >-
-        Record the applicant's acceptance of the provider terms of service for a
-        draft application.
+        Records that the applicant accepted the bank's terms of service for a
+        `draft` application.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2783,11 +2775,11 @@ paths:
                   example: 550e8400-e29b-41d4-a716-446655440001
                 agreement_id:
                   type: string
-                  description: Provider agreement identifier being accepted.
+                  description: ID of the terms of service agreement being accepted.
                   example: agr_123
       responses:
         '200':
-          description: TOS marked as accepted
+          description: Terms of service marked as accepted
           content:
             application/json:
               schema:
@@ -2802,9 +2794,9 @@ paths:
       description: >-
         Checks application data against the bank it would be sent to, and
         returns that bank's requirements, without saving anything. It checks
-        only the data you send: there is no fill from the customer record and
-        no KYC or duplicate check. Fix every `validation_errors` entry before
-        you create or submit.
+        only the data you send. It does not fill fields from the customer record
+        and runs no KYC or duplicate check. Fix every `validation_errors` entry
+        before you create or submit.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2831,14 +2823,14 @@ paths:
         Opens an internal account for a customer whose KYC is completed. Call
         `GET /v1/accounts/capabilities` first to choose the bank, currency and
         network. Business customers use the account application flow instead.
-        Your business opens its one card account here, with its own customer
-        id; it starts `pending`.
+        Your business opens its one card account here, with its own customer ID.
+        That account starts `pending`.
 
 
         USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the
         bank sets them up. Wait for the `account.activated` webhook, or get the
-        account until it is `active`, before you share deposit details. NGN
-        and `non_custodial` accounts are `active` at once.
+        account until it is `active`, before you share deposit details. NGN and
+        `non_custodial` accounts are `active` at once.
 
 
         Every error is HTTP 400, including not found and duplicates. Use
@@ -2900,7 +2892,7 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Get accounts
+      summary: List accounts
       description: >-
         Lists your internal accounts, newest first, with balances. Accounts
         opened with `/v2/accounts` are included. Filters combine with AND, and
@@ -2990,7 +2982,7 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Get a single account
+      summary: Get an account
       description: >-
         Returns one account with its deposit details, balance and assets. Poll
         it after you create an account until `status` is `active`; deposit
@@ -3025,8 +3017,8 @@ paths:
 
 
         Deleting needs a zero balance and cannot be undone. `auto_sweep` and
-        `default` accounts cannot change status. Do not use `active` to move a
-        `pending` account forward; that skips the bank set-up. An unknown ID
+        `default` accounts cannot change status. Do not set `active` on a
+        `pending` account, because that skips the bank set-up. An unknown ID
         returns the generic error message.
       parameters:
         - in: path

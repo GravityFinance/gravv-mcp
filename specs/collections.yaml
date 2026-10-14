@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -19,9 +19,9 @@ components:
       in: header
       required: true
       description: >-
-        Required for POST requests. Reuse it only to retry the same request. A
-        400 is stored with the key for 24 hours, so use a new key after you fix
-        a rejected body.
+        Required for POST requests. Reuse it only to retry the same request.
+        Gravv stores a 400 with the key for 24 hours, so use a new key after you
+        fix a rejected body.
       schema:
         type: string
         minLength: 1
@@ -32,8 +32,8 @@ components:
       in: header
       required: false
       description: >-
-        Optional ID of the payer's device. On a payment intent it is stored
-        and reused for later saved-card charges.
+        Optional ID of the payer's device. On a payment intent, Gravv stores it
+        and reuses it for later saved-card charges.
       schema:
         type: string
       example: device-7f3a9c
@@ -97,8 +97,8 @@ components:
           description: >-
             Payment methods to offer. Send one group only: `card`, `apple_pay`
             and `google_pay` together, or `bank_transfer` alone. `pix` and
-            `mobile_money` are not available in any country, so a request with
-            them is rejected. Availability depends on the customer's address
+            `mobile_money` are not available in any country, so the API rejects
+            a request with them. Availability depends on the customer's address
             country.
           items:
             type: string
@@ -217,11 +217,11 @@ components:
         is_anonymous:
           type: boolean
           default: false
-          description: When true, the payer's name and email are not sent to the card checkout
+          description: When true, Gravv does not send the payer's name and email to the card checkout
         save_card:
           type: boolean
           default: false
-          description: Ask the card checkout to save the card
+          description: When true, asks the card checkout to save the card
         metadata:
           $ref: '#/components/schemas/Metadata'
         source:
@@ -319,7 +319,7 @@ components:
           example: 07b655cc-3dbd-4f6c-a16c-4657946d2e08
         status:
           type: string
-          description: Always `created` when the collection is made
+          description: Always `created` when the collection is created
           enum:
             - created
           example: created
@@ -398,8 +398,8 @@ components:
           type: string
           format: uuid
           description: >-
-            Internal record ID. It is not the collection ID: do not use it with
-            this endpoint.
+            Internal record ID. It is not the collection ID, so do not use it
+            with this endpoint.
           example: 5b0d7c1e-2f7e-4c55-9a51-0d4c1a6c2e11
         transaction_status:
           type: string
@@ -589,12 +589,12 @@ components:
           type: string
           description: >-
             A saved card token from `GET /v1/collections/cards`. When you send
-            it, the card is charged at once.
+            it, Gravv charges the card at once.
           example: tokn_80aebb6ea2594a74bc
         save_card:
           type: boolean
           default: false
-          description: Ask the checkout to save the card
+          description: When true, asks the checkout to save the card
         redirect_url:
           type: string
           format: uri
@@ -644,9 +644,9 @@ components:
         status:
           type: string
           description: >-
-            `created` without a card token. With a card token: `processing`
-            when the charge went through, `requires_action` for 3D Secure, or
-            `charge_failed` with the reason in `message`.
+            `created` when you send no card token. With a card token, it is
+            `processing` when the charge went through, `requires_action` for 3D
+            Secure, or `charge_failed` with the reason in `message`.
           enum:
             - created
             - processing
@@ -676,8 +676,8 @@ components:
           type: string
           format: uri
           description: >-
-            Checkout link, without a card token. It carries a secret for this
-            payment, so send it only to the payer.
+            Checkout link, returned when you send no card token. It carries a
+            secret for this payment, so send it only to the payer.
         client_secret:
           type: string
           description: Sent only when Gravv could not build a payment link
@@ -717,7 +717,7 @@ components:
           example: pi_429f578b-675a-4b68-abe3-856cd976257f
         card_token:
           type: string
-          description: A saved card token, saved under the intent's `client_customer_id`
+          description: A card token saved under the intent's `client_customer_id`
           example: tokn_80aebb6ea2594a74bc
         first_name:
           type: string
@@ -867,7 +867,7 @@ components:
     BadRequest:
       description: >-
         The request failed. Every collections error is a 400, including
-        not-found; read `error`.
+        not-found. Read `error`.
       content:
         application/json:
           schema:
@@ -998,8 +998,8 @@ paths:
           description: >-
             The request failed. The error names the field, such as
             `source.methods: payment method 'pix' is not available for country
-            'BR'`. A customer without a phone number or a date of birth is
-            rejected.
+            'BR'`. The API rejects a customer without a phone number or a date
+            of birth.
           content:
             application/json:
               schema:
@@ -1011,7 +1011,7 @@ paths:
     get:
       tags:
         - Collections
-      summary: Get transaction by ID
+      summary: Get a collection
       operationId: getCollection
       description: >-
         Returns the status and details of a collection. Pass the
@@ -1217,7 +1217,7 @@ paths:
         be saved under the intent's `client_customer_id`.
 
 
-        A saved card can be charged at most 5 times in 24 hours, and each
+        You can charge a saved card at most 5 times in 24 hours, and each
         charge can be at most 3 times the card's first payment. A declined
         charge returns HTTP 400 with a sentence such as
         `The card has insufficient funds: payment declined`.
@@ -1297,8 +1297,8 @@ paths:
           schema:
             type: string
           description: >-
-            When set, cards are matched by this value only, and `customer_id`
-            is not used to filter.
+            When set, Gravv matches cards by this value only and does not
+            filter by `customer_id`.
           example: merchant-user-123
       responses:
         '200':
@@ -1351,7 +1351,7 @@ paths:
       operationId: getSavedCard
       description: >-
         Returns one active saved card by the `id` from the list. Ignore
-        `is_active` in this response: it always reads `false`.
+        `is_active` in this response, as it is always `false`.
       parameters:
         - in: path
           name: card_id
@@ -1404,8 +1404,8 @@ paths:
       operationId: deleteSavedCard
       description: >-
         Removes a saved card. Send the owner's `customer_id` and the
-        `card_token` in the body: the card deleted is the one named by
-        `card_token`, not by the path. A request without a body fails with
+        `card_token` in the body. Gravv deletes the card that `card_token`
+        names, not the one in the path. A request without a body fails with
         `EOF`. A token that matches no active card returns
         `card already deleted`.
       parameters:

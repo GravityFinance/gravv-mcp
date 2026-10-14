@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -46,7 +46,7 @@ components:
     ItemsPerPage:
       in: query
       name: items_per_page
-      description: Page size. Values above 100 give 100.
+      description: Page size. The API caps values above 100 at 100.
       schema:
         type: integer
         minimum: 1
@@ -119,14 +119,15 @@ components:
       type: object
       required:
         - amount
-      description: Send `currency_pair` or `direction`. Unknown fields are ignored.
+      description: Send `currency_pair` or `direction`. The API ignores unknown fields.
       properties:
         currency_pair:
           type: string
           description: >-
-            `FROM_TO`: the currency you sell, then the currency you buy, such as
-            `USD_XAF`. The four-part form `USD_US_XAF_CM` is also accepted; its
-            countries do not change the price. It wins over `direction`.
+            The currency you sell, then the currency you buy, in `FROM_TO` form,
+            such as `USD_XAF`. The four-part form `USD_US_XAF_CM` is also
+            accepted; its countries do not change the price. It takes precedence
+            over `direction`.
           example: USD_XAF
         direction:
           type: string
@@ -135,8 +136,8 @@ components:
         amount:
           type: string
           description: >-
-            Amount you sell, in major units of the FROM currency, as a string. A
-            JSON number is rejected.
+            Amount you sell, in major units of the FROM currency, as a string.
+            The API rejects a JSON number.
           example: '10000'
     FxQuote:
       type: object
@@ -192,8 +193,8 @@ components:
       required:
         - quote_id
       description: >-
-        The amounts come from the quote. Unknown fields are ignored; there is no
-        `amount`, `pair`, `order_type` or `customer_id`.
+        The amounts come from the quote. The API ignores unknown fields. There
+        is no `amount`, `pair`, `order_type` or `customer_id`.
       properties:
         quote_id:
           type: string
@@ -201,15 +202,16 @@ components:
           example: GRVOTC_3F9A1C
         source:
           description: >-
-            Where the sold amount comes from: your account or crypto wallet
-            holding at least `from_amount` in the FROM currency. It cannot be
+            Your account or crypto wallet that pays the sold amount. It must hold
+            at least `from_amount` in the FROM currency. It cannot be
             `external_account`.
           allOf:
             - $ref: '#/components/schemas/OrderLeg'
         destination:
           description: >-
-            Where the bought amount goes: your account or crypto wallet, or an
-            active settlement instruction (`external_account`) in the TO currency.
+            Where the bought amount goes. It is your account or crypto wallet, or
+            an active settlement instruction (`external_account`) in the TO
+            currency.
           allOf:
             - $ref: '#/components/schemas/OrderLeg'
         transaction_id:
@@ -227,8 +229,8 @@ components:
     OrderStatus:
       type: string
       description: >-
-        An order made with an API key starts as `pending` and its source is
-        debited at once. It then becomes `completed`, or `cancelled` if the
+        An order made with an API key starts as `pending`, and Gravv debits its
+        source at once. It then becomes `completed`, or `cancelled` if the
         debit fails. `waiting_approval` is for orders made in the dashboard.
       enum:
         - waiting_approval
@@ -239,7 +241,7 @@ components:
       example: pending
     FxOrder:
       type: object
-      description: An order. Empty fields are left out.
+      description: An order. The response leaves out empty fields.
       properties:
         id:
           type: string
@@ -334,7 +336,7 @@ components:
     BadRequest:
       description: >-
         The request failed. Every FX error is a 400, including not-found and
-        outages; read `error`.
+        outages. Read `error`.
       content:
         application/json:
           schema:
@@ -355,9 +357,9 @@ paths:
       summary: List supported currency pairs
       operationId: listFxCurrencyPairs
       description: >-
-        Lists every currency pair FX knows. A listed pair is not always
-        enabled for you; `POST /v1/fx/quote` tells you. This route reads no
-        query parameters.
+        Lists every currency pair in FX. A listed pair is not always enabled
+        for you; `POST /v1/fx/quote` returns an error for a pair that is not.
+        This route reads no query parameters.
       responses:
         '200':
           description: The pairs, in one list with no paging
@@ -393,7 +395,7 @@ paths:
         Returns indicative rates for display, sorted by pair. You cannot trade
         at these rates; call `POST /v1/fx/quote` for a firm price. Filters are
         not case-sensitive. When rates are not loaded yet, the error is
-        `fx cache is not ready`; retry.
+        `fx cache is not ready`; retry the call.
       parameters:
         - in: query
           name: currency_type
@@ -519,8 +521,8 @@ paths:
       summary: Create an order
       operationId: createFxOrder
       description: >-
-        Trades a quote. With an API key there is no approval step: the order
-        starts as `pending` and the source is debited at once. Then get the
+        Trades a quote. With an API key there is no approval step. The order
+        starts as `pending` and Gravv debits the source at once. Then get the
         order until it is `completed` or `cancelled`. FX orders send no
         webhooks.
 
@@ -582,7 +584,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
                 Quote:
-                  summary: Get a new quote
+                  summary: The quote is expired or used
                   value:
                     data: null
                     error: quote is invalid or expired
@@ -666,8 +668,8 @@ paths:
       description: >-
         Lists orders in `waiting_approval`, newest first. Only orders made in
         the dashboard wait for approval, so orders made with an API key never
-        appear here. A scoped key needs `fx:order_approve`. Approving and
-        rejecting are done in the dashboard.
+        appear here. A scoped key needs `fx:order_approve`. You approve and
+        reject orders in the dashboard.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/ItemsPerPage'
@@ -687,7 +689,7 @@ paths:
                   total_pages: 0
                 error: null
         '400':
-          description: The key may not approve orders
+          description: The key is not allowed to approve orders
           content:
             application/json:
               schema:
@@ -703,7 +705,8 @@ paths:
       operationId: getFxOrder
       description: >-
         Returns one order. `pending` covers both a debit in progress and a
-        debit that landed and is waiting to settle. Not-found is a 400.
+        debit that landed and is waiting to settle. An unknown order returns a
+        400.
       parameters:
         - $ref: '#/components/parameters/OrderIdPath'
       responses:

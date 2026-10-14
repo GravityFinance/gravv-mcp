@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    This is the API Gateway for Gravv services.
-    Use the `Api-Key` header for authentication.
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
   - url: https://api.gravv.xyz
@@ -109,8 +109,8 @@ components:
       type: string
       description: >-
         `paused` means the transfer needs something from you; see
-        `POST /v1/transfer/{id}/resume`. A returned payment keeps `completed`
-        and adds a new row.
+        `POST /v1/transfer/{id}/resume`. A returned payment keeps `completed`,
+        and the return appears as a new transaction.
       enum:
         - pending
         - completed
@@ -289,7 +289,7 @@ components:
           type:
             - string
             - 'null'
-          description: ISO 4217 currency code for local_amount
+          description: ISO 4217 currency code for `local_amount`
           example: NGN
         uetr:
           type:
@@ -526,7 +526,7 @@ paths:
         Lists your transactions, newest first. Filters that take values accept
         a comma-separated list. There is no date filter; use the export for
         dates. A typo in a filter value returns an empty list, not an error.
-        Page until a page is empty, using `total_pages`.
+        Page through the results with `total_pages` until a page is empty.
       parameters:
         - in: query
           name: page
@@ -567,7 +567,7 @@ paths:
       description: >-
         Returns one transaction. Poll it after a transfer until `status` is
         `completed` or `failed`; `paused` means the transfer needs something
-        from you. Not-found is a 400.
+        from you. An unknown ID returns a 400.
       parameters:
         - in: path
           name: transaction_id
@@ -684,14 +684,14 @@ paths:
           schema:
             type: string
             format: date
-          description: First day, as YYYY-MM-DD. Other formats are ignored.
+          description: First day, as YYYY-MM-DD. The API ignores other formats.
           example: '2026-10-01'
         - in: query
           name: end_date
           schema:
             type: string
             format: date
-          description: Last day, included, as YYYY-MM-DD. Other formats are ignored.
+          description: Last day, included, as YYYY-MM-DD. The API ignores other formats.
           example: '2026-10-13'
         - in: query
           name: export_format
@@ -701,7 +701,7 @@ paths:
               - csv
               - json
             default: json
-          description: Lower case only
+          description: Send it in lower case
       responses:
         '200':
           description: The file
