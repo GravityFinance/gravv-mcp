@@ -46,7 +46,7 @@
     "sandbox-replay": "node --experimental-strip-types scripts/sandbox-replay.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
