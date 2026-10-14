@@ -281,6 +281,11 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
         `If it can go ahead, the payout is released and cannot be reversed from the API.`
       );
     }
+    case "deleteSettlementInstruction":
+      return (
+        `Delete settlement instruction ${text(args.id) ?? "(unspecified)"}. It cannot be read, used or restored ` +
+        `afterwards; if it is the default, its currency is left with no default.`
+      );
     case "deleteAccountApplication":
       return `Delete account application ${text(args.id) ?? "(unspecified)"}. It cannot be restored over the API.`;
     case "activateFeature":

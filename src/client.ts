@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
-import { OUTCOME_LOOKUPS } from "./curation.ts";
+import { OUTCOME_LOOKUPS, UPPER_CASE_ARGS } from "./curation.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
 
@@ -158,7 +158,8 @@ export class GravvClient {
    * Split a flat argument object into path substitutions, query string, and body,
    * according to how the generator classified each argument.
    */
-  buildRequest(tool: GeneratedTool, args: Record<string, unknown>) {
+  buildRequest(tool: GeneratedTool, rawArgs: Record<string, unknown>) {
+    const args = normaliseArgs(tool, rawArgs);
     let path = tool.path;
     for (const p of tool.pathParams) {
       const v = args[p];
@@ -514,6 +515,15 @@ function errorCode(body: unknown): string | undefined {
  */
 function isGatewayRateLimit(message: string): boolean {
   return /too many request/i.test(message);
+}
+
+/** Apply the curation's argument rules (upper-cased fields), without changing the caller's object. */
+export function normaliseArgs(tool: GeneratedTool, args: Record<string, unknown>): Record<string, unknown> {
+  const upper = UPPER_CASE_ARGS[tool.name];
+  if (!upper) return args;
+  const out = { ...args };
+  for (const k of upper) if (typeof out[k] === "string") out[k] = (out[k] as string).toUpperCase();
+  return out;
 }
 
 /**

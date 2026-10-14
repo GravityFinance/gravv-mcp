@@ -184,6 +184,13 @@ describe("confirm-only gating", () => {
     assert.equal(gate({ environment: "unknown" }).check(del, { id: "app_1", confirm: true }, delPreview), null);
   });
 
+  test("a settlement instruction delete names it and the lost default", () => {
+    const tool = TOOLS_BY_NAME.get("deleteSettlementInstruction")!;
+    const p = { method: "DELETE", path: "/v1/settlement-instructions/{id}", body: undefined };
+    const result = gate({ environment: "live" }).check(tool, { id: "si_1" }, p);
+    assert.match(result!.willDo, /Delete settlement instruction si_1\. .*no default/);
+  });
+
   test("feature activation names the feature and the customer", () => {
     const body = { customer_id: "cus_1", feature_id: "virtual_cards" };
     const result = gate().check(activate, body, { method: "POST", path: "/v1/risk/features/activate", body });

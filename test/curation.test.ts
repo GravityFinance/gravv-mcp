@@ -126,6 +126,7 @@ const GATED: Record<string, { route: string; why: string }> = {
 const CONFIRMED: Record<string, { route: string; why: string }> = {
   deleteAccountApplication: { route: "DELETE /v1/accounts/applications/{id}", why: "cannot be restored" },
   activateFeature: { route: "POST /v1/risk/features/activate", why: "can issue a card; no deactivate route" },
+  deleteSettlementInstruction: { route: "DELETE /v1/settlement-instructions/{id}", why: "cannot be restored" },
 };
 
 describe("idempotency_key argument", () => {
@@ -135,7 +136,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 29);
+    assert.equal(keyed.length, 30);
   });
 
   test("the exempt POSTs do not offer it", () => {

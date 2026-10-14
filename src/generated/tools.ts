@@ -3379,6 +3379,126 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "fx.yaml"
   },
   {
+    "name": "createSettlementInstruction",
+    "toolset": "fx",
+    "method": "post",
+    "path": "/v1/settlement-instructions",
+    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. The details are not checked with a bank, and there is no duplicate check.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "instruction_type": {
+          "type": "string",
+          "description": "Exact lower case",
+          "enum": [
+            "bank_account",
+            "crypto_wallet"
+          ],
+          "example": "bank_account"
+        },
+        "account_name": {
+          "type": "string",
+          "description": "Name on the account or wallet",
+          "example": "Acme Treasury LLC"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency this destination receives, such as `USD` or `USDC`. It is stored as sent and filters match it exactly, so always send upper case.",
+          "example": "USD"
+        },
+        "is_default": {
+          "type": "boolean",
+          "default": false,
+          "description": "Make this the default for its currency. The old default is unset."
+        },
+        "account_number": {
+          "type": "string",
+          "description": "Required for `bank_account`",
+          "example": "000987654321"
+        },
+        "bank_name": {
+          "type": "string",
+          "description": "Required for `bank_account`",
+          "example": "Example Bank"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "routing_number": {
+          "type": "string",
+          "example": "026009593"
+        },
+        "swift_code": {
+          "type": "string"
+        },
+        "iban": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string",
+          "example": "US"
+        },
+        "address": {
+          "type": "object",
+          "description": "The bank's address, stored as sent",
+          "additionalProperties": true
+        },
+        "wallet_address": {
+          "type": "string",
+          "description": "Required for `crypto_wallet`. Its format is not checked, so check it yourself."
+        },
+        "network": {
+          "type": "string",
+          "description": "Required for `crypto_wallet`, such as `polygon` or `stellar`. Send lower case.",
+          "example": "polygon"
+        },
+        "memo": {
+          "type": "string",
+          "description": "Required when `network` is `stellar`"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "instruction_type",
+        "account_name",
+        "currency"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "instruction_type",
+      "account_name",
+      "currency",
+      "is_default",
+      "account_number",
+      "bank_name",
+      "bank_code",
+      "routing_number",
+      "swift_code",
+      "iban",
+      "country",
+      "address",
+      "wallet_address",
+      "network",
+      "memo"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
+  },
+  {
     "name": "createTransfer",
     "toolset": "transfers",
     "method": "post",
@@ -3879,6 +3999,43 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "deleteSettlementInstruction",
+    "toolset": "fx",
+    "method": "delete",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Delete a settlement instruction — Retires a settlement instruction. It can no longer be read or used, and it cannot be restored. Orders that used it keep its ID. Deleting the default leaves its currency with no default.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": true,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "exportTransactions",
@@ -4725,6 +4882,39 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "collections.yaml"
+  },
+  {
+    "name": "getSettlementInstruction",
+    "toolset": "fx",
+    "method": "get",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Get a settlement instruction — Returns one active settlement instruction. A deleted one is not found.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "getTransaction",
@@ -5989,6 +6179,57 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "collections.yaml"
+  },
+  {
+    "name": "listSettlementInstructions",
+    "toolset": "fx",
+    "method": "get",
+    "path": "/v1/settlement-instructions",
+    "description": "List settlement instructions — Lists your active settlement instructions, defaults first, then newest. Filters match exactly, including case.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "items_per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "currency": {
+          "type": "string"
+        },
+        "instruction_type": {
+          "type": "string",
+          "description": "Exact lower case",
+          "enum": [
+            "bank_account",
+            "crypto_wallet"
+          ],
+          "example": "bank_account"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "page",
+      "items_per_page",
+      "currency",
+      "instruction_type"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "listTransactions",
@@ -8323,6 +8564,93 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "customers.yaml"
+  },
+  {
+    "name": "updateSettlementInstruction",
+    "toolset": "fx",
+    "method": "patch",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Update a settlement instruction — Changes the details of an active settlement instruction, or makes it the default for its currency. To change the currency or type, delete it and create a new one. This route needs no Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "account_name": {
+          "type": "string"
+        },
+        "account_number": {
+          "type": "string"
+        },
+        "bank_name": {
+          "type": "string"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "routing_number": {
+          "type": "string"
+        },
+        "swift_code": {
+          "type": "string"
+        },
+        "iban": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "wallet_address": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "is_default",
+      "account_name",
+      "account_number",
+      "bank_name",
+      "bank_code",
+      "routing_number",
+      "swift_code",
+      "iban",
+      "country",
+      "address",
+      "wallet_address",
+      "network",
+      "memo"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "uploadCustomerKycDocument",

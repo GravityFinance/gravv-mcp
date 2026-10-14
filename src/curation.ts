@@ -237,6 +237,13 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/fx/orders/pending-approvals": { name: "listFxPendingApprovals", toolset: "fx" },
   "GET /v1/fx/orders/{order_id}": { name: "getFxOrder", toolset: "fx" },
   "POST /v1/fx/orders/{order_id}/cancel": { name: "cancelFxOrder", toolset: "fx" },
+  // Settlement instructions are where createFxOrder pays out (destination type
+  // external_account), so they sit with fx.
+  "GET /v1/settlement-instructions": { name: "listSettlementInstructions", toolset: "fx" },
+  "POST /v1/settlement-instructions": { name: "createSettlementInstruction", toolset: "fx" },
+  "GET /v1/settlement-instructions/{id}": { name: "getSettlementInstruction", toolset: "fx" },
+  "PATCH /v1/settlement-instructions/{id}": { name: "updateSettlementInstruction", toolset: "fx" },
+  "DELETE /v1/settlement-instructions/{id}": { name: "deleteSettlementInstruction", toolset: "fx" },
 
   // ---- collections / onramp ------------------------------------------------
   "POST /v1/collections": { name: "createCollection", toolset: "collections" },
@@ -462,6 +469,8 @@ export const CONFIRM_OPS = new Set<string>([
   // Activating virtual_cards creates a card application and can issue a card at once;
   // there is no route to deactivate a feature.
   "POST /v1/risk/features/activate",
+  // A deleted settlement instruction cannot be read, used or restored.
+  "DELETE /v1/settlement-instructions/{id}",
 ]);
 
 /**
@@ -553,6 +562,17 @@ export const PREREQUISITES: Record<string, string> = {
 };
 
 /**
+ * Top-level arguments sent in upper case, whatever the model passes.
+ *
+ * A settlement instruction stores its currency exactly as sent, and the list filter and
+ * order matching compare it exactly, so a `usd` instruction is never found by `USD`. The
+ * list filter is left as given: rows already stored in lower case must stay findable.
+ */
+export const UPPER_CASE_ARGS: Record<string, string[]> = {
+  createSettlementInstruction: ["currency"],
+};
+
+/**
  * How to learn whether a call took effect, for every tool that sends an Idempotency-Key.
  *
  * After a timeout, a network error or a 5xx the outcome is unknown, and the error's hint
@@ -581,6 +601,9 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   chargeSavedCard: { lookup: "getWebhookHistory, and find the event for your payment_intent_id" },
   createCustomer: { lookup: "listCustomers, and match the email" },
   createExternalAccount: { lookup: "listExternalAccounts, and match the customer, account number and rail" },
+  createSettlementInstruction: {
+    lookup: "listSettlementInstructions with currency, and match the account name (there is no duplicate check)",
+  },
   createAccount: { lookup: "listAccounts with customer_id, and match the currency" },
   createAccountV2: {
     lookup: "listAccountsV2 with customer_id and currency, and listAccountApplicationsV2 with customer_id",

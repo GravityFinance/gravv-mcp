@@ -116,6 +116,17 @@ describe("request building", () => {
     });
     assert.equal("confirm" in (body as object), false, "confirm is an MCP concern, not an API field");
   });
+
+  test("a new settlement instruction's currency is sent in upper case; the list filter is not", () => {
+    const { fetchImpl } = stub([{ status: 200 }]);
+    const c = client(fetchImpl);
+    const args = { instruction_type: "bank_account", account_name: "Acme", currency: "usd" };
+    const { body } = c.buildRequest(TOOLS_BY_NAME.get("createSettlementInstruction")!, args);
+    assert.equal((body as any).currency, "USD");
+    assert.equal(args.currency, "usd", "the caller's arguments are not changed");
+    const { url } = c.buildRequest(TOOLS_BY_NAME.get("listSettlementInstructions")!, { currency: "usd" });
+    assert.match(url, /currency=usd/);
+  });
 });
 
 describe("auth and idempotency", () => {
