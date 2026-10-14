@@ -210,11 +210,9 @@ export class DocsIndex {
     const index = await indexRes.text();
     const corpus = await corpusRes.text();
 
-    const entries = parseIndex(index);
-    const { pages, unmatchedEntries, unmatchedPages } = pairPages(
-      entries,
-      parseCorpus(corpus, entries),
-      (url) => url.replace(`${this.origin}/`, "").replace(/\.md$/, ""),
+    const entries = parseIndex(index, this.origin);
+    const { pages, unmatchedEntries, unmatchedPages } = pairPages(entries, parseCorpus(corpus, entries), (url) =>
+      slugFromUrl(url, this.origin),
     );
 
     // Document frequency for IDF weighting.
@@ -286,7 +284,10 @@ export class DocsIndex {
 
   async getPage(slug: string): Promise<DocPage | null> {
     await this.ensureLoaded();
-    const clean = slug.replace(/^\/+/, "").replace(/\.md$/, "");
+    // A full docs URL works too, on whatever host it names.
+    const clean = /^https?:\/\//i.test(slug.trim())
+      ? slugFromUrl(slug.trim(), this.origin)
+      : slug.replace(/^\/+/, "").replace(/\.md$/, "");
     return (
       this.pages.find((p) => p.slug === clean) ??
       this.pages.find((p) => p.slug.endsWith(`/${clean}`)) ??
@@ -330,8 +331,11 @@ export interface CorpusPage {
   content: string;
 }
 
-/** Entries of llms.txt in document order, each tagged with its `## Section` heading. */
-export function parseIndex(index: string): IndexEntry[] {
+/**
+ * Entries of llms.txt in document order, each tagged with its `## Section` heading.
+ * A relative link resolves against `base`, the origin the index was fetched from.
+ */
+export function parseIndex(index: string, base?: string): IndexEntry[] {
   const entries: IndexEntry[] = [];
   let section = "";
   for (const line of index.replace(/\r\n?/g, "\n").split("\n")) {
@@ -340,10 +344,47 @@ export function parseIndex(index: string): IndexEntry[] {
       section = sec[1]!.trim();
       continue;
     }
-    const m = /^-\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)(?::\s*(.*))?$/.exec(line);
-    if (m) entries.push({ title: m[1]!.trim(), url: m[2]!, description: (m[3] ?? "").trim(), section });
+    const m = /^-\s+\[([^\]]+)\]\(([^)\s]+)\)(?::\s*(.*))?$/.exec(line);
+    if (!m) continue;
+    let url: string;
+    try {
+      url = new URL(m[2]!, base ? `${base}/` : undefined).href;
+    } catch {
+      continue; // a relative link with no base, or not a link at all
+    }
+    entries.push({ title: m[1]!.trim(), url, description: (m[3] ?? "").trim(), section });
   }
   return entries;
+}
+
+/**
+ * A page's slug: its URL path, without the leading `/`, the origin's own path prefix
+ * (for an origin such as `https://example.com/docs`) or the `.md` suffix.
+ *
+ * Taken from the path alone, so the slug is the same whatever host the index names. The
+ * old slug removed the origin as text, and an index whose URLs sat on another host (after
+ * a docs move, or behind a redirect) gave whole URLs as slugs.
+ */
+export function slugFromUrl(url: string, origin: string): string {
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return url.replace(/^\/+/, "").replace(/\.md$/, "");
+  }
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    /* keep it encoded */
+  }
+  let prefix = "";
+  try {
+    prefix = new URL(origin).pathname.replace(/\/+$/, "");
+  } catch {
+    /* no prefix */
+  }
+  if (prefix && path.startsWith(`${prefix}/`)) path = path.slice(prefix.length);
+  return path.replace(/^\/+/, "").replace(/\.md$/, "");
 }
 
 /** Case and whitespace folded, for comparing titles and descriptions. */

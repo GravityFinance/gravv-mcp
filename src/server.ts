@@ -93,7 +93,7 @@ const DOC_TOOLS = [
         slug: {
           type: "string",
           description:
-            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'.",
+            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'. The page's full docs URL also works.",
         },
       },
       required: ["slug"],

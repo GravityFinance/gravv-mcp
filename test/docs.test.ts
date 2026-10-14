@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { DocsIndex } from "../src/docs.ts";
+import { DocsIndex, slugFromUrl } from "../src/docs.ts";
 
 /**
  * Fixture in the shape of the live docs site: an llms.txt index grouped by `## Section`,
@@ -119,7 +119,7 @@ describe("docs index", () => {
     assert.deepEqual(sections.sort(), ["API Reference", "Developer Platform", "Get Started", "Recipes"]);
   });
 
-  test("derives slugs by stripping origin and .md", async () => {
+  test("derives slugs from the URL path, without .md", async () => {
     const page = await index().getPage("platform/wallets/create-a-wallet");
     assert.ok(page);
     assert.equal(page.title, "Create a wallet");
@@ -183,6 +183,38 @@ describe("docs index", () => {
     const docs = index(`${CORPUS}\n---\n${page("Unlisted", "Not in the index.", "Trailing text.")}`);
     assert.deepEqual(await docs.stats(), { pages: 9, unmatchedEntries: 0, unmatchedPages: 0 });
     assert.match((await docs.getPage("getting-started/idempotent-requests"))!.content, /# Unlisted[\s\S]*Trailing text/);
+  });
+});
+
+describe("slugs", () => {
+  test("come from the URL path, whatever host the index names", async () => {
+    // Fetched from docs.test, but the index lists its pages on another host, as after a
+    // docs move or behind a redirect.
+    const moved = INDEX.replaceAll("https://docs.test/", "https://docs.example/");
+    const docs = index(CORPUS, moved);
+    const page = await docs.getPage("platform/wallets/create-a-wallet");
+    assert.ok(page);
+    assert.equal(page.url, "https://docs.example/platform/wallets/create-a-wallet.md");
+    const hits = await docs.search("422 unprocessable");
+    assert.equal(hits[0]!.slug, "getting-started/idempotent-requests");
+  });
+
+  test("a relative link resolves against the origin", async () => {
+    const relative = INDEX.replace("(https://docs.test/getting-started/authentication.md)", "(/getting-started/authentication.md)");
+    const page = await index(CORPUS, relative).getPage("getting-started/authentication");
+    assert.equal(page?.url, "https://docs.test/getting-started/authentication.md");
+    assert.match(page!.content, /x-tenant-id/);
+  });
+
+  test("an origin with a path drops that prefix", () => {
+    assert.equal(slugFromUrl("https://example.com/docs/platform/x.md", "https://example.com/docs"), "platform/x");
+    assert.equal(slugFromUrl("https://other.example/platform/x.md", "https://example.com/docs"), "platform/x");
+    assert.equal(slugFromUrl("https://docs.test/index.md", "https://docs.test"), "index");
+  });
+
+  test("a page can be fetched by its full docs URL", async () => {
+    const page = await index().getPage("https://docs.test/recipes/remit-funds-to-a-recipient.md");
+    assert.equal(page?.title, "Remit funds to a recipient");
   });
 });
 
