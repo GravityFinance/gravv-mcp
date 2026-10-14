@@ -4,16 +4,20 @@
     "tool": "getCustomer"
   },
   "S-ACC2-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-01.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-01.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-01.6": {
     "outcome": "ok",
@@ -24,16 +28,20 @@
     "tool": "getCustomer"
   },
   "S-ACC2-02.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-02.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-02.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-02.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-02.6": {
     "outcome": "ok",
@@ -44,79 +52,139 @@
     "tool": "getCustomer"
   },
   "S-ACC2-03.2": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].phone_daytime: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].residential_address: is not declared"
+    ]
   },
   "S-ACC2-03.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-04.1": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].tax_id_type: is not declared",
+      "data.parties[0].tax_id_number: is not declared",
+      "data.parties[0].permanent_address: is not declared",
+      "data.parties[0].mailing_address: is not declared"
+    ]
   },
   "S-ACC2-04.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-05.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-05.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-06.1": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].is_director: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared"
+    ]
   },
   "S-ACC2-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-07.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-07.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-08.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-08.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-09.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-09.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountApplicationV2"
   },
   "S-ACC2-09.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountApplicationsV2"
   },
   "S-ACC2-09.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
   },
   "S-ACC2-09.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
   },
   "S-ACC2-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-10.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-10.3": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "getAccountRequirements",
+    "problems": [
+      "customer_type: is required",
+      "currency: is required",
+      "...: is not allowed"
+    ]
   },
   "S-ACC2-10.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-10.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-11.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-11.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-12.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-12.2": {
     "outcome": "ok",
@@ -457,10 +525,12 @@
     "outcome": "no-tool"
   },
   "S-ACC1-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC1-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC1-01.3": {
     "outcome": "ok",
@@ -631,7 +701,8 @@
     "tool": "getAccount"
   },
   "S-FX-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-FX-01.3": {
     "outcome": "ok",
@@ -756,7 +827,8 @@
     "tool": "listAccounts"
   },
   "S-TXN-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-TXN-01.3": {
     "outcome": "ok",
@@ -860,14 +932,16 @@
     "tool": "getCustomer"
   },
   "S-PAY-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-01.3": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-PAY-01.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-PAY-01.5": {
     "outcome": "ok",
@@ -929,7 +1003,8 @@
     "tool": "listExternalAccounts"
   },
   "S-PAY-05.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-05.2": {
     "outcome": "ok",
@@ -1013,7 +1088,8 @@
     "outcome": "no-tool"
   },
   "S-PAY-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-10.2": {
     "outcome": "ok",
@@ -1071,7 +1147,8 @@
     "tool": "getCustomer"
   },
   "S-REM-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-01.3": {
     "outcome": "ok",
@@ -1122,7 +1199,8 @@
     "tool": "getCustomer"
   },
   "S-REM-02.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-02.3": {
     "outcome": "ok",
@@ -1160,7 +1238,8 @@
     "tool": "getCustomer"
   },
   "S-REM-03.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-03.3": {
     "outcome": "ok",
@@ -1331,14 +1410,16 @@
     "tool": "getWebhookCallHistory"
   },
   "S-SBX-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-01.2": {
     "outcome": "ok",
     "tool": "simulateDeposit"
   },
   "S-SBX-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-02.1": {
     "outcome": "ok",
@@ -1383,7 +1464,8 @@
     "tool": "getCollection"
   },
   "S-SBX-04.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-04.2": {
     "outcome": "ok",
@@ -1478,10 +1560,12 @@
     "tool": "getWallet"
   },
   "S-COL-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-COL-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-COL-01.3": {
     "outcome": "ok",

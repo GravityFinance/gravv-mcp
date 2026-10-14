@@ -134,7 +134,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 26);
+    assert.equal(keyed.length, 27);
   });
 
   test("the exempt POSTs do not offer it", () => {

@@ -91,11 +91,11 @@ describe("runReplay", () => {
     assert.equal(sent.length, 0);
   });
 
-  test("runs the reads and the create, skips the rest, and lists what it made", async () => {
+  test("runs the reads and the create, skips the money step, and lists what it made", async () => {
     const { sent, fetchImpl } = stub();
     const report = await runReplay({ apiKey: KEY, run: "mcp-replay-test", fetchImpl });
     const outcomes = Object.fromEntries(report.steps.map((s) => [s.id, s.outcome]));
-    assert.deepEqual(outcomes, { R1: "pass", R2: "pass", R3: "pass", R4: "pass", R5: "skipped", R6: "skipped", C1: "pass", M1: "skipped" });
+    assert.deepEqual(outcomes, { R1: "pass", R2: "pass", R3: "pass", R4: "pass", R5: "pass", R6: "pass", C1: "pass", M1: "skipped" });
     assert.match(report.steps.find((s) => s.id === "M1")!.note!, /--money/);
     assert.deepEqual(report.cleanup, [{ step: "C1", what: STEPS.find((s) => s.id === "C1")!.what, id: "made-id" }]);
 

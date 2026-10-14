@@ -1586,6 +1586,330 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
+    "name": "createAccountV2",
+    "toolset": "accounts",
+    "method": "post",
+    "path": "/v2/accounts",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call `GET /v1/accounts/capabilities` to choose `bank_code`, `currency` and `account_type`, then `GET /v2/accounts/requirements` to build `data`. The response has only `account_id` and `status: pending`. Get the account for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected. When you retry, reuse the same Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "An existing customer whose KYC is completed. It is checked before every other field.",
+          "example": "0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33"
+        },
+        "customer_type": {
+          "type": "string",
+          "description": "`individual` or `business`. Always send it: bank choice and routing use the value you send. Defaults to the customer's profile type.",
+          "enum": [
+            "individual",
+            "business"
+          ],
+          "example": "individual"
+        },
+        "account_type": {
+          "type": "string",
+          "description": "Account type from the capabilities, such as `operating`, `yield` or `revenue`. Defaults to `operating`.",
+          "example": "operating"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "Three-letter ISO 4217 code",
+          "example": "USD"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main",
+          "description": "Defaults to `multi_currency` for NGN and `main` for other currencies."
+        },
+        "label": {
+          "type": "string",
+          "description": "Your label for the account, at most 255 bytes",
+          "example": "Jane USD"
+        },
+        "bank_code": {
+          "type": "string",
+          "description": "A `bank_code` from `GET /v1/accounts/capabilities`. Leave it out to use the highest-priority bank that fits.",
+          "example": "cross_river_bank"
+        },
+        "network": {
+          "type": "string",
+          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`; refused otherwise. It must be one of the bank's `token_options`. Prefer polygon, ethereum, base or solana, which work end to end.",
+          "enum": [
+            "stellar",
+            "polygon",
+            "ethereum",
+            "base",
+            "solana",
+            "avalanche_c_chain",
+            "sui",
+            "tron",
+            "bsc",
+            "flow_evm",
+            "canton",
+            "bitcoin",
+            "celo",
+            "gnosis",
+            "arbitrum",
+            "optimism",
+            "xdc",
+            "tempo"
+          ],
+          "example": "polygon"
+        },
+        "wallet_id": {
+          "type": "string",
+          "description": "An existing wallet of yours to use instead of `network`. Send one, not both."
+        },
+        "account_structure": {
+          "type": "string",
+          "description": "For banks that offer FBO accounts only",
+          "enum": [
+            "fbo_account",
+            "subledger"
+          ]
+        },
+        "parent_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The FBO account, with `account_structure` `subledger`"
+        },
+        "data": {
+          "type": "object",
+          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`. Fields the customer record already answers are filled in for you.",
+          "properties": {
+            "root": {
+              "type": "object",
+              "description": "Applicant fields for an individual, or business fields for a business. Include `citizenship_country` or `incorporation_country`, which routing reads. Do not put `network` or `wallet_id` here.",
+              "additionalProperties": true
+            },
+            "parties": {
+              "type": "array",
+              "description": "Business only; refused for individuals. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record.",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "ID of an associated person on the customer record"
+                  },
+                  "documents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "ID of a document already on file"
+                        },
+                        "document_type": {
+                          "type": "string",
+                          "description": "Type of a new document. Required with `content`.",
+                          "enum": [
+                            "national_id",
+                            "passport",
+                            "drivers_license",
+                            "permanent_resident_card",
+                            "employment_authorization",
+                            "other",
+                            "proof_of_address",
+                            "selfie_photo",
+                            "tax_form_w8ben",
+                            "signed_terms_document",
+                            "articles_of_incorporation",
+                            "ownership_document",
+                            "control_structure",
+                            "compliance_document",
+                            "tax_id_letter",
+                            "bank_statement",
+                            "source_of_funds",
+                            "denial_explanation_letter",
+                            "regulatory_action_explanation"
+                          ],
+                          "example": "passport"
+                        },
+                        "document_type_side": {
+                          "type": "string",
+                          "description": "Which side, for identity documents sent one side at a time",
+                          "enum": [
+                            "front",
+                            "back"
+                          ],
+                          "default": "front"
+                        },
+                        "document_subtype": {
+                          "type": "string",
+                          "description": "Optional sub-type"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "The file as standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB decoded.",
+                          "example": "<base64>"
+                        },
+                        "filename": {
+                          "type": "string",
+                          "example": "passport.jpg"
+                        },
+                        "issuing_country": {
+                          "type": "string",
+                          "description": "Issuing country as an alpha-2 code. Required for every type except `selfie_photo`.",
+                          "example": "GB"
+                        },
+                        "number": {
+                          "type": "string",
+                          "description": "Document number. Required for identity documents.",
+                          "example": "123456789"
+                        },
+                        "issued_date": {
+                          "type": "string",
+                          "description": "Issue date as YYYY-MM-DD. Required for identity documents.",
+                          "example": "2020-01-15"
+                        },
+                        "expiration_date": {
+                          "type": "string",
+                          "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
+                          "example": "2030-01-14"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "documents": {
+              "type": "array",
+              "description": "Root documents. When you send none, documents on the customer record are used.",
+              "items": {
+                "type": "object",
+                "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "ID of a document already on file"
+                  },
+                  "document_type": {
+                    "type": "string",
+                    "description": "Type of a new document. Required with `content`.",
+                    "enum": [
+                      "national_id",
+                      "passport",
+                      "drivers_license",
+                      "permanent_resident_card",
+                      "employment_authorization",
+                      "other",
+                      "proof_of_address",
+                      "selfie_photo",
+                      "tax_form_w8ben",
+                      "signed_terms_document",
+                      "articles_of_incorporation",
+                      "ownership_document",
+                      "control_structure",
+                      "compliance_document",
+                      "tax_id_letter",
+                      "bank_statement",
+                      "source_of_funds",
+                      "denial_explanation_letter",
+                      "regulatory_action_explanation"
+                    ],
+                    "example": "passport"
+                  },
+                  "document_type_side": {
+                    "type": "string",
+                    "description": "Which side, for identity documents sent one side at a time",
+                    "enum": [
+                      "front",
+                      "back"
+                    ],
+                    "default": "front"
+                  },
+                  "document_subtype": {
+                    "type": "string",
+                    "description": "Optional sub-type"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "The file as standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB decoded.",
+                    "example": "<base64>"
+                  },
+                  "filename": {
+                    "type": "string",
+                    "example": "passport.jpg"
+                  },
+                  "issuing_country": {
+                    "type": "string",
+                    "description": "Issuing country as an alpha-2 code. Required for every type except `selfie_photo`.",
+                    "example": "GB"
+                  },
+                  "number": {
+                    "type": "string",
+                    "description": "Document number. Required for identity documents.",
+                    "example": "123456789"
+                  },
+                  "issued_date": {
+                    "type": "string",
+                    "description": "Issue date as YYYY-MM-DD. Required for identity documents.",
+                    "example": "2020-01-15"
+                  },
+                  "expiration_date": {
+                    "type": "string",
+                    "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
+                    "example": "2030-01-14"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "currency"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "customer_type",
+      "account_type",
+      "currency",
+      "category",
+      "label",
+      "bank_code",
+      "network",
+      "wallet_id",
+      "account_structure",
+      "parent_account_id",
+      "data"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
     "name": "createCard",
     "toolset": "cards",
     "method": "post",
@@ -3749,6 +4073,204 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
+    "name": "getAccountApplicationV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/applications/{application_id}",
+    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`: upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the account application. Read it from the account (`application_id`) or from the application webhooks."
+        }
+      },
+      "required": [
+        "application_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "application_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "getAccountCapabilities",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v1/accounts/capabilities",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. Send `customer_type` with `customer_id` too, or options for both types come back. The answer uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Customer to check. Their profile address gives the country when you do not send `country`."
+        },
+        "country": {
+          "type": "string",
+          "description": "Residence country as an ISO 3166-1 alpha-2 or alpha-3 code"
+        },
+        "subdivision": {
+          "type": "string",
+          "description": "Residence state, such as `US-NY` or `NY`"
+        },
+        "customer_type": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ],
+          "description": "Customer type to list options for"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code to filter by"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "country",
+      "subdivision",
+      "customer_type",
+      "currency"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts.yaml"
+  },
+  {
+    "name": "getAccountRequirements",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/requirements",
+    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that the same bank as create is chosen. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_type": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code"
+        },
+        "bank_code": {
+          "type": "string",
+          "description": "A `bank_code` from the capabilities"
+        },
+        "account_type": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main"
+        },
+        "country": {
+          "type": "string",
+          "description": "The customer's citizenship or incorporation country, alpha-2 or alpha-3"
+        },
+        "subdivision": {
+          "type": "string",
+          "description": "ISO 3166-2 code or a bare state code. Needs `country`."
+        },
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Customer to fill the form for"
+        }
+      },
+      "required": [
+        "customer_type",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_type",
+      "currency",
+      "bank_code",
+      "account_type",
+      "category",
+      "country",
+      "subdivision",
+      "customer_id"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "getAccountV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/{id}",
+    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are major units; `ledger_balance` is minor units.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the account"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
     "name": "getCard",
     "toolset": "cards",
     "method": "get",
@@ -4534,6 +5056,65 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
+    "name": "listAccountApplicationsV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/applications",
+    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total; page until `count` is less than `limit`. A misspelt `status` returns an empty list.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "`processing` while the bank works, `blocked` while it waits on you or the customer, `manual_review` while Gravv holds it, then `approved` or `rejected`. `draft` and `submitted` come only from v1 flows.",
+          "enum": [
+            "draft",
+            "submitted",
+            "processing",
+            "blocked",
+            "manual_review",
+            "approved",
+            "rejected",
+            "expired",
+            "cancelled"
+          ],
+          "example": "blocked"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "status",
+      "limit",
+      "offset"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
     "name": "listAccounts",
     "toolset": "accounts",
     "method": "get",
@@ -4621,6 +5202,140 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "listAccountsV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts",
+    "description": "List accounts — Lists your accounts, v1 and v2, newest first, with bank details and balances. Status reasons are only on the single read. Unknown query parameters are rejected with a 400. A bad filter value is an error, not an empty page.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "description": "Filter by customer"
+        },
+        "excluded_customer_id": {
+          "type": "string",
+          "description": "Leave out this customer's accounts"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "active",
+            "frozen",
+            "closed",
+            "rejected",
+            "failed",
+            "deleted",
+            "manual_review"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code"
+        },
+        "network": {
+          "type": "string",
+          "description": "Network name in lower case",
+          "enum": [
+            "stellar",
+            "polygon",
+            "ethereum",
+            "base",
+            "solana",
+            "avalanche_c_chain",
+            "sui",
+            "tron",
+            "bsc",
+            "flow_evm",
+            "canton",
+            "bitcoin",
+            "celo",
+            "gnosis",
+            "arbitrum",
+            "optimism",
+            "xdc",
+            "tempo"
+          ],
+          "example": "polygon"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "description": "Exact label. Use `search` for part of a label."
+        },
+        "type": {
+          "type": "string",
+          "description": "Account type, such as `operating`"
+        },
+        "search": {
+          "type": "string",
+          "description": "Case-insensitive search across label, currency, status, type and wallet address"
+        },
+        "created_from": {
+          "type": "string",
+          "description": "Created at or after, as RFC 3339 or YYYY-MM-DD (inclusive)"
+        },
+        "created_to": {
+          "type": "string",
+          "description": "Created before, as RFC 3339 or YYYY-MM-DD (exclusive)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50,
+          "description": "Page size, 1 to 200. Values out of range give 50."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "excluded_customer_id",
+      "status",
+      "category",
+      "currency",
+      "network",
+      "bank_code",
+      "label",
+      "type",
+      "search",
+      "created_from",
+      "created_to",
+      "limit",
+      "offset"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "listCardApplications",
@@ -6790,6 +7505,202 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "updateAccountApplicationV2",
+    "toolset": "accounts",
+    "method": "patch",
+    "path": "/v2/accounts/applications/{application_id}",
+    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call; a partial answer stays `blocked`. There is no Idempotency-Key on this route, so a retry uploads again. The response leaves out the status reason fields; get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the account application. Read it from the account (`application_id`) or from the application webhooks."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Field values by field name, such as `{\"tax_id_number\": \"123456789\"}`. On a blocked application, send only fields the bank asked for.",
+          "additionalProperties": true
+        },
+        "customer": {
+          "type": "object",
+          "description": "Changes to the customer record. They are saved on the customer, not only on this application.",
+          "properties": {
+            "first_name": {
+              "type": "string"
+            },
+            "middle_name": {
+              "type": "string"
+            },
+            "last_name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "date_of_birth": {
+              "type": "string"
+            },
+            "gender": {
+              "type": "string"
+            },
+            "tax_id_number": {
+              "type": "string"
+            },
+            "business_name": {
+              "type": "string"
+            },
+            "business_description": {
+              "type": "string"
+            },
+            "business_type": {
+              "type": "string"
+            },
+            "business_industry": {
+              "type": "string"
+            },
+            "registration_number": {
+              "type": "string"
+            },
+            "external_id": {
+              "type": "string"
+            },
+            "address": {
+              "type": "object",
+              "properties": {
+                "address_line": {
+                  "type": "string"
+                },
+                "address_line2": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "postal_code": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                }
+              }
+            },
+            "associated_persons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "parties": {
+          "type": "array",
+          "description": "Party changes, in the create shape. Only on `draft` or `blocked`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "documents": {
+          "type": "array",
+          "description": "Documents to upload. Only on `draft`, `blocked` or `manual_review`. Upload every requested type in this one call.",
+          "items": {
+            "type": "object",
+            "required": [
+              "document_type",
+              "filename",
+              "content"
+            ],
+            "properties": {
+              "document_type": {
+                "type": "string",
+                "example": "proof_of_address"
+              },
+              "document_type_side": {
+                "type": "string",
+                "enum": [
+                  "front",
+                  "back"
+                ]
+              },
+              "document_subtype": {
+                "type": "string"
+              },
+              "party_id": {
+                "type": "string",
+                "description": "Required for an identity document on a business application"
+              },
+              "party_role": {
+                "type": "string"
+              },
+              "party_name": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string",
+                "example": "bill.pdf"
+              },
+              "content": {
+                "type": "string",
+                "description": "Standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB.",
+                "example": "<base64>"
+              },
+              "issuing_country": {
+                "type": "string",
+                "description": "Alpha-2 code. Required except for `selfie_photo`.",
+                "example": "US"
+              },
+              "number": {
+                "type": "string"
+              },
+              "issued_date": {
+                "type": "string"
+              },
+              "expiration_date": {
+                "type": "string"
+              },
+              "date_of_birth": {
+                "type": "string"
+              },
+              "document_place_of_birth": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "application_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "application_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "metadata",
+      "customer",
+      "parties",
+      "documents"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "updateAccountStatus",

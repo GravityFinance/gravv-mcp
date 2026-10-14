@@ -173,7 +173,9 @@ function slim(schema: any, depth = 0): any {
       // A map of names to schemas, not a schema: its keys are field names, never keywords.
       const props: Json = {};
       for (const [name, sub] of Object.entries(v as Json)) if (!notYetLive(sub)) props[name] = slim(sub, depth + 1);
-      out.properties = props;
+      // A map emptied by the removal is dropped, so an open form (v2 data.root) stays open
+      // rather than claiming to declare no fields at all.
+      if (Object.keys(props).length > 0 || Object.keys(v as Json).length === 0) out.properties = props;
       continue;
     }
     out[k] = slim(v, depth + 1);

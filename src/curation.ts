@@ -154,6 +154,16 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/accounts": { name: "listAccounts", toolset: "accounts" },
   "GET /v1/accounts/{account_id}": { name: "getAccount", toolset: "accounts" },
   "PATCH /v1/accounts/{account_id}/status": { name: "updateAccountStatus", toolset: "accounts" },
+  "GET /v1/accounts/capabilities": { name: "getAccountCapabilities", toolset: "accounts" },
+  // v2 opens an account and its application in one call. Unlike the v1 application tools
+  // these load by default: the schemas are smaller and v2 is the path the guides teach.
+  "POST /v2/accounts": { name: "createAccountV2", toolset: "accounts" },
+  "GET /v2/accounts": { name: "listAccountsV2", toolset: "accounts" },
+  "GET /v2/accounts/{id}": { name: "getAccountV2", toolset: "accounts" },
+  "GET /v2/accounts/requirements": { name: "getAccountRequirements", toolset: "accounts" },
+  "GET /v2/accounts/applications": { name: "listAccountApplicationsV2", toolset: "accounts" },
+  "GET /v2/accounts/applications/{application_id}": { name: "getAccountApplicationV2", toolset: "accounts" },
+  "PATCH /v2/accounts/applications/{application_id}": { name: "updateAccountApplicationV2", toolset: "accounts" },
   "POST /v1/accounts/applications": { name: "createAccountApplication", toolset: "account-applications" },
   "GET /v1/accounts/applications": { name: "listAccountApplications", toolset: "account-applications" },
   "GET /v1/accounts/applications/pending": { name: "listPendingAccountApplications", toolset: "account-applications" },
@@ -559,6 +569,9 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   createCustomer: { lookup: "listCustomers, and match the email" },
   createExternalAccount: { lookup: "listExternalAccounts, and match the customer, account number and rail" },
   createAccount: { lookup: "listAccounts with customer_id, and match the currency" },
+  createAccountV2: {
+    lookup: "listAccountsV2 with customer_id and currency, and listAccountApplicationsV2 with customer_id",
+  },
   createWallet: {
     lookup: "listWallets with customer_id and network (a second call creates a second wallet)",
   },
