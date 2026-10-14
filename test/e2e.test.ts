@@ -255,6 +255,36 @@ describe("end-to-end over MCP stdio", () => {
     }
   });
 
+  test("a resend under the model's idempotency_key sends that header and keeps it out of the body", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const payload = JSON.parse(
+        textOf(
+          await mcp.request("tools/call", {
+            name: "createTransfer",
+            arguments: {
+              amount: 50,
+              source: { id: "acc_1" },
+              destination: { id: "acc_2" },
+              idempotency_key: "e2e-key-1",
+              confirm: true,
+            },
+          }),
+        ),
+      );
+      assert.equal(payload.idempotency_key, "e2e-key-1");
+      assert.equal(received.length, 1);
+      assert.equal(received[0]!.headers["idempotency-key"], "e2e-key-1");
+      assert.equal(received[0]!.body.idempotency_key, undefined, "the key is a header, not a body field");
+    } finally {
+      mcp.kill();
+    }
+  });
+
   test("a live key refuses money movement without GRAVV_ALLOW_LIVE_WRITES", async () => {
     received = [];
     const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {

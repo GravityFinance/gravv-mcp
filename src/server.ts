@@ -9,6 +9,7 @@ import {
   PUBLISHABLE_KEY_MESSAGE,
   detectEnvironment,
   isPublishableKey,
+  isValidIdempotencyKey,
   type Environment,
 } from "./client.ts";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
@@ -290,6 +291,17 @@ export function createServer(config: ServerConfig) {
     }
 
     try {
+      // A key the model passes back resends a call whose outcome is unknown. A value that
+      // is not a valid key cannot be one an earlier result returned, so refuse it before
+      // the preview rather than quietly making a new key and running the call twice.
+      const suppliedKey = tool.needsIdempotency ? args.idempotency_key : undefined;
+      if (suppliedKey != null && !isValidIdempotencyKey(suppliedKey)) {
+        return errorResult(
+          "idempotency_key must be 1-255 printable ASCII characters. Pass it exactly as an earlier result " +
+            "returned it, or leave it out and a new key is made.",
+        );
+      }
+
       const preview = client!.buildRequest(tool, args);
 
       // Redirect a card method smuggled past the schema, before it reaches the API and
@@ -307,7 +319,7 @@ export function createServer(config: ServerConfig) {
         return { content: [{ type: "text" as const, text: JSON.stringify(gateResult, null, 2) }] };
       }
 
-      const result = await client!.call(tool, args);
+      const result = await client!.call(tool, args, { idempotencyKey: suppliedKey ?? undefined });
 
       const payload: Record<string, unknown> = {
         environment,

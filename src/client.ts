@@ -104,7 +104,10 @@ export interface ClientOptions {
 
 export interface CallResult {
   data: unknown;
-  /** Present on POSTs; returned for tracing. Every call gets a new key. */
+  /**
+   * Present on POSTs: the key that was sent. It is the caller's when one was passed,
+   * otherwise a new one made for this call.
+   */
   idempotencyKey?: string;
   /** True when the gateway replayed a stored response rather than re-executing. */
   replayed: boolean;
@@ -159,7 +162,14 @@ export class GravvClient {
       const b: Record<string, unknown> = {};
       for (const k of tool.bodyProps) if (args[k] !== undefined) b[k] = args[k];
       // Fields the spec did not enumerate but the API accepts.
-      const known = new Set([...tool.pathParams, ...tool.queryParams, ...tool.bodyProps, "confirm"]);
+      // confirm and idempotency_key are MCP arguments; the key travels as a header.
+      const known = new Set([
+        ...tool.pathParams,
+        ...tool.queryParams,
+        ...tool.bodyProps,
+        "confirm",
+        "idempotency_key",
+      ]);
       for (const [k, v] of Object.entries(args)) if (!known.has(k) && v !== undefined) b[k] = v;
       // Identifiers the API wants in both the path and the body.
       for (const k of tool.alsoInBody) if (args[k] !== undefined) b[k] = args[k];
@@ -184,10 +194,20 @@ export class GravvClient {
 
     if (this.opts.apiKey) headers["Api-Key"] = this.opts.apiKey;
 
-    // The API rejects any POST without an Idempotency-Key with a 400, so we always
-    // generate one rather than relying on the caller. Exemptions are in curation.ts.
+    // The API rejects any POST without an Idempotency-Key with a 400, so every such call
+    // sends one: the caller's, to resend a call whose outcome is unknown, or else a new
+    // one. Exemptions are in curation.ts.
     let idempotencyKey: string | undefined;
     if (tool.needsIdempotency) {
+      if (opts.idempotencyKey !== undefined && !isValidIdempotencyKey(opts.idempotencyKey)) {
+        // The gateway refuses it too, but only after a round trip.
+        throw new GravvApiError(
+          "idempotency_key must be 1-255 printable ASCII characters",
+          400,
+          null,
+          "Pass the idempotency_key exactly as an earlier result returned it, or leave it out and a new key is made.",
+        );
+      }
       idempotencyKey = opts.idempotencyKey ?? randomUUID();
       headers["Idempotency-Key"] = idempotencyKey;
     }
@@ -264,6 +284,11 @@ export class GravvClient {
   }
 }
 
+/** The gateway's rule for an Idempotency-Key: 1-255 printable ASCII characters. */
+export function isValidIdempotencyKey(key: unknown): key is string {
+  return typeof key === "string" && /^[\x20-\x7E]{1,255}$/.test(key);
+}
+
 /**
  * Normalise the gateway's error field into a readable string.
  *
@@ -322,7 +347,7 @@ const LIMIT_CODES = new Set([
 /** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
 function hint422(code: string | undefined): string {
   if (code === "idempotency_key_reused") {
-    return "The gateway saw this Idempotency-Key before with a different body. This server makes a new key for every call, so calling the tool again sends a fresh one.";
+    return "The same idempotency_key was sent before with a different body. If this is a resend, send exactly the same arguments as the first call. If it is a new request, leave idempotency_key out and a fresh key is made.";
   }
   if (code && LIMIT_CODES.has(code)) {
     return "Not an idempotency problem. The transfer is over a sender limit (see window and details). Reduce the amount or wait for the window to reset. Retrying the same call will not help.";

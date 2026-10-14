@@ -114,6 +114,34 @@ const GATED: Record<string, { route: string; why: string }> = {
   chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
 };
 
+describe("idempotency_key argument", () => {
+  const hasKeyArg = (t: (typeof TOOLS)[number]) => "idempotency_key" in ((t.inputSchema as any).properties ?? {});
+
+  test("every tool that sends a key declares it, and no other tool does", () => {
+    const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
+    const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
+    assert.deepEqual(declared, keyed);
+    assert.equal(keyed.length, 25);
+  });
+
+  test("the exempt POSTs do not offer it", () => {
+    for (const name of ["verifyExternalAccount", "retryWebhookEvent"]) {
+      assert.equal(hasKeyArg(TOOLS_BY_NAME.get(name)!), false, name);
+    }
+  });
+
+  test("it is optional and follows the gateway's key rule", () => {
+    for (const t of TOOLS.filter(hasKeyArg)) {
+      const schema = (t.inputSchema as any).properties.idempotency_key;
+      assert.equal(((t.inputSchema as any).required as string[]).includes("idempotency_key"), false, t.name);
+      assert.equal(schema.maxLength, 255, t.name);
+      const re = new RegExp(schema.pattern);
+      assert.ok(re.test("6f1c-key"), t.name);
+      assert.equal(re.test("bad\nkey"), false, t.name);
+    }
+  });
+});
+
 describe("money and irreversible tools are gated", () => {
   for (const [name, { route, why }] of Object.entries(GATED)) {
     test(`${name} needs confirm: ${why}`, () => {

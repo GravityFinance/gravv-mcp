@@ -120,6 +120,33 @@ describe("auth and idempotency", () => {
     assert.equal(calls[0]!.headers["Idempotency-Key"], "fixed-key");
   });
 
+  test("a caller's idempotency_key goes in the header, never in the body", async () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ["createTransfer", { amount: 5, source: { id: "acc_1" }, idempotency_key: "k-inline" }],
+      ["createCustomer", { body: { email: "a@b.c" }, idempotency_key: "k-wrapped" }],
+      ["submitAccountApplication", { id: "app_1", idempotency_key: "k-none" }],
+    ];
+    for (const [name, args] of cases) {
+      const { calls, fetchImpl } = stub([{ status: 200, body: { data: {} } }]);
+      const key = args.idempotency_key as string;
+      const res = await client(fetchImpl).call(TOOLS_BY_NAME.get(name)!, args, { idempotencyKey: key });
+      assert.equal(calls[0]!.headers["Idempotency-Key"], key, name);
+      assert.equal(res.idempotencyKey, key, name);
+      assert.equal(JSON.stringify(calls[0]!.body ?? {}).includes("idempotency_key"), false, `${name} body`);
+    }
+  });
+
+  test("a key the gateway would refuse is refused before any request", async () => {
+    for (const bad of ["x".repeat(256), "line\nbreak", ""]) {
+      const { calls, fetchImpl } = stub([{ status: 200, body: { data: {} } }]);
+      await assert.rejects(
+        client(fetchImpl).call(createCustomer, { body: {} }, { idempotencyKey: bad }),
+        (e: GravvApiError) => e.status === 400 && /printable ASCII/.test(e.message),
+      );
+      assert.equal(calls.length, 0, `no request for ${JSON.stringify(bad).slice(0, 20)}`);
+    }
+  });
+
   test("verifyExternalAccount is exempt from idempotency", async () => {
     const { calls, fetchImpl } = stub([{ status: 200, body: { data: {} } }]);
     await client(fetchImpl).call(TOOLS_BY_NAME.get("verifyExternalAccount")!, { body: {} });
@@ -159,7 +186,10 @@ describe("response handling", () => {
     ]);
     await assert.rejects(
       client(fetchImpl).call(createCustomer, { body: {} }),
-      (e: GravvApiError) => /different body/.test(e.hint ?? "") && /fresh one/.test(e.hint ?? ""),
+      (e: GravvApiError) =>
+        /different body/.test(e.hint ?? "") &&
+        /exactly the same arguments/.test(e.hint ?? "") &&
+        /leave idempotency_key out/.test(e.hint ?? ""),
     );
   });
 
