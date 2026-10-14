@@ -11,9 +11,32 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+/**
+ * A one-page docs site in the shape of llms.txt and llms-full.txt. The suite runs with no
+ * network (ci.yml), so the documentation tools read this instead of the live site.
+ */
+let docs: Server;
+let docsOrigin = "";
+const docsIndex = () => `# Gravv
+
+## Guides
+
+- [Wallets](${docsOrigin}/platform/wallets/overview.md): Wallets on the stub docs site.
+`;
+const DOCS_CORPUS = `# Gravv — Full Documentation
+
+---
+
+# Wallets
+
+Wallets on the stub docs site.
+`;
 
 class Session {
   private proc: ChildProcessWithoutNullStreams;
@@ -25,7 +48,10 @@ class Session {
     this.proc = spawn(
       process.execPath,
       ["--experimental-strip-types", join(root, "src", "bin", "gravv-mcp.ts")],
-      { env: { ...process.env, GRAVV_API_KEY: "grvSec_sandbox_proto" }, stdio: ["pipe", "pipe", "pipe"] },
+      {
+        env: { ...process.env, GRAVV_API_KEY: "grvSec_sandbox_proto", GRAVV_DOCS_ORIGIN: docsOrigin },
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     ) as ChildProcessWithoutNullStreams;
 
     this.proc.stdout.on("data", (c) => {
@@ -81,10 +107,24 @@ class Session {
 
 let s: Session;
 before(async () => {
+  docs = createServer((req, res) => {
+    if (req.url === "/llms.txt" || req.url === "/llms-full.txt") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(req.url === "/llms.txt" ? docsIndex() : DOCS_CORPUS);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  await new Promise<void>((r) => docs.listen(0, "127.0.0.1", r));
+  docsOrigin = `http://127.0.0.1:${(docs.address() as AddressInfo).port}`;
   s = new Session();
   await s.handshake();
 });
-after(() => s?.kill());
+after(() => {
+  s?.kill();
+  docs?.close();
+});
 
 describe("initialize", () => {
   test("negotiates the current protocol version", async () => {
@@ -199,6 +239,8 @@ describe("tools/call", () => {
     assert.ok(Array.isArray(res.result.content));
     assert.equal(res.result.content[0].type, "text");
     assert.equal(typeof res.result.content[0].text, "string");
+    assert.equal(res.result.isError, undefined, "the stub docs site answers, so the search succeeds");
+    assert.match(res.result.content[0].text, /Wallets/);
   });
 
   test("missing required arguments fail gracefully", async () => {
