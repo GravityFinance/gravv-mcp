@@ -1,0 +1,733 @@
+{
+  "about": "Requests from the Gravv integration scenarios (customers-and-accounts-v1), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-CUS-01.1",
+      "scenario": "S-CUS-01",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-CUS-01.2",
+      "scenario": "S-CUS-01",
+      "method": "GET",
+      "path": "/v1/customers?keyword=amara.nwosu@example.com"
+    },
+    {
+      "id": "S-CUS-01.3",
+      "scenario": "S-CUS-01",
+      "method": "POST",
+      "path": "/v1/customers",
+      "body": {
+        "type": "individual",
+        "first_name": "Amara",
+        "last_name": "Nwosu",
+        "email": "amara.nwosu@example.com",
+        "phone": "+2348031234567",
+        "gender": "female",
+        "date_of_birth": "1992-03-14",
+        "external_id": "user-88412",
+        "address": {
+          "address_line1": "14 Bourdillon Road",
+          "city": "Lagos",
+          "state": "NG-LA",
+          "postal_code": "101233",
+          "country": "NG"
+        }
+      }
+    },
+    {
+      "id": "S-CUS-01.4",
+      "scenario": "S-CUS-01",
+      "method": "POST",
+      "path": "/v1/customers/kyc/start",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71"
+      }
+    },
+    {
+      "id": "S-CUS-01.5",
+      "scenario": "S-CUS-01",
+      "method": "GET",
+      "path": "/v1/customers/3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71"
+    },
+    {
+      "id": "S-CUS-01.6",
+      "scenario": "S-CUS-01",
+      "method": "GET",
+      "path": "/v1/customers/{id}/kyc/status"
+    },
+    {
+      "id": "S-CUS-02.1",
+      "scenario": "S-CUS-02",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-CUS-02.2",
+      "scenario": "S-CUS-02",
+      "method": "GET",
+      "path": "/v1/customers/{id}/kyc/documents"
+    },
+    {
+      "id": "S-CUS-02.3",
+      "scenario": "S-CUS-02",
+      "method": "POST",
+      "path": "/v1/customers/kyc/upload-document",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13",
+        "filename": "ghana-card-front.jpg",
+        "content": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8U",
+        "metadata": {
+          "idDocType": "ID_CARD",
+          "idDocSubType": "FRONT_SIDE",
+          "country": "GH",
+          "number": "GHA-723456789-1",
+          "issuedDate": "2021-05-04",
+          "validUntil": "2031-05-03",
+          "firstName": "Kofi",
+          "lastName": "Mensah"
+        }
+      }
+    },
+    {
+      "id": "S-CUS-02.4",
+      "scenario": "S-CUS-02",
+      "method": "POST",
+      "path": "/v1/customers/kyc/upload-document",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13",
+        "filename": "selfie.jpg",
+        "content": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQ",
+        "metadata": {
+          "idDocType": "SELFIE"
+        }
+      }
+    },
+    {
+      "id": "S-CUS-02.5",
+      "scenario": "S-CUS-02",
+      "method": "GET",
+      "path": "/v1/customers/9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13/kyc/documents"
+    },
+    {
+      "id": "S-CUS-02.6",
+      "scenario": "S-CUS-02",
+      "method": "POST",
+      "path": "/v1/customers/kyc/start-s2s",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13"
+      }
+    },
+    {
+      "id": "S-CUS-03.1",
+      "scenario": "S-CUS-03",
+      "method": "POST",
+      "path": "/v1/customers",
+      "body": {
+        "type": "business",
+        "email": "finance@adirelogistics.ng",
+        "phone": "+2348091234567",
+        "business_name": "Adire Logistics Ltd",
+        "business_description": "Freight forwarding and customs clearing for importers",
+        "business_type": "private_limited",
+        "business_industry": "Transportation and Warehousing",
+        "registration_number": "RC-1234567",
+        "external_id": "biz-2040",
+        "address": {
+          "address_line1": "22 Creek Road",
+          "city": "Apapa",
+          "state": "NG-LA",
+          "postal_code": "102272",
+          "country": "NG"
+        },
+        "associated_persons": [
+          {
+            "first_name": "Tunde",
+            "last_name": "Bakare",
+            "email": "tunde.bakare@adirelogistics.ng",
+            "phone": "+2348021234567",
+            "gender": "male",
+            "date_of_birth": "1984-07-22",
+            "address": {
+              "address_line1": "7 Glover Road",
+              "city": "Ikoyi",
+              "state": "NG-LA",
+              "postal_code": "106104",
+              "country": "NG"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "S-CUS-03.2",
+      "scenario": "S-CUS-03",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-CUS-03.3",
+      "scenario": "S-CUS-03",
+      "method": "POST",
+      "path": "/v1/customers/kyc/upload-document",
+      "body": {
+        "customer_id": "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+        "filename": "cac-certificate.pdf",
+        "content": "JVBERi0xLjcKJcfsj6IKNSAwIG9iago8PC9MZW5ndGggNiAwIFIvRmlsdGVyIC9GbGF0",
+        "metadata": {
+          "idDocType": "COMPANY_DOC",
+          "idDocSubType": "INCORPORATION_CERT",
+          "country": "NG"
+        }
+      }
+    },
+    {
+      "id": "S-CUS-03.4",
+      "scenario": "S-CUS-03",
+      "method": "POST",
+      "path": "/v1/customers/kyc/start-s2s",
+      "body": {
+        "customer_id": "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d"
+      }
+    },
+    {
+      "id": "S-CUS-04.1",
+      "scenario": "S-CUS-04",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-CUS-04.2",
+      "scenario": "S-CUS-04",
+      "method": "GET",
+      "path": "/v1/customers/{id}/kyc/status"
+    },
+    {
+      "id": "S-CUS-04.3",
+      "scenario": "S-CUS-04",
+      "method": "POST",
+      "path": "/v1/customers/kyc/start",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13"
+      }
+    },
+    {
+      "id": "S-CUS-04.4",
+      "scenario": "S-CUS-04",
+      "method": "POST",
+      "path": "/v1/customers/kyc/upload-document",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13",
+        "filename": "selfie-retake.jpg",
+        "content": "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYI",
+        "metadata": {
+          "idDocType": "SELFIE"
+        }
+      }
+    },
+    {
+      "id": "S-CUS-05.1",
+      "scenario": "S-CUS-05",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}/kyc/documents"
+    },
+    {
+      "id": "S-CUS-05.2",
+      "scenario": "S-CUS-05",
+      "method": "GET",
+      "path": "/v1/customers/3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71/kyc/documents"
+    },
+    {
+      "id": "S-CUS-05.3",
+      "scenario": "S-CUS-05",
+      "method": "GET",
+      "path": "/v1/customers/3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71/kyc/documents/a7b8c9d0-e1f2-4a3b-8c4d-5e6f7a8b9c0d/download?side=front"
+    },
+    {
+      "id": "S-CUS-06.1",
+      "scenario": "S-CUS-06",
+      "method": "GET",
+      "path": "/v1/customers/{id}/limits"
+    },
+    {
+      "id": "S-CUS-06.2",
+      "scenario": "S-CUS-06",
+      "method": "POST",
+      "path": "/v1/transfer/{reference}/resume",
+      "body": {}
+    },
+    {
+      "id": "S-CUS-06.3",
+      "scenario": "S-CUS-06",
+      "method": "GET",
+      "path": "/v1/limits/remitters/{remitter_id}"
+    },
+    {
+      "id": "S-CUS-06.4",
+      "scenario": "S-CUS-06",
+      "method": "GET",
+      "path": "/v1/customers/abc/limits"
+    },
+    {
+      "id": "S-CUS-07.1",
+      "scenario": "S-CUS-07",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+        "amount": "250",
+        "source": {
+          "source_type": "internal_account",
+          "id": "8e1a3c5b-7d9f-4b2e-a4c6-0e2f4a6c8b1d"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "4f3e2d1c-0b9a-4876-9543-2a1b0c9d8e7f"
+        },
+        "client_reference": "adire-inv-3310",
+        "additional_information": {
+          "remitter_full_name": "Tunde Bakare",
+          "remitter_date_of_birth": "1984-07-22",
+          "remitter_country": "NG",
+          "remitter_address": {
+            "address_line1": "22 Creek Road",
+            "city": "Apapa",
+            "postal_code": "102272",
+            "country": "NG",
+            "state": "NG-LA"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-CUS-07.2",
+      "scenario": "S-CUS-07",
+      "method": "PUT",
+      "path": "/v1/customers/0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+      "body": {
+        "email": "finance@adirelogistics.ng"
+      }
+    },
+    {
+      "id": "S-CUS-07.3",
+      "scenario": "S-CUS-07",
+      "method": "POST",
+      "path": "/v1/transfer/c7d8e9f0-a1b2-4c3d-8e4f-5a6b7c8d9e0f/resume",
+      "body": {
+        "additional_information": {
+          "remitter_full_name": "Tunde Bakare",
+          "remitter_date_of_birth": "1984-07-22"
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-01.1",
+      "scenario": "S-ACC1-01",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities"
+    },
+    {
+      "id": "S-ACC1-01.2",
+      "scenario": "S-ACC1-01",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities?customer_id=3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71&currency=USD"
+    },
+    {
+      "id": "S-ACC1-01.3",
+      "scenario": "S-ACC1-01",
+      "method": "GET",
+      "path": "/v1/accounts?customer_id=3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71&status=active"
+    },
+    {
+      "id": "S-ACC1-02.1",
+      "scenario": "S-ACC1-02",
+      "method": "POST",
+      "path": "/v1/accounts",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71",
+        "type": "regular",
+        "currency": "USD",
+        "label": "Amara salary",
+        "blockchain_network": "polygon"
+      }
+    },
+    {
+      "id": "S-ACC1-02.2",
+      "scenario": "S-ACC1-02",
+      "method": "GET",
+      "path": "/v1/accounts/6c2e4a8b-0d1f-4a3c-9e5b-7f9a1c3e5d7b"
+    },
+    {
+      "id": "S-ACC1-02.3",
+      "scenario": "S-ACC1-02",
+      "method": "GET",
+      "path": "/v1/accounts/{id}"
+    },
+    {
+      "id": "S-ACC1-03.1",
+      "scenario": "S-ACC1-03",
+      "method": "POST",
+      "path": "/v1/accounts",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71",
+        "type": "regular",
+        "currency": "EUR",
+        "label": "Amara EUR invoices",
+        "blockchain_network": "polygon"
+      }
+    },
+    {
+      "id": "S-ACC1-03.2",
+      "scenario": "S-ACC1-03",
+      "method": "GET",
+      "path": "/v1/accounts/{id}"
+    },
+    {
+      "id": "S-ACC1-04.1",
+      "scenario": "S-ACC1-04",
+      "method": "POST",
+      "path": "/v1/accounts",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71",
+        "type": "regular",
+        "currency": "NGN",
+        "label": "Amara naira savings",
+        "blockchain_network": "polygon"
+      }
+    },
+    {
+      "id": "S-ACC1-04.2",
+      "scenario": "S-ACC1-04",
+      "method": "GET",
+      "path": "/v1/accounts/{id}"
+    },
+    {
+      "id": "S-ACC1-05.1",
+      "scenario": "S-ACC1-05",
+      "method": "POST",
+      "path": "/v1/accounts",
+      "body": {
+        "customer_id": "9d2f4b6a-1c3e-4a5b-8d7f-2e4a6c8e0b13",
+        "type": "non_custodial",
+        "currency": "USDC",
+        "label": "Kofi payroll wallet",
+        "blockchain_network": "base"
+      }
+    },
+    {
+      "id": "S-ACC1-05.2",
+      "scenario": "S-ACC1-05",
+      "method": "GET",
+      "path": "/v1/accounts/{id}"
+    },
+    {
+      "id": "S-ACC1-06.1",
+      "scenario": "S-ACC1-06",
+      "method": "POST",
+      "path": "/v1/accounts/applications/validate",
+      "body": {
+        "application_type": "business",
+        "data": {
+          "account_type": "regular",
+          "currency": "USD",
+          "blockchain_network": "polygon",
+          "label": "Adire USD collections",
+          "business": {
+            "legal_name": "Adire Logistics Ltd",
+            "trade_name": "Adire Logistics",
+            "description": "Freight forwarding and customs clearing for importers",
+            "type": "corporation",
+            "email": "finance@adirelogistics.ng",
+            "phone": "+2348091234567",
+            "country_of_incorporation": "NGA",
+            "registration_number": "RC-1234567",
+            "tax_id_number": "12345678-0001",
+            "tax_id_type": "tin",
+            "account_purpose": "receive_payments_for_goods_and_services",
+            "registered_address": {
+              "street_line_1": "22 Creek Road",
+              "city": "Apapa",
+              "state": "LA",
+              "postal_code": "102272",
+              "country": "NGA"
+            },
+            "physical_address": {
+              "street_line_1": "22 Creek Road",
+              "city": "Apapa",
+              "state": "LA",
+              "postal_code": "102272",
+              "country": "NGA"
+            },
+            "formation_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "ownership_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "proof_of_address_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "associated_persons": [
+              {
+                "first_name": "Tunde",
+                "last_name": "Bakare",
+                "email": "tunde.bakare@adirelogistics.ng",
+                "phone": "+2348021234567",
+                "date_of_birth": "1984-07-22",
+                "address": {
+                  "street_line_1": "7 Glover Road",
+                  "city": "Ikoyi",
+                  "state": "LA",
+                  "postal_code": "106104",
+                  "country": "NGA"
+                },
+                "identification_type": "passport",
+                "identification_number": "A12345678",
+                "identification_country": "NGA",
+                "id_document_front": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ",
+                "has_ownership": true,
+                "ownership_percentage": 60,
+                "has_control": true,
+                "is_signer": true,
+                "is_director": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-06.2",
+      "scenario": "S-ACC1-06",
+      "method": "POST",
+      "path": "/v1/accounts/applications",
+      "body": {
+        "customer_id": "0a9b8c7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d",
+        "application_type": "business",
+        "data": {
+          "account_type": "regular",
+          "currency": "USD",
+          "blockchain_network": "polygon",
+          "label": "Adire USD collections",
+          "business": {
+            "legal_name": "Adire Logistics Ltd",
+            "trade_name": "Adire Logistics",
+            "description": "Freight forwarding and customs clearing for importers",
+            "type": "corporation",
+            "email": "finance@adirelogistics.ng",
+            "phone": "+2348091234567",
+            "country_of_incorporation": "NGA",
+            "registration_number": "RC-1234567",
+            "tax_id_number": "12345678-0001",
+            "tax_id_type": "tin",
+            "account_purpose": "receive_payments_for_goods_and_services",
+            "registered_address": {
+              "street_line_1": "22 Creek Road",
+              "city": "Apapa",
+              "state": "LA",
+              "postal_code": "102272",
+              "country": "NGA"
+            },
+            "physical_address": {
+              "street_line_1": "22 Creek Road",
+              "city": "Apapa",
+              "state": "LA",
+              "postal_code": "102272",
+              "country": "NGA"
+            },
+            "formation_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "ownership_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "proof_of_address_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK",
+            "associated_persons": [
+              {
+                "first_name": "Tunde",
+                "last_name": "Bakare",
+                "email": "tunde.bakare@adirelogistics.ng",
+                "phone": "+2348021234567",
+                "date_of_birth": "1984-07-22",
+                "address": {
+                  "street_line_1": "7 Glover Road",
+                  "city": "Ikoyi",
+                  "state": "LA",
+                  "postal_code": "106104",
+                  "country": "NGA"
+                },
+                "identification_type": "passport",
+                "identification_number": "A12345678",
+                "identification_country": "NGA",
+                "id_document_front": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ",
+                "has_ownership": true,
+                "ownership_percentage": 60,
+                "has_control": true,
+                "is_signer": true,
+                "is_director": true
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-06.3",
+      "scenario": "S-ACC1-06",
+      "method": "PUT",
+      "path": "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d",
+      "body": {
+        "data": {
+          "business": {
+            "tax_id_type": "tin"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-06.4",
+      "scenario": "S-ACC1-06",
+      "method": "POST",
+      "path": "/v1/accounts/applications/tos",
+      "body": {
+        "application_id": "2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d",
+        "agreement_id": "9f8e7d6c-5b4a-4392-8a1b-0c9d8e7f6a5b"
+      }
+    },
+    {
+      "id": "S-ACC1-06.5",
+      "scenario": "S-ACC1-06",
+      "method": "GET",
+      "path": "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d"
+    },
+    {
+      "id": "S-ACC1-06.6",
+      "scenario": "S-ACC1-06",
+      "method": "GET",
+      "path": "/v1/accounts/8e1a3c5b-7d9f-4b2e-a4c6-0e2f4a6c8b1d"
+    },
+    {
+      "id": "S-ACC1-07.1",
+      "scenario": "S-ACC1-07",
+      "method": "POST",
+      "path": "/v1/accounts/applications",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71",
+        "application_type": "individual",
+        "data": {
+          "account_type": "card",
+          "currency": "USD",
+          "blockchain_network": "polygon",
+          "label": "Amara card",
+          "individual": {
+            "address": {
+              "street_line_1": "14 Bourdillon Road",
+              "city": "Lagos",
+              "state": "LA",
+              "postal_code": "101233",
+              "country": "NGA"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-07.2",
+      "scenario": "S-ACC1-07",
+      "method": "PUT",
+      "path": "/v1/accounts/applications/5d7f9b1c-3e5a-4c7e-9f1b-2d4f6a8c0e3b",
+      "body": {
+        "data": {
+          "individual": {
+            "identification_type": "passport",
+            "identification_number": "A87654321",
+            "identification_country": "NGA",
+            "id_document_front": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ",
+            "tin": "23456789-0001",
+            "tax_id_type": "tin",
+            "nationalities": [
+              "NGA"
+            ],
+            "place_of_birth": {
+              "country": "NGA"
+            },
+            "account_purpose": "personal_or_living_expenses"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-07.3",
+      "scenario": "S-ACC1-07",
+      "method": "GET",
+      "path": "/v1/accounts/{metadata.internal_account_id}"
+    },
+    {
+      "id": "S-ACC1-08.1",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications?customer_id=…"
+    },
+    {
+      "id": "S-ACC1-08.2",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications/{id}"
+    },
+    {
+      "id": "S-ACC1-08.3",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications/{id}/history"
+    },
+    {
+      "id": "S-ACC1-08.4",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d"
+    },
+    {
+      "id": "S-ACC1-08.5",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d/history"
+    },
+    {
+      "id": "S-ACC1-08.6",
+      "scenario": "S-ACC1-08",
+      "method": "PUT",
+      "path": "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d",
+      "body": {
+        "data": {
+          "business": {
+            "proof_of_address_document": "data:application/pdf;base64,JVBERi0xLjcKJcfsj6IK"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC1-08.7",
+      "scenario": "S-ACC1-08",
+      "method": "GET",
+      "path": "/v1/accounts/applications/pending"
+    },
+    {
+      "id": "S-ACC1-09.1",
+      "scenario": "S-ACC1-09",
+      "method": "GET",
+      "path": "/v1/accounts?customer_id=…"
+    },
+    {
+      "id": "S-ACC1-09.2",
+      "scenario": "S-ACC1-09",
+      "method": "PATCH",
+      "path": "/v1/accounts/6c2e4a8b-0d1f-4a3c-9e5b-7f9a1c3e5d7b/status",
+      "body": {
+        "status": "frozen"
+      }
+    },
+    {
+      "id": "S-ACC1-09.3",
+      "scenario": "S-ACC1-09",
+      "method": "GET",
+      "path": "/v1/accounts/6c2e4a8b-0d1f-4a3c-9e5b-7f9a1c3e5d7b"
+    },
+    {
+      "id": "S-ACC1-09.4",
+      "scenario": "S-ACC1-09",
+      "method": "GET",
+      "path": "/v1/accounts?customer_id=…&status=deleted"
+    }
+  ]
+}

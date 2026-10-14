@@ -1,0 +1,508 @@
+{
+  "about": "Requests from the Gravv integration scenarios (cards), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-CRD-01.1",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/risk/features?customer_id=<id>"
+    },
+    {
+      "id": "S-CRD-01.2",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-CRD-01.3",
+      "scenario": "S-CRD-01",
+      "method": "POST",
+      "path": "/v1/risk/features/eligibility",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "feature_id": "virtual_cards"
+      }
+    },
+    {
+      "id": "S-CRD-01.4",
+      "scenario": "S-CRD-01",
+      "method": "POST",
+      "path": "/v1/customers",
+      "body": {
+        "type": "individual",
+        "first_name": "Ada",
+        "last_name": "Obi",
+        "email": "ada.obi@example.com",
+        "phone": "+2348031234567",
+        "gender": "female",
+        "date_of_birth": "1990-04-16",
+        "address": {
+          "address_line1": "12 Admiralty Way",
+          "city": "Lagos",
+          "state": "NG-LA",
+          "postal_code": "106104",
+          "country": "NG"
+        }
+      }
+    },
+    {
+      "id": "S-CRD-01.5",
+      "scenario": "S-CRD-01",
+      "method": "POST",
+      "path": "/v1/risk/start-kyc",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42"
+      }
+    },
+    {
+      "id": "S-CRD-01.6",
+      "scenario": "S-CRD-01",
+      "method": "POST",
+      "path": "/v1/risk/features/activate",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "feature_id": "virtual_cards",
+        "provider_data": {
+          "annual_remuneration": 24000,
+          "estimated_monthly_limit": 300,
+          "account_id": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23",
+          "ip_address": "203.0.113.24"
+        }
+      }
+    },
+    {
+      "id": "S-CRD-01.7",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards?customer_id=5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42"
+    },
+    {
+      "id": "S-CRD-01.8",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-CRD-01.9",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards/applications"
+    },
+    {
+      "id": "S-CRD-01.10",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards/applications/{id}"
+    },
+    {
+      "id": "S-CRD-01.11",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards/applications/{application_id}"
+    },
+    {
+      "id": "S-CRD-01.12",
+      "scenario": "S-CRD-01",
+      "method": "POST",
+      "path": "/v1/cards",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "card_type": "virtual",
+        "card_limit": 300,
+        "name_on_card": "Ada Obi"
+      }
+    },
+    {
+      "id": "S-CRD-01.13",
+      "scenario": "S-CRD-01",
+      "method": "GET",
+      "path": "/v1/cards/a14ec356-f33d-4384-ba68-4d9bfa19765b"
+    },
+    {
+      "id": "S-CRD-02.1",
+      "scenario": "S-CRD-02",
+      "method": "POST",
+      "path": "/v1/risk/upload-document",
+      "body": {
+        "customer_id": "7d3c9e1a-5b2f-4a8d-9e6c-2f1a0b9c8d7e",
+        "content": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/",
+        "filename": "chidi-id-front.jpg",
+        "metadata": {
+          "idDocType": "id_card",
+          "idDocSubType": "FRONT_SIDE",
+          "country": "NGA",
+          "number": "A12345678",
+          "dob": "1994-08-21",
+          "validUntil": "2031-05-31"
+        }
+      }
+    },
+    {
+      "id": "S-CRD-02.2",
+      "scenario": "S-CRD-02",
+      "method": "POST",
+      "path": "/v1/risk/start-kyc-s2s",
+      "body": {
+        "customer_id": "7d3c9e1a-5b2f-4a8d-9e6c-2f1a0b9c8d7e"
+      }
+    },
+    {
+      "id": "S-CRD-03.1",
+      "scenario": "S-CRD-03",
+      "method": "GET",
+      "path": "/v1/accounts/{company_account_id}"
+    },
+    {
+      "id": "S-CRD-03.2",
+      "scenario": "S-CRD-03",
+      "method": "GET",
+      "path": "/v1/cards/{card_id}"
+    },
+    {
+      "id": "S-CRD-03.3",
+      "scenario": "S-CRD-03",
+      "method": "POST",
+      "path": "/v1/risk/features/activate",
+      "body": {
+        "customer_id": "c3a1f2e4-7b6d-4e8a-9c0b-1d2e3f4a5b6c",
+        "feature_id": "virtual_cards",
+        "provider_data": {
+          "annual_remuneration": 18000,
+          "estimated_monthly_limit": 200,
+          "account_id": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23",
+          "funding": {
+            "mode": "own"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-CRD-03.4",
+      "scenario": "S-CRD-03",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "6f1c2b8e-9a43-4f0e-8d35-2b7f0f6c1a90"
+        },
+        "destination": {
+          "destination_type": "card",
+          "id": "e7b1c2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
+        },
+        "amount": "500",
+        "customer_id": "0d6c2f4e-6a1b-4f0e-9b8f-5c2a7d3e1f00",
+        "client_reference": "fuel-tunde-2026-w42",
+        "description": "Weekly fuel allowance"
+      }
+    },
+    {
+      "id": "S-CRD-03.5",
+      "scenario": "S-CRD-03",
+      "method": "GET",
+      "path": "/v1/cards/{id}/balance"
+    },
+    {
+      "id": "S-CRD-04.1",
+      "scenario": "S-CRD-04",
+      "method": "GET",
+      "path": "/v1/customers/{business_id}"
+    },
+    {
+      "id": "S-CRD-04.2",
+      "scenario": "S-CRD-04",
+      "method": "POST",
+      "path": "/v1/cards/applications/new",
+      "body": {
+        "type": "business",
+        "customer_id": "9e8d7c6b-5a49-4382-a1b0-c9d8e7f6a5b4",
+        "business_customer_id": "0d6c2f4e-6a1b-4f0e-9b8f-5c2a7d3e1f00",
+        "account_id": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23",
+        "annual_remuneration": 60000,
+        "estimated_monthly_limit": 3000,
+        "ip_address": "203.0.113.24"
+      }
+    },
+    {
+      "id": "S-CRD-04.3",
+      "scenario": "S-CRD-04",
+      "method": "GET",
+      "path": "/v1/cards/applications"
+    },
+    {
+      "id": "S-CRD-04.4",
+      "scenario": "S-CRD-04",
+      "method": "POST",
+      "path": "/v1/cards",
+      "body": {
+        "customer_id": "9e8d7c6b-5a49-4382-a1b0-c9d8e7f6a5b4",
+        "card_type": "virtual",
+        "card_limit": 500,
+        "name_on_card": "Jane Doe"
+      }
+    },
+    {
+      "id": "S-CRD-05.1",
+      "scenario": "S-CRD-05",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "6f1c2b8e-9a43-4f0e-8d35-2b7f0f6c1a90"
+        },
+        "destination": {
+          "destination_type": "card",
+          "id": "a14ec356-f33d-4384-ba68-4d9bfa19765b"
+        },
+        "amount": "150",
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "client_reference": "ada-card-topup-0001",
+        "description": "Card top-up"
+      }
+    },
+    {
+      "id": "S-CRD-05.2",
+      "scenario": "S-CRD-05",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_crypto_wallet",
+          "id": "67e169c0-547f-410d-8e18-f616b6822d70",
+          "crypto_asset": "USDC"
+        },
+        "destination": {
+          "destination_type": "card",
+          "id": "e7b1c2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e"
+        },
+        "amount": "100",
+        "customer_id": "0d6c2f4e-6a1b-4f0e-9b8f-5c2a7d3e1f00",
+        "client_reference": "tunde-topup-0001"
+      }
+    },
+    {
+      "id": "S-CRD-05.3",
+      "scenario": "S-CRD-05",
+      "method": "GET",
+      "path": "/v1/transactions/8d4e2b6c-1f3a-4e7b-b0c9-5a6d7e8f9a01"
+    },
+    {
+      "id": "S-CRD-05.4",
+      "scenario": "S-CRD-05",
+      "method": "GET",
+      "path": "/v1/cards/a14ec356-f33d-4384-ba68-4d9bfa19765b/balance"
+    },
+    {
+      "id": "S-CRD-05.5",
+      "scenario": "S-CRD-05",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "<your wallet-backed USD account>",
+        "amount": "250.00",
+        "rail": "ach"
+      }
+    },
+    {
+      "id": "S-CRD-06.1",
+      "scenario": "S-CRD-06",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-CRD-06.2",
+      "scenario": "S-CRD-06",
+      "method": "GET",
+      "path": "/v1/cards/{card_id}"
+    },
+    {
+      "id": "S-CRD-06.3",
+      "scenario": "S-CRD-06",
+      "method": "PATCH",
+      "path": "/v1/cards/a14ec356-f33d-4384-ba68-4d9bfa19765b/update",
+      "body": {
+        "status": "active",
+        "limit": 1000
+      }
+    },
+    {
+      "id": "S-CRD-07.1",
+      "scenario": "S-CRD-07",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-CRD-07.2",
+      "scenario": "S-CRD-07",
+      "method": "PATCH",
+      "path": "/v1/cards/{id}/update",
+      "body": {
+        "status": "freeze",
+        "limit": 300
+      }
+    },
+    {
+      "id": "S-CRD-07.3",
+      "scenario": "S-CRD-07",
+      "method": "POST",
+      "path": "/v1/cards",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "card_type": "virtual",
+        "card_limit": 300,
+        "name_on_card": "Ada Obi"
+      }
+    },
+    {
+      "id": "S-CRD-07.4",
+      "scenario": "S-CRD-07",
+      "method": "GET",
+      "path": "/v1/cards/f4c3b2a1-0e9d-4c8b-a7f6-e5d4c3b2a190/balance"
+    },
+    {
+      "id": "S-CRD-08.1",
+      "scenario": "S-CRD-08",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-CRD-08.2",
+      "scenario": "S-CRD-08",
+      "method": "GET",
+      "path": "/v1/cards/{id}/balance"
+    },
+    {
+      "id": "S-CRD-09.1",
+      "scenario": "S-CRD-09",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-CRD-09.2",
+      "scenario": "S-CRD-09",
+      "method": "GET",
+      "path": "/v1/cards/a14ec356-f33d-4384-ba68-4d9bfa19765b/sensitive-details"
+    },
+    {
+      "id": "S-CRD-09.3",
+      "scenario": "S-CRD-09",
+      "method": "GET",
+      "path": "/v1/cards/{id}/pin"
+    },
+    {
+      "id": "S-CRD-09.4",
+      "scenario": "S-CRD-09",
+      "method": "PUT",
+      "path": "/v1/cards/{id}/pin",
+      "body": {
+        "card_pin": "4821"
+      }
+    },
+    {
+      "id": "S-CRD-10.1",
+      "scenario": "S-CRD-10",
+      "method": "GET",
+      "path": "/v1/cards/e7b1c2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e/balance"
+    },
+    {
+      "id": "S-CRD-10.2",
+      "scenario": "S-CRD-10",
+      "method": "POST",
+      "path": "/v1/cards/withdraw",
+      "body": {
+        "card_id": "e7b1c2d3-4f5a-4b6c-8d7e-9f0a1b2c3d4e",
+        "amount": 435.8
+      }
+    },
+    {
+      "id": "S-CRD-10.3",
+      "scenario": "S-CRD-10",
+      "method": "PATCH",
+      "path": "/v1/cards/{id}/update",
+      "body": {
+        "status": "blocked",
+        "limit": 200
+      }
+    },
+    {
+      "id": "S-CRD-10.4",
+      "scenario": "S-CRD-10",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "card",
+          "id": "a14ec356-f33d-4384-ba68-4d9bfa19765b"
+        },
+        "destination": {
+          "destination_type": "internal_account",
+          "id": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23"
+        },
+        "amount": "40",
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "client_reference": "ada-card-out-0001"
+      }
+    },
+    {
+      "id": "S-CRD-10.5",
+      "scenario": "S-CRD-10",
+      "method": "GET",
+      "path": "/v1/cards?card_id=…"
+    },
+    {
+      "id": "S-CRD-11.1",
+      "scenario": "S-CRD-11",
+      "method": "GET",
+      "path": "/v1/cards?customer_id=…"
+    },
+    {
+      "id": "S-CRD-11.2",
+      "scenario": "S-CRD-11",
+      "method": "GET",
+      "path": "/v1/cards?customer_id=<id>&status=active,freeze,inactive"
+    },
+    {
+      "id": "S-CRD-11.3",
+      "scenario": "S-CRD-11",
+      "method": "POST",
+      "path": "/v1/cards",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "card_type": "virtual",
+        "card_limit": 50,
+        "name_on_card": "Ada Obi",
+        "funding": {
+          "mode": "own"
+        }
+      }
+    },
+    {
+      "id": "S-CRD-11.4",
+      "scenario": "S-CRD-11",
+      "method": "POST",
+      "path": "/v1/cards",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "card_type": "physical",
+        "card_limit": 300,
+        "name_on_card": "Ada Obi",
+        "shipping_address": {
+          "address_line1": "12 Admiralty Way",
+          "city": "Lagos",
+          "state": "Lagos",
+          "postal_code": "106104",
+          "country_code": "NG",
+          "phone_number": "+2348031234567",
+          "method": "international"
+        }
+      }
+    },
+    {
+      "id": "S-CRD-11.5",
+      "scenario": "S-CRD-11",
+      "method": "GET",
+      "path": "/v1/cards/{new_id}"
+    }
+  ]
+}

@@ -1,0 +1,446 @@
+{
+  "about": "Requests from the Gravv integration scenarios (fx-settlement-transactions), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-FX-01.1",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/accounts/{account_id}"
+    },
+    {
+      "id": "S-FX-01.2",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-FX-01.3",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/wallets/{wallet_id}"
+    },
+    {
+      "id": "S-FX-01.4",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/fx/rates?directions=USD_NGN"
+    },
+    {
+      "id": "S-FX-01.5",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/fx/supported-currencies"
+    },
+    {
+      "id": "S-FX-01.6",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/accounts/bd9c66b3-ad3c-4d6d-9a3d-1fa7bc8960a9"
+    },
+    {
+      "id": "S-FX-01.7",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/wallets/972a8469-1641-4f82-8b9d-2434e465e150"
+    },
+    {
+      "id": "S-FX-01.8",
+      "scenario": "S-FX-01",
+      "method": "POST",
+      "path": "/v1/fx/quote",
+      "body": {
+        "currency_pair": "NGN_USDC",
+        "amount": "1530000"
+      }
+    },
+    {
+      "id": "S-FX-01.9",
+      "scenario": "S-FX-01",
+      "method": "POST",
+      "path": "/v1/fx/orders",
+      "body": {
+        "quote_id": "GRVOTC_7A41C2",
+        "source": {
+          "type": "internal_account",
+          "id": "bd9c66b3-ad3c-4d6d-9a3d-1fa7bc8960a9"
+        },
+        "destination": {
+          "type": "internal_crypto_wallet",
+          "id": "972a8469-1641-4f82-8b9d-2434e465e150"
+        },
+        "client_reference": "conv-chidi-000187",
+        "metadata": {
+          "app_user": "chidi"
+        }
+      }
+    },
+    {
+      "id": "S-FX-01.10",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/fx/orders/17fc695a-07a0-4a6e-8822-e8f36c031199"
+    },
+    {
+      "id": "S-FX-01.11",
+      "scenario": "S-FX-01",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=bd9c66b3-ad3c-4d6d-9a3d-1fa7bc8960a9&direction=out"
+    },
+    {
+      "id": "S-FX-02.1",
+      "scenario": "S-FX-02",
+      "method": "GET",
+      "path": "/v1/wallets/{wallet_id}"
+    },
+    {
+      "id": "S-FX-02.2",
+      "scenario": "S-FX-02",
+      "method": "GET",
+      "path": "/v1/settlement-instructions?currency=NGN"
+    },
+    {
+      "id": "S-FX-02.3",
+      "scenario": "S-FX-02",
+      "method": "POST",
+      "path": "/v1/settlement-instructions",
+      "body": {
+        "instruction_type": "bank_account",
+        "account_name": "Harbor Digital Assets Ltd",
+        "currency": "NGN",
+        "is_default": true,
+        "account_number": "3012345678",
+        "bank_name": "First Bank of Nigeria",
+        "bank_code": "011",
+        "country": "NG"
+      }
+    },
+    {
+      "id": "S-FX-02.4",
+      "scenario": "S-FX-02",
+      "method": "GET",
+      "path": "/v1/wallets/b74d0fb1-32e7-4629-8fad-c1a606cb0fb3"
+    },
+    {
+      "id": "S-FX-02.5",
+      "scenario": "S-FX-02",
+      "method": "POST",
+      "path": "/v1/fx/quote",
+      "body": {
+        "currency_pair": "USDC_NGN",
+        "amount": "1000"
+      }
+    },
+    {
+      "id": "S-FX-02.6",
+      "scenario": "S-FX-02",
+      "method": "POST",
+      "path": "/v1/fx/orders",
+      "body": {
+        "quote_id": "GRVOTC_C19E04",
+        "source": {
+          "type": "internal_crypto_wallet",
+          "id": "b74d0fb1-32e7-4629-8fad-c1a606cb0fb3"
+        },
+        "destination": {
+          "type": "external_account",
+          "id": "7e0161a9-34d6-4935-b764-d9eb3a7825f7"
+        },
+        "client_reference": "treasury-ngn-2026-10-13"
+      }
+    },
+    {
+      "id": "S-FX-02.7",
+      "scenario": "S-FX-02",
+      "method": "GET",
+      "path": "/v1/fx/orders/6b65a6a4-8b81-48f6-b38a-088ca65ed389"
+    },
+    {
+      "id": "S-FX-03.1",
+      "scenario": "S-FX-03",
+      "method": "POST",
+      "path": "/v1/fx/quote",
+      "body": {
+        "currency_pair": "NGN_USDC",
+        "amount": "200000"
+      }
+    },
+    {
+      "id": "S-FX-03.2",
+      "scenario": "S-FX-03",
+      "method": "GET",
+      "path": "/v1/fx/orders?status=pending&items_per_page=100"
+    },
+    {
+      "id": "S-FX-04.1",
+      "scenario": "S-FX-04",
+      "method": "GET",
+      "path": "/v1/fx/supported-currencies"
+    },
+    {
+      "id": "S-FX-04.2",
+      "scenario": "S-FX-04",
+      "method": "GET",
+      "path": "/v1/fx/rates?directions=USD_EUR"
+    },
+    {
+      "id": "S-FX-04.3",
+      "scenario": "S-FX-04",
+      "method": "POST",
+      "path": "/v1/fx/quote",
+      "body": {
+        "currency_pair": "USD_EUR",
+        "amount": "10"
+      }
+    },
+    {
+      "id": "S-FX-04.4",
+      "scenario": "S-FX-04",
+      "method": "POST",
+      "path": "/v1/fx/orders",
+      "body": {
+        "quote_id": "GRVOTC_9D8E7F",
+        "source": {
+          "type": "internal_account",
+          "id": "c241330b-01a9-471f-9e8a-774bcf36d58b"
+        },
+        "destination": {
+          "type": "internal_account",
+          "id": "6c307511-b2b9-437a-a8df-6ec4ce4a2bbd"
+        },
+        "client_reference": "amelia-usd-eur-0001"
+      }
+    },
+    {
+      "id": "S-FX-04.5",
+      "scenario": "S-FX-04",
+      "method": "GET",
+      "path": "/v1/accounts/{id}"
+    },
+    {
+      "id": "S-FX-05.1",
+      "scenario": "S-FX-05",
+      "method": "POST",
+      "path": "/v1/settlement-instructions",
+      "body": {
+        "instruction_type": "crypto_wallet",
+        "account_name": "Harbor Treasury Stellar",
+        "currency": "USDC",
+        "wallet_address": "GC3ONVVSIG2XZHHZCLJPDIR7ZAHR4IJ2AH34DFVDQVEFSPPX46DYJMJ2",
+        "network": "stellar",
+        "memo": "208117"
+      }
+    },
+    {
+      "id": "S-FX-05.2",
+      "scenario": "S-FX-05",
+      "method": "PATCH",
+      "path": "/v1/settlement-instructions/132c8884-fe71-46b0-8c73-2fdb614f7bb8",
+      "body": {
+        "is_default": true
+      }
+    },
+    {
+      "id": "S-FX-05.3",
+      "scenario": "S-FX-05",
+      "method": "GET",
+      "path": "/v1/settlement-instructions?currency=USDC"
+    },
+    {
+      "id": "S-FX-05.4",
+      "scenario": "S-FX-05",
+      "method": "GET",
+      "path": "/v1/settlement-instructions/132c8884-fe71-46b0-8c73-2fdb614f7bb8"
+    },
+    {
+      "id": "S-FX-06.1",
+      "scenario": "S-FX-06",
+      "method": "GET",
+      "path": "/v1/fx/orders/{id}"
+    },
+    {
+      "id": "S-FX-06.2",
+      "scenario": "S-FX-06",
+      "method": "GET",
+      "path": "/v1/fx/orders?status=pending&items_per_page=100&page=1"
+    },
+    {
+      "id": "S-FX-06.3",
+      "scenario": "S-FX-06",
+      "method": "GET",
+      "path": "/v1/fx/orders/{order_id}"
+    },
+    {
+      "id": "S-FX-06.4",
+      "scenario": "S-FX-06",
+      "method": "GET",
+      "path": "/v1/fx/orders/pending-approvals?items_per_page=20"
+    },
+    {
+      "id": "S-TXN-01.1",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/accounts"
+    },
+    {
+      "id": "S-TXN-01.2",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v2/accounts"
+    },
+    {
+      "id": "S-TXN-01.3",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=43b7a3a6-9a8d-4a03-980d-7b71d8f56413&items_per_page=100&page=1"
+    },
+    {
+      "id": "S-TXN-01.4",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    },
+    {
+      "id": "S-TXN-01.5",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/transactions/export?account_id=43b7a3a6-9a8d-4a03-980d-7b71d8f56413&start_date=2026-10-12&end_date=2026-10-12&export_format=csv"
+    },
+    {
+      "id": "S-TXN-01.6",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/transactions/volume?sending_account_id=43b7a3a6-9a8d-4a03-980d-7b71d8f56413&direction=out&status=completed"
+    },
+    {
+      "id": "S-TXN-01.7",
+      "scenario": "S-TXN-01",
+      "method": "GET",
+      "path": "/v1/webhooks/history?event_type=transfer&start_date=2026-10-12&end_date=2026-10-13&status=failed"
+    },
+    {
+      "id": "S-TXN-02.1",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=…"
+    },
+    {
+      "id": "S-TXN-02.2",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/transactions/1a2a73ed-562b-4f79-8374-59eef50bea63"
+    },
+    {
+      "id": "S-TXN-02.3",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/webhooks/history?transaction_id=1a2a73ed-562b-4f79-8374-59eef50bea63&event_type=transfer&limit=100"
+    },
+    {
+      "id": "S-TXN-02.4",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/webhooks/event/3139d32c-93cd-49bf-9c94-1cf0dc98d2c1"
+    },
+    {
+      "id": "S-TXN-02.5",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/webhooks/calls/3139d32c-93cd-49bf-9c94-1cf0dc98d2c1"
+    },
+    {
+      "id": "S-TXN-02.6",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/transactions/{id}"
+    },
+    {
+      "id": "S-TXN-02.7",
+      "scenario": "S-TXN-02",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=5be6128e-18c2-4797-a142-ea7d17be3111&transaction_type=transfer_refund"
+    },
+    {
+      "id": "S-TXN-03.1",
+      "scenario": "S-TXN-03",
+      "method": "GET",
+      "path": "/v1/transactions/ec1b8ca1-f91e-4d4c-9ff4-9b7889463e85"
+    },
+    {
+      "id": "S-TXN-03.2",
+      "scenario": "S-TXN-03",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=43b7a3a6-9a8d-4a03-980d-7b71d8f56413&transaction_type=fee_charge"
+    },
+    {
+      "id": "S-TXN-03.3",
+      "scenario": "S-TXN-03",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=…&direction=in&transaction_type=account_funding,crypto_funding"
+    },
+    {
+      "id": "S-TXN-03.4",
+      "scenario": "S-TXN-03",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "43b7a3a6-9a8d-4a03-980d-7b71d8f56413",
+        "amount": "2500.00",
+        "rail": "wire"
+      }
+    },
+    {
+      "id": "S-TXN-04.1",
+      "scenario": "S-TXN-04",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=43b7a3a6-9a8d-4a03-980d-7b71d8f56413&transaction_type=fee_charge&items_per_page=100&page=1"
+    },
+    {
+      "id": "S-TXN-04.2",
+      "scenario": "S-TXN-04",
+      "method": "GET",
+      "path": "/v1/transactions?account_id=…&direction=out&transaction_type=global_remittance,bank_account"
+    },
+    {
+      "id": "S-TXN-05.1",
+      "scenario": "S-TXN-05",
+      "method": "GET",
+      "path": "/v1/transactions/29a3b2e9-5d65-4441-9588-42dea2bc372f"
+    },
+    {
+      "id": "S-TXN-05.2",
+      "scenario": "S-TXN-05",
+      "method": "GET",
+      "path": "/v1/webhooks/history?transaction_id=29a3b2e9-5d65-4441-9588-42dea2bc372f&event_type=transfer"
+    },
+    {
+      "id": "S-TXN-05.3",
+      "scenario": "S-TXN-05",
+      "method": "GET",
+      "path": "/v1/webhooks/event/{id}"
+    },
+    {
+      "id": "S-TXN-05.4",
+      "scenario": "S-TXN-05",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}/limits"
+    },
+    {
+      "id": "S-TXN-05.5",
+      "scenario": "S-TXN-05",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=…&transaction_type=transfer_refund"
+    },
+    {
+      "id": "S-TXN-06.1",
+      "scenario": "S-TXN-06",
+      "method": "GET",
+      "path": "/v1/limits/remitters/rem-20431"
+    },
+    {
+      "id": "S-TXN-06.2",
+      "scenario": "S-TXN-06",
+      "method": "GET",
+      "path": "/v1/customers/5be6128e-18c2-4797-a142-ea7d17be3111/limits"
+    }
+  ]
+}
