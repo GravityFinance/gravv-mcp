@@ -264,11 +264,11 @@ describe("response handling", () => {
     );
   });
 
-  test("explains that 403 may mean a dashboard-only endpoint", async () => {
+  test("a Dashboard-only 403 names the Dashboard", async () => {
     const { fetchImpl } = stub([{ status: 403, body: { error: "forbidden" } }]);
     await assert.rejects(
       client(fetchImpl).call(getAccount, { account_id: "a" }),
-      (e: GravvApiError) => /dashboard/.test(e.hint ?? ""),
+      (e: GravvApiError) => /Gravv Dashboard/.test(e.hint ?? "") && !/approvals/.test(e.hint ?? ""),
     );
   });
 });
@@ -792,6 +792,145 @@ describe("422 hints follow the error code", () => {
   test("a 422 with no known code is not blamed on idempotency", () => {
     const h = hint({ error: "unprocessable" });
     assert.match(h, /not an idempotency problem/);
+  });
+});
+
+describe("hints by status", () => {
+  const transfer = TOOLS_BY_NAME.get("createTransfer")!;
+  const card = TOOLS_BY_NAME.get("createCard")!;
+
+  test("a scoped key's 403 names the permission", () => {
+    const h = hintFor(403, transfer, "", {
+      data: null,
+      error: { reason: "forbidden", required_any: ["transfer:initiate"] },
+    });
+    assert.match(h ?? "", /scoped/);
+    assert.match(h ?? "", /transfer:initiate/);
+  });
+
+  test("a route that takes no API key says so", () => {
+    const body = {
+      data: null,
+      error: { reason: "forbidden", required_any: ["admin"], reason_detail: "api_key_not_accepted_on_admin_routes" },
+    };
+    assert.match(hintFor(403, transfer, "", body) ?? "", /does not accept API keys/);
+  });
+
+  test("a feature gate names the feature, where to ask and the request id", () => {
+    const h = hintFor(403, card, "", {
+      error: {
+        code: "feature_access_required",
+        message: "Your business does not have access to card_issuing.",
+        feature: "card_issuing",
+        access_status: "none",
+        request_access_url: "/v1/feature-access/requests",
+        request_id: "req_9",
+      },
+    });
+    assert.match(h ?? "", /card_issuing/);
+    assert.match(h ?? "", /\/v1\/feature-access\/requests/);
+    assert.match(h ?? "", /req_9/);
+    for (const [code, re] of [
+      ["feature_access_pending", /under review/],
+      ["feature_access_action_required", /more information/],
+      ["feature_access_rejected", /apply again after 2026-11-01/],
+      ["feature_access_suspended", /suspended/],
+    ] as const) {
+      assert.match(hintFor(403, card, "", { error: { code, reapply_after: "2026-11-01" } }) ?? "", re, code);
+    }
+  });
+
+  test("any other 403 says retrying will not help", () => {
+    assert.match(hintFor(403, transfer, "", { error: "nope" }) ?? "", /retrying will not help/);
+  });
+
+  test("a duplicate client_reference is told not to resend", () => {
+    const h = hintFor(409, transfer, "", {
+      error: "client_reference has already been used for a different transfer",
+      code: "ERROR_CODE_DUPLICATE_TRANSACTION",
+    });
+    assert.match(h ?? "", /client_reference/);
+    assert.match(h ?? "", /different transfer/);
+    assert.match(h ?? "", /Do not send again/);
+    assert.match(h ?? "", /listTransactions/);
+    assert.doesNotMatch(h ?? "", /use the existing transfer/i);
+  });
+
+  test("a conflict says to read again, and any other 409 to look it up", () => {
+    assert.match(hintFor(409, transfer, "", { error: "x", code: "ERROR_CODE_CONFLICT" }) ?? "", /Read it again/);
+    assert.match(hintFor(409, card, "", { error: "exists" }) ?? "", /Already exists/);
+  });
+
+  test("an ended pause says to start a new transfer", () => {
+    for (const code of ["ERROR_CODE_TRANSFER_PAUSE_EXPIRED", "ERROR_CODE_TRANSFER_PAUSE_CANCELLED"]) {
+      assert.match(hintFor(410, transfer, "", { error: "ended", code }) ?? "", /new client_reference/, code);
+    }
+  });
+
+  test("both 413 shapes get the real size limit", () => {
+    const upload = TOOLS_BY_NAME.get("uploadCustomerKycDocument")!;
+    for (const body of [
+      {
+        error: {
+          code: "request_body_too_large",
+          message: "Request body exceeds the maximum allowed size",
+          limit: 13997400,
+        },
+      },
+      { data: null, error: "the uploaded file is too large — the maximum is 10MB" },
+    ]) {
+      assert.match(hintFor(413, upload, "", body) ?? "", /under 500 KB/);
+    }
+  });
+
+  test("a 501 says not to retry", async () => {
+    const { fetchImpl } = stub([{ status: 501, body: { data: null, error: "not implemented" } }]);
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.match(e.hint ?? "", /not available in this environment/);
+      assert.equal(e.outcomeUnknown, false);
+      return true;
+    });
+  });
+
+  test("a 503 limits outage says the transfer was not created", async () => {
+    const { fetchImpl } = stub([
+      {
+        status: 503,
+        body: {
+          data: null,
+          error: "transfer limits are temporarily unavailable, please retry",
+          code: "ERROR_CODE_LIMITS_UNAVAILABLE",
+        },
+      },
+    ]);
+    await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+      assert.match(e.hint ?? "", /transfer was not created/);
+      assert.equal(e.outcomeUnknown, false);
+      return true;
+    });
+  });
+
+  test("a 503 or 504 from before the request ran says so", async () => {
+    for (const [status, body] of [
+      [503, { error: "service_unavailable", message: "failed to read request body" }],
+      [503, { data: null, error: "auth service unavailable" }],
+      [504, { data: null, error: "auth validation timed out" }],
+    ] as const) {
+      const { fetchImpl } = stub([{ status, body }]);
+      await assert.rejects(client(fetchImpl).call(transfer, { amount: 5 }), (e: GravvApiError) => {
+        assert.match(e.hint ?? "", /refused before it ran/, JSON.stringify(body));
+        assert.equal(e.outcomeUnknown, false);
+        return true;
+      });
+    }
+  });
+
+  test("any other 504 on a write is an unknown outcome", async () => {
+    const { fetchImpl } = stub([{ status: 504, body: { data: null, error: "deadline exceeded" } }]);
+    await assert.rejects(
+      client(fetchImpl).call(transfer, { amount: 5 }),
+      (e: GravvApiError) => e.outcomeUnknown && /does not keep 5xx answers/.test(e.hint ?? ""),
+    );
   });
 });
 

@@ -329,7 +329,7 @@ export class GravvClient {
       throw new GravvApiError(apiMessage, res.status, parsed, hint, {
         idempotencyKey,
         replayed,
-        outcomeUnknown: isOutcomeUnknown(res.status, tool, apiMessage),
+        outcomeUnknown: isOutcomeUnknown(res.status, tool, apiMessage, parsed),
       });
     }
 
@@ -545,15 +545,28 @@ function isServerFault400(message: string): boolean {
 }
 
 /**
- * Whether a failed call may still have taken effect: a timeout or network error (0 or
- * 408), a 5xx other than 501, or a server fault sent as a 400. Never for a call that
- * changes nothing.
+ * A 5xx that proves the request never ran: the auth check failed or timed out, the
+ * gateway could not read the body or reach the service (`service_unavailable`), or the
+ * transfer limits could not be checked, so the transfer was not created.
  */
-export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = ""): boolean {
+function refusedBeforeRunning(status: number, message: string, body: unknown): boolean {
+  if (status !== 503 && status !== 504) return false;
+  if (errorCode(body) === "ERROR_CODE_LIMITS_UNAVAILABLE") return true;
+  const top = body && typeof body === "object" ? (body as Record<string, unknown>).error : undefined;
+  if (top === "service_unavailable") return true;
+  return /^auth (service unavailable|validation failed|validation timed out)$/i.test(message);
+}
+
+/**
+ * Whether a failed call may still have taken effect: a timeout or network error (0 or
+ * 408), a 5xx other than 501 that does not prove the request never ran, or a server
+ * fault sent as a 400. Never for a call that changes nothing.
+ */
+export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = "", body: unknown = null): boolean {
   if (safeToRepeat(tool)) return false;
   if (status === 0 || status === 408) return true;
   if (status === 400) return isServerFault400(message);
-  return status >= 500 && status !== 501;
+  return status >= 500 && status !== 501 && !refusedBeforeRunning(status, message, body);
 }
 
 /** Extra facts about the call that change what a hint should say. */
@@ -620,15 +633,73 @@ function hint429(tool: GeneratedTool, message: string, ctx: HintContext): string
 }
 
 /** A 409 is not one thing: only two of them mean "still running". */
-function hint409(code: string | undefined): string | undefined {
+function hint409(tool: GeneratedTool, code: string | undefined): string {
   switch (code) {
     case "idempotency_in_flight":
       return "The first call with this key is still running (the gateway holds it for up to 60 s). Wait, then call again with the same arguments and idempotency_key to get its answer.";
     case "ERROR_CODE_TRANSFER_IN_PROGRESS":
       return "A transfer with this client_reference is still being processed. Wait a few seconds, then call again with the same arguments and idempotency_key; if it is the same transfer, the API returns its result.";
+    case "ERROR_CODE_DUPLICATE_TRANSACTION":
+      // The reference was used for a DIFFERENT transfer, so "use the existing one" is wrong.
+      return `This client_reference was already used for a different transfer. Do not send again: find the earlier transfer (${lookupFor(tool)}). If this really is a new payment, use a new client_reference.`;
+    case "ERROR_CODE_CONFLICT":
+      return "The resource changed or is no longer in the state this change expects. Read it again before retrying.";
     default:
-      return undefined;
+      return "Already exists. Look it up and use it rather than creating it again.";
   }
+}
+
+/** The feature-access gate's 403s, by code. */
+const FEATURE_ACCESS: Record<string, (f: Record<string, unknown>) => string> = {
+  feature_access_required: (f) =>
+    `Your business does not have access to ${nonEmpty(f.feature) ?? "this feature"}. Request it in the Gravv Dashboard (API: POST ${nonEmpty(f.request_access_url) ?? "/v1/feature-access/requests"}).`,
+  feature_access_pending: () => "The access request is under review; wait for the feature_access webhook.",
+  feature_access_action_required: () => "Gravv asked for more information; answer it in the Dashboard.",
+  feature_access_rejected: (f) =>
+    `The request was rejected; you can apply again after ${nonEmpty(f.reapply_after) ?? "the reapply_after date"}.`,
+  feature_access_suspended: () => "Access is suspended; contact Gravv support.",
+};
+
+function nonEmpty(v: unknown): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
+/** A 403 is a scoped key, a Dashboard-only route or a feature gate, and says which. */
+function hint403(body: unknown): string {
+  const f = errorFields(body);
+  if (f.reason_detail === "api_key_not_accepted_on_admin_routes") return "This route does not accept API keys.";
+  if (Array.isArray(f.required_any) && f.required_any.length > 0) {
+    return `This API key is scoped and lacks the permission for this route: it needs one of ${f.required_any.join(", ")}. Use a key that has it. Retrying will not help.`;
+  }
+  const gate = typeof f.code === "string" ? FEATURE_ACCESS[f.code] : undefined;
+  if (gate) {
+    const requestId = nonEmpty(f.request_id);
+    return requestId ? `${gate(f)} Quote request_id ${requestId} to support.` : gate(f);
+  }
+  if (body && typeof body === "object" && (body as Record<string, unknown>).error === "forbidden") {
+    return "Dashboard-only: this route refuses API keys. Do it in the Gravv Dashboard.";
+  }
+  return "Forbidden. Read the error; retrying will not help.";
+}
+
+/** A 410: a paused transfer that can no longer be resumed. */
+function hint410(code: string | undefined): string {
+  if (code === "ERROR_CODE_TRANSFER_PAUSE_EXPIRED" || code === "ERROR_CODE_TRANSFER_PAUSE_CANCELLED") {
+    return "The pause has ended and this transfer can no longer be resumed. Start a new transfer with a new client_reference.";
+  }
+  return "Gone: this can no longer be used. Read the error; retrying will not help.";
+}
+
+/** A 5xx with its own next step, before the general 5xx rule. */
+function hint5xxByCause(tool: GeneratedTool, status: number, message: string, body: unknown): string {
+  if (status === 501) {
+    return "This operation is not available in this environment. Do not retry; search the docs for the feature.";
+  }
+  if (errorCode(body) === "ERROR_CODE_LIMITS_UNAVAILABLE") {
+    return "Transfer limits could not be checked, so the transfer was not created. Try again shortly.";
+  }
+  if (refusedBeforeRunning(status, message, body)) return "The request was refused before it ran. Try again shortly.";
+  return hint5xx(tool);
 }
 
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
@@ -679,7 +750,7 @@ export function hintFor(
   if (!ctx.replayed) return hint;
   // A stored server fault may still have taken effect, so its own hint, which looks the
   // result up before any resend, must not be preceded by "call again".
-  const prefix = hint && isOutcomeUnknown(status, tool, message) ? REPLAYED_STORED : REPLAYED;
+  const prefix = hint && isOutcomeUnknown(status, tool, message, body) ? REPLAYED_STORED : REPLAYED;
   return hint ? `${prefix} ${hint}` : prefix;
 }
 
@@ -724,16 +795,22 @@ function statusHint(
     case 401:
       return "The API key was rejected. Confirm GRAVV_API_KEY is set to a current key for the environment you intend.";
     case 403:
-      return "Forbidden. Some endpoints are dashboard-only and reject API-key callers — approvals in particular must be done in the Gravv dashboard.";
+      return hint403(body);
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
     case 409:
-      return hint409(errorCode(body));
+      return hint409(tool, errorCode(body));
+    case 410:
+      return hint410(errorCode(body));
+    case 413:
+      // Both shapes: request_body_too_large with a limit, and "the uploaded file is too
+      // large". Neither states the size that is refused in practice.
+      return "The upload is too large. Today files from about 600 KB are refused, whatever size the message states. Keep each file under 500 KB.";
     case 422:
       return hint422(errorCode(body));
     case 429:
       return hint429(tool, message, ctx);
     default:
-      return status >= 500 && status !== 501 ? hint5xx(tool) : undefined;
+      return status >= 500 ? hint5xxByCause(tool, status, message, body) : undefined;
   }
 }
