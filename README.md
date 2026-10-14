@@ -152,6 +152,10 @@ so you can explore Gravv before you have credentials.
 transfers, limits, cards, wallets, FX and settlement instructions, collections, webhooks,
 and a sandbox deposit simulator.
 
+**Prompts** — ten goal prompts, from opening an account to unsticking a transfer. Pick one
+in your client and the assistant gets the questions to ask first, the tool order for each
+path, the confirm steps and the recovery rules ([Prompts](#prompts)).
+
 Both matter. The API tools execute calls, but they can't tell you what has to happen
 first — that an account needs a KYC-verified customer, or that a new recipient must reach
 `active` before you can pay them. That's what the guides are for, so they're reachable
@@ -159,9 +163,45 @@ from the same connector. Ask the assistant how to do something and it can look i
 write your integration, then run it against sandbox to prove it works.
 
 ```bash
-npx @gravv-infra/mcp     # with GRAVV_API_KEY: docs + API tools
-npx @gravv-infra/mcp     # without it: docs tools only, still useful
+npx @gravv-infra/mcp     # with GRAVV_API_KEY: docs + API tools + prompts
+npx @gravv-infra/mcp     # without it: docs tools and prompts, still useful
 ```
+
+---
+
+## Prompts
+
+MCP prompts are chosen by the user, not the model: your client lists them (often behind
+`/` or a prompt menu). Each one is a whole goal, built from Gravv's integration scenarios.
+It says what to ask the user before any call, gives each path's tool order with its
+confirm steps and recovery, links the docs page to read, and ends with the rules every
+task shares: never invent a value, confirm before money moves, and when to resend with the
+same `idempotency_key` and when to leave it out.
+
+| Prompt | For | Optional argument |
+|---|---|---|
+| `open-account` | a bank, wallet-only or card account; an application the bank is waiting on; freeze or close | `path`: v2, v1, business-v1, card-account, manage |
+| `onboard-customer` | create and verify a person or a business; resubmit; read KYC documents | `path`: person-hosted, person-s2s, business, resubmit, documents |
+| `send-payout` | ACH, wire, RTP, SWIFT, SEPA, Faster Payments, or between own accounts | `rail`: ach, wire, rtp, swift, sepa, fps, book |
+| `send-remittance` | a bank account or mobile wallet abroad | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
+| `send-crypto` | USDC or USDT to a wallet; USDT to USDC between own wallets | `path`: same-network, cross-network, convert |
+| `convert-currency` | quote and place an FX order; settlement instructions; follow or cancel | `path`: quote-and-order, settlement-instruction, manage |
+| `issue-card` | verify a cardholder and issue a card; fund, limit, freeze, close | `path`: hosted-kyc, own-kyc, fund, limit, freeze-or-block, close, another-card |
+| `collect-payment` | stablecoin deposits, bank deposits, bank transfers, card checkout, saved cards | `method`: stablecoin, bank-deposit, bank-transfer, card, saved-card |
+| `reconcile` | transactions against the books, one transfer's webhooks, fees, missed events | `path`: transactions, trace, fees, webhooks |
+| `fix-stuck-transfer` | pending, paused, under review or failed, and how to answer a pause | `transaction_id` |
+
+The argument narrows the prompt to one path; leave it out to get them all. Route
+availability follows the docs: a route is Available, Not yet available (ask support to
+switch it on for your business), or Not supported. A prompt names any tool it uses that
+the session has not loaded (the `account-applications` toolset is opt-in, and
+`simulateDeposit` needs a sandbox key), and says so when there is no API key.
+
+**Next steps and fix hints.** Results carry the same knowledge where a call answers. A 200
+that is not done, such as a paused transfer, a declined card or a file the card KYC
+refused, comes back with `next_step` ahead of `data`. A 4xx the scenarios name, such as a
+duplicate payee, a closed route or an expired FX quote, gets a `hint` that says what to do
+instead of what the status means.
 
 ---
 
@@ -354,40 +394,39 @@ something else having happened first, and the assistant reads those before calli
 
 ## A worked example
 
-Asking an assistant to *"pay a supplier in Nigeria 200 USD from my main account"*:
+Asking an assistant to *"pay our US supplier 1,250 USD by ACH from my main account"*:
 
 ```
-1. searchGravvDocs("send money to a Nigerian bank account")
-   -> finds the remittance guide, learns the recipient must be `active`
+1. searchGravvDocs("pay a US bank account by ACH")
+   -> finds the bank payouts guide, learns the recipient must be `active`
       before a transfer will succeed
 
-2. listAccounts()
-   -> finds the funded USD account to pay from
+2. getAccountV2({ account_id })
+   -> confirms the USD account is funded
 
-3. listExternalAccountInstitutions({ country_iso_code: "NG" })
-   -> resolves the recipient's bank
+3. listExternalAccounts({ customer_id, search: "<account number>" })
+   -> no payee for this account yet, so one is added
 
-4. createExternalAccount({ ...bank account recipient details })
-   -> a Nigerian bank account comes back "active" at once
+4. createExternalAccount({ payee_type: "ach_wire", payment_rail: "ach", ... })
+   -> an ach_wire payee comes back "pending"
 
 5. getExternalAccount({ external_account_id })
-   -> confirms "active"; swift, sepa, ach_wire and fps recipients start
-      "pending", so for those the assistant polls until "active" or "setup_failed"
+   -> polled until "active" (or "setup_failed", which next_step explains)
 
-6. createTransfer({ amount: 200, source, destination })
+6. createTransfer({ amount: "1250.00", source, destination, client_reference })
    -> returns a PREVIEW, does not execute:
-      "Transfer 200 USD from acc_1 to external_account ext_9.
+      "Transfer 1250.00 USD from acc_1 to external_account ext_9.
        Once submitted this cannot be reversed from the API."
 
    [you review and agree]
 
 7. createTransfer({ ...same arguments, confirm: true })
-   -> executes; returns transfer_id and status
+   -> executes; returns the transaction and transfer_status
 ```
 
 Step 1 is what stops step 6 failing. Without the guides, an assistant tends to create the
 recipient and immediately transfer to it, before the payment rail has finished setting
-them up.
+them up. The `send-payout` prompt with `rail: ach` walks the same path.
 
 ---
 

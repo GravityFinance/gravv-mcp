@@ -38,8 +38,28 @@ documented endpoint now has a tool or a stated reason it has none.
 - A warning at start when `GRAVV_BASE_URL` is not `https://api.gravv.xyz`. An empty value
   now means the default.
 - The User-Agent and the server metadata carry the package version.
+- Ten goal prompts (`prompts/list`, `prompts/get`): `open-account`, `onboard-customer`,
+  `send-payout`, `send-remittance`, `send-crypto`, `convert-currency`, `issue-card`,
+  `collect-payment`, `reconcile` and `fix-stuck-transfer`. Each says what to ask first,
+  gives each path's tool order with its confirm steps and recovery, and links a docs page;
+  one optional argument narrows it to one path. They are offered without an API key too.
+- `next_step` on a successful result that is not done: a paused or waiting transfer, a
+  manual-review webhook, a declined or 3-D Secure card payment, a refused card KYC file, the
+  liveness step, a missing v1 application, a v2 account the bank is waiting on, a pending
+  or failed payee, and limits on the default tier or in shadow mode.
+- Fix hints for the 4xx answers the integration scenarios name: duplicate and
+  uncorrectable payees, payees missing an institution, closed routes, transfer limits,
+  resuming a transfer that is not paused, an existing customer email, incomplete or
+  completed KYC, missing KYC documents, the account limit, the card account, saved-card
+  declines, a reused client_reference, and FX quotes, sources and destinations.
 
 ### Changed
+
+- The MCP SDK floor is 1.30.0, the version the server is tested with.
+- An error whose fix hint says the call did not run, such as "failed to add customer:
+  email already exists", is no longer flagged `outcome_unknown`.
+- The `activateFeature` note for `provider_data.account_id` says to always send the
+  business's card account; the spec said it could be left out.
 
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
