@@ -532,8 +532,19 @@ used for a different transfer is final: find the earlier transfer, and use a new
 `client_reference` only for a genuinely new payment.
 
 **`413` on an upload**
-Files from about 600 KB are refused today, whatever limit the message states. Keep each
-file under 500 KB.
+The message can state a size the route does not take. Each upload tool takes files up to
+its own limit:
+
+| Tool | Largest file |
+|---|---|
+| `uploadCustomerKycDocument` | 10 MB |
+| `uploadCardholderKycDocument` | 5 MB |
+| `uploadTransferDocument` | 700 KB |
+| `createAccountV2`, `updateAccountApplicationV2` documents | 2 MB each |
+
+In sandbox, keep the files of one call under 500 KB together: larger requests are
+refused there, with a `413` that says 10MB. The hint names the tool's limit. An oversized
+card KYC file can also come back as a `400`.
 
 **Documentation search returns nothing**
 It's keyword-based, not semantic. Rephrase using the vocabulary the docs use — "transfer"

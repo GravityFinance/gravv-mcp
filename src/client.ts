@@ -8,8 +8,8 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
-import { OUTCOME_LOOKUPS, UPPER_CASE_ARGS } from "./curation.ts";
-import { TRANSFER_LIMIT_CODES, errorFixFor } from "./fix-hints.ts";
+import { OUTCOME_LOOKUPS, SANDBOX_UPLOAD_BYTES, UPLOADS, UPPER_CASE_ARGS, sizeText } from "./curation.ts";
+import { TRANSFER_LIMIT_CODES, errorFixFor, uploadTooLargeHint } from "./fix-hints.ts";
 import { VERSION } from "./version.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
@@ -644,6 +644,19 @@ const REPLAYED_STORED =
   "This is the stored answer to an earlier call with the same idempotency key (kept 24 hours); the request did not run again.";
 const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again without idempotency_key.`;
 
+/**
+ * A 413 the upload fixes (fix-hints.ts) did not match: the gateway's `request_body_too_large`
+ * with a `limit`, or "the uploaded file is too large — the maximum is 10MB", sent for any
+ * size refusal further on. Neither states the size the route takes, so the hint does.
+ */
+function hint413(tool: GeneratedTool): string {
+  if (Object.hasOwn(UPLOADS, tool.name)) return uploadTooLargeHint(tool.name);
+  return (
+    "The request is too large, whatever size the message states. Send smaller files; in sandbox, keep the files " +
+    `of one call under ${sizeText(SANDBOX_UPLOAD_BYTES)} together. Then call again without idempotency_key.`
+  );
+}
+
 /** After a timeout or a network error. */
 function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
   const safe = safeToRepeat(tool);
@@ -862,9 +875,7 @@ function statusHint(
     case 410:
       return hint410(errorCode(body));
     case 413:
-      // Both shapes: request_body_too_large with a limit, and "the uploaded file is too
-      // large". Neither states the size that is refused in practice.
-      return "The upload is too large. Today files from about 600 KB are refused, whatever size the message states. Keep each file under 500 KB.";
+      return hint413(tool);
     case 422:
       return hint422(errorCode(body));
     case 429:

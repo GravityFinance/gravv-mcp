@@ -14,6 +14,7 @@
  */
 import { TOOLS_BY_NAME } from "./generated/tools.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
+import { uploadLimit } from "./curation.ts";
 
 export interface PromptPath {
   /** Argument values that select this path, lower case. */
@@ -193,7 +194,7 @@ export const PROMPTS: GoalPrompt[] = [
         steps: [
           "getCustomer: if basic KYC is already `completed`, stop.",
           "Ask for the document type, its number, the issue and expiry dates, the issuing country, and whether it is two-sided.",
-          "uploadCustomerKycDocument for each item (front, back of a two-sided ID, selfie). Pass file_path for a local file rather than pasting base64; keep each file under 500 KB.",
+          `uploadCustomerKycDocument for each item (front, back of a two-sided ID, selfie). Pass file_path for a local file rather than pasting base64. Each file: ${uploadLimit("uploadCustomerKycDocument")}.`,
           "startCustomerKycS2S, then wait for the webhook or poll getCustomer.",
           "A \"missing required documents\" error lists what to upload: upload exactly those, then call again.",
           "Server-to-server KYC records no liveness: a card for this person will ask for a liveness step later.",
@@ -309,7 +310,7 @@ export const PROMPTS: GoalPrompt[] = [
           "The source must be a bank-held USD account with the funds.",
           "Ask for the country (outside Nigeria, ask support first), company or person, legal name, account number or IBAN, BIC, the beneficiary's and the bank's address, an intermediary bank only if their bank gave one (all its fields), the purpose of payment (it goes in description), and the invoice file.",
           "listExternalAccountInstitutions with swift_code checks the BIC; listTransferSupportedCountriesForAddress checks the address country.",
-          "uploadTransferDocument first (PDF, PNG or JPEG under 500 KB) and pass its id in supporting_document_ids.",
+          `uploadTransferDocument first (PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}) and pass its id in supporting_document_ids.`,
           "Confirm the amount in USD, the beneficiary and the country, and say banks along the route may deduct charges.",
         ],
       },
@@ -862,7 +863,7 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-PAY-06", "S-PAY-11", "S-CUS-06", "S-CUS-07", "S-TXN-06"],
         steps: [
           "The `requirements` are in the createTransfer answer or the `transfer.requires_information` event. Read them to the user in plain words; `pause_reason` says which kind.",
-          "`supporting_document_required`: uploadTransferDocument (PDF, PNG or JPEG under 500 KB), then pass its id in supporting_document_ids.",
+          `\`supporting_document_required\`: uploadTransferDocument (PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}), then pass its id in supporting_document_ids.`,
           "`sender_details_required`: ask for exactly the listed values and send them in additional_information. For `customer_email`, updateCustomer first.",
           "A limit window (`per_transfer`, `daily`, `weekly`, `monthly`, `annual`): getCustomerLimits or getRemitterLimits shows what is left. Send real verification details only; never invent `remitter_verification`. `annual_requires_approval` and `screening` are reviewed by Gravv: there is nothing to send.",
           "resumeTransfer with id set to the transfer `reference` (not the transaction id), before `expires_at`. It releases the payout: send confirm: true only after the user says yes, and leave idempotency_key out on each new attempt.",

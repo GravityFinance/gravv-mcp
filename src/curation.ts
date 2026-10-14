@@ -581,6 +581,93 @@ export function isSandboxOnly(method: string, path: string): boolean {
  */
 export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1/webhooks/"];
 
+/** A file type the upload and download handling recognises by its first bytes. */
+export type FileKind = "pdf" | "png" | "jpeg";
+
+/**
+ * Where a tool takes a file, so the model can pass a local `file_path` instead of
+ * base64 it would have to produce, and carry, in its own context.
+ *
+ * `at` is the object holding the file fields: "" for the top level, or a dotted path
+ * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
+ * generator adds `file_path` there and makes `content` optional; the server reads the
+ * file, checks its type and size, and fills `content` (and the name and type fields when
+ * they are absent). `maxBytes` is the decoded size the route takes in live, as the
+ * services check it:
+ * - uploadCustomerKycDocument: 10 MiB, the customers KYC check and the gateway's
+ *   document body limit (sized for a 10 MiB file).
+ * - uploadCardholderKycDocument: 5 MiB. The card KYC service accepts gRPC requests of
+ *   at most 10 MiB, and the file reaches it base64 in the JSON body, base64 again in the
+ *   gRPC request (16/9 of the file), so about 5.6 MiB of file fits; its own 10 MB check
+ *   is never reached.
+ * - uploadTransferDocument: 700 KiB, the transfers service's default cap, which keeps the
+ *   file under a 1 MiB ingress further down the payout path. A deployment setting can
+ *   change it; the default is what the tool states.
+ * - the v2 account documents: 2 MiB each, the accounts service's inline document cap.
+ */
+export interface UploadSpec {
+  at: string;
+  content: string;
+  nameField?: string;
+  typeField?: string;
+  kinds: FileKind[];
+  maxBytes: number;
+}
+
+const MB = 1024 * 1024;
+const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
+
+export const UPLOADS: Record<string, UploadSpec[]> = {
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
+  uploadTransferDocument: [
+    {
+      at: "",
+      content: "content",
+      nameField: "file_name",
+      typeField: "content_type",
+      kinds: ANY_DOC,
+      maxBytes: 700 * 1024,
+    },
+  ],
+  updateAccountApplicationV2: [
+    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+  createAccountV2: [
+    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+};
+
+/** A size as the tool texts write it: "10 MB", "700 KB". */
+export function sizeText(bytes: number): string {
+  return bytes >= MB ? `${bytes / MB} MB` : `${bytes / 1024} KB`;
+}
+
+/**
+ * What to keep a sandbox call's files under. Sandbox calls reach the services through an
+ * ingress that refuses a request over 1 MiB. The file travels base64 in the JSON body and
+ * the body base64 again in the gRPC request, 16/9 of the file, so files from about 576 KiB
+ * are refused there, with a 413 that says 10MB (sandbox, 2026-10-13: 571 KB taken, 600 KB
+ * refused, on the customer KYC and transfer document routes). 500 KB leaves room for the
+ * other fields. The limit is per request, so a call with several files shares it.
+ */
+export const SANDBOX_UPLOAD_BYTES = 500 * 1024;
+
+/**
+ * The size sentence for a tool's files, the one wording every note, hint and prompt
+ * uses: "at most 700 KB; in sandbox, under 500 KB".
+ */
+export function uploadLimit(tool: string): string {
+  const specs = UPLOADS[tool];
+  if (!specs) throw new Error(`uploadLimit: ${tool} is not in UPLOADS`);
+  const max = sizeText(Math.min(...specs.map((s) => s.maxBytes)));
+  const sandbox = sizeText(SANDBOX_UPLOAD_BYTES);
+  return specs.some((s) => s.at.includes("[]"))
+    ? `at most ${max} each; in sandbox, under ${sandbox} for all of one call's files`
+    : `at most ${max}; in sandbox, under ${sandbox}`;
+}
+
 /**
  * Call-ordering and preconditions, appended to the generated tool description.
  *
@@ -605,7 +692,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Call first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
 
   createAccountV2:
-    "PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
+    `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2.`,
 
   getAccountRequirements:
     "Build createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
@@ -620,7 +707,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Read before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
 
   updateAccountApplicationV2:
-    "PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+    `PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("updateAccountApplicationV2")}) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.`,
 
   simulateDeposit:
     "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
@@ -632,7 +719,7 @@ export const PREREQUISITES: Record<string, string> = {
     "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
 
   uploadTransferDocument:
-    "Upload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB): the server reads it and fills content, file_name and content_type.",
+    `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
 
   resumeTransfer:
     "Only for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
@@ -686,7 +773,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
 
   uploadCardholderKycDocument:
-    "STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
+    `STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status \`error\`. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCardholderKycDocument")}) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.`,
 
   startCardholderKycS2S:
     "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
@@ -713,7 +800,7 @@ export const PREREQUISITES: Record<string, string> = {
     "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
 
   uploadCustomerKycDocument:
-    "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; keep sandbox files under about 500 KB) in place of base64 content.",
+    `STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCustomerKycDocument")}) in place of base64 content.`,
 
   downloadCustomerKycDocument:
     "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
@@ -735,53 +822,6 @@ export const PREREQUISITES: Record<string, string> = {
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
-};
-
-/** A file type the upload and download handling recognises by its first bytes. */
-export type FileKind = "pdf" | "png" | "jpeg";
-
-/**
- * Where a tool takes a file, so the model can pass a local `file_path` instead of
- * base64 it would have to produce, and carry, in its own context.
- *
- * `at` is the object holding the file fields: "" for the top level, or a dotted path
- * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
- * generator adds `file_path` there and makes `content` optional; the server reads the
- * file, checks its type and size, and fills `content` (and the name and type fields when
- * they are absent). Limits are the decoded sizes each spec states.
- */
-export interface UploadSpec {
-  at: string;
-  content: string;
-  nameField?: string;
-  typeField?: string;
-  kinds: FileKind[];
-  maxBytes: number;
-}
-
-const MB = 1024 * 1024;
-const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
-
-export const UPLOADS: Record<string, UploadSpec[]> = {
-  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
-  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
-  uploadTransferDocument: [
-    {
-      at: "",
-      content: "content",
-      nameField: "file_name",
-      typeField: "content_type",
-      kinds: ANY_DOC,
-      maxBytes: 700 * 1024,
-    },
-  ],
-  updateAccountApplicationV2: [
-    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-  ],
-  createAccountV2: [
-    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-  ],
 };
 
 /**

@@ -81,6 +81,27 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
     status: 400,
     body: { data: null, error: "account must be a card account, but this account's type is operating" },
   },
+  "kyc-file-too-large": {
+    tool: "uploadCustomerKycDocument",
+    status: 413,
+    body: { data: null, error: "the uploaded file is too large — the maximum is 10MB" },
+  },
+  "card-kyc-file-too-large": {
+    tool: "uploadCardholderKycDocument",
+    status: 400,
+    body: { data: null, error: "grpc: received message larger than max (11534336 vs. 10485760)" },
+  },
+  "transfer-document-too-large": {
+    tool: "uploadTransferDocument",
+    status: 400,
+    body: {
+      data: null,
+      error:
+        "content: the file is 812 KB (831488 bytes); the largest accepted is 700 KB (716800 bytes). Compress it or " +
+        "upload a smaller scan",
+      code: "ERROR_CODE_SUPPORTING_DOCUMENT_INVALID",
+    },
+  },
   "card-activate-fault": {
     tool: "activateFeature",
     status: 400,

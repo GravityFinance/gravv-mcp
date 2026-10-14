@@ -12,6 +12,8 @@
  * error body in the shape the API sends.
  */
 
+import { uploadLimit } from "./curation.ts";
+
 export interface ErrorFix {
   id: string;
   /** Scenario ids whose "what can go wrong" rows this answers. */
@@ -29,6 +31,25 @@ export interface ErrorFix {
    */
   outcomeKnown?: boolean;
   hint: string;
+}
+
+/** The next step after an upload is refused for its size, with the size the tool takes. */
+export function uploadTooLargeHint(tool: string): string {
+  return (
+    `The file is too large, whatever size the message states: ${tool} takes files of ${uploadLimit(tool)}. ` +
+    "Compress the file or scan it at a lower resolution, then call again without idempotency_key."
+  );
+}
+
+function tooLarge(id: string, scenarios: string[], tool: string, own: RegExp): ErrorFix {
+  return {
+    id,
+    scenarios,
+    tools: [tool],
+    codes: ["request_body_too_large"],
+    messages: [/uploaded file is too large/i, /larger than max/i, /request entity too large/i, own],
+    hint: uploadTooLargeHint(tool),
+  };
 }
 
 /** Transfer limit codes: all 422, none fixed by a retry. */
@@ -254,6 +275,14 @@ export const ERROR_FIXES: ErrorFix[] = [
       "The destination must be your account, your crypto wallet, or an active settlement instruction in the quote's " +
       "TO currency (type external_account): find one with listSettlementInstructions. A payee is not a destination.",
   },
+  // ---- uploads -----------------------------------------------------------------
+  // A size refusal comes in several shapes: the gateway's 413 `request_body_too_large`, a
+  // 413 "the maximum is 10MB" for a refusal further on (in sandbox, from about 576 KiB), the
+  // card KYC route's 400 with the gRPC size message, and each service's own 400. Not one
+  // states the size the route takes.
+  tooLarge("kyc-file-too-large", ["S-CUS-02"], "uploadCustomerKycDocument", /document exceeds maximum allowed size/i),
+  tooLarge("card-kyc-file-too-large", ["S-CRD-02"], "uploadCardholderKycDocument", /content exceeds maximum allowed size/i),
+  tooLarge("transfer-document-too-large", ["S-PAY-06"], "uploadTransferDocument", /the largest accepted is/i),
 ];
 
 const BY_TOOL = new Map<string, ErrorFix[]>();
@@ -319,7 +348,7 @@ const LIMIT_WINDOWS = new Set(["per_transfer", "daily", "weekly", "monthly", "an
 /** What a paused transfer needs, by pause_reason. */
 function pauseAsk(reason: unknown): string {
   if (reason === "supporting_document_required") {
-    return "Upload the document with uploadTransferDocument (PDF, PNG or JPEG under 500 KB) and pass its id in supporting_document_ids.";
+    return `Upload the document with uploadTransferDocument (PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}) and pass its id in supporting_document_ids.`;
   }
   if (reason === "sender_details_required") {
     return "Ask the user for exactly the sender details listed and send them in additional_information; for `customer_email`, updateCustomer first.";
@@ -400,7 +429,7 @@ export const RESULT_STEPS: ResultStep[] = [
     tools: ["uploadCardholderKycDocument"],
     step: (data) =>
       obj(data).status === "error"
-        ? "The file was refused (`error_code`), although the call answered 200. Use a JPEG, PNG or PDF under 500 KB with its extension in the filename, and a 3-letter country code (a selfie needs one too). Upload again without idempotency_key."
+        ? `The file was refused (\`error_code\`), although the call answered 200. Use a JPEG, PNG or PDF (of ${uploadLimit("uploadCardholderKycDocument")}) with its extension in the filename, and a 3-letter country code (a selfie needs one too). Upload again without idempotency_key.`
         : undefined,
   },
   {

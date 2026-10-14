@@ -63,6 +63,12 @@ documented endpoint now has a tool or a stated reason it has none.
 - `createAccount` takes any non-empty currency label for a `non_custodial` (wallet-only)
   account, such as `USDC`, and says the business opens its one card account there with
   its own customer id.
+- Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
+  the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
+  `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
+  500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
+  about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
+  name the tool's limit.
 - The v1 application tools take the fields the bank checks (`tax_id_type`,
   `nationalities`, `place_of_birth`, `account_purpose`, a business `email` and `phone`),
   no longer require every address part, and `updateAccountApplication` requires no field
