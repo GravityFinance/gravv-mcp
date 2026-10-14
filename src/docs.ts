@@ -174,6 +174,18 @@ const SYNONYMS: Record<string, string[]> = {
   webhook: ["webhooks", "event", "notification"],
   retry: ["idempotency", "idempotent"],
   duplicate: ["idempotency", "idempotent"],
+
+  // added with the 0.4.0 tools: paused payouts, limits, v2 accounts, sandbox, FX payouts
+  paused: ["pause", "requirements", "resume", "supporting"],
+  resume: ["paused", "pause", "requirements"],
+  document: ["documents", "upload", "supporting", "kyc"],
+  documents: ["document", "upload", "supporting", "kyc"],
+  limit: ["limits", "tier", "caps"],
+  limits: ["limit", "tier", "caps"],
+  requirements: ["requirement", "fields", "form"],
+  capabilities: ["capability", "options", "eligibility"],
+  simulate: ["simulator", "sandbox", "test"],
+  settlement: ["settlement-instructions", "instruction", "destination"],
 };
 
 /**
@@ -207,7 +219,7 @@ function applyPhrases(query: string): string {
 const EXPANSION_WEIGHT = 0.45;
 
 /** Query terms plus their expansions, tagged so scoring can discount the expansions. */
-function expandQuery(query: string): Array<{ term: string; weight: number }> {
+export function expandQuery(query: string): Array<{ term: string; weight: number }> {
   const literal = tokenize(applyPhrases(query));
   const seen = new Set(literal);
   const out = literal.map((term) => ({ term, weight: 1 }));

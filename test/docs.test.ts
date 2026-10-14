@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { DEFAULT_DOCS_ORIGIN, DocsIndex, parseDocsOrigin, slugFromUrl } from "../src/docs.ts";
+import { DEFAULT_DOCS_ORIGIN, DocsIndex, expandQuery, parseDocsOrigin, slugFromUrl } from "../src/docs.ts";
 import { createServer } from "../src/server.ts";
 
 /**
@@ -287,6 +287,24 @@ describe("search ranking", () => {
 
   test("respects the limit", async () => {
     assert.ok((await index().search("wallet customer network", 2)).length <= 2);
+  });
+});
+
+describe("query expansion", () => {
+  test("the 0.4.0 vocabulary reaches the pages that use other words", () => {
+    const terms = (q: string) => expandQuery(q).map((t) => t.term);
+    assert.ok(terms("resume a paused transfer").includes("requirements"));
+    assert.ok(terms("upload documents").includes("supporting"));
+    assert.ok(terms("customer limits").includes("tier"));
+    assert.ok(terms("simulate a deposit").includes("sandbox"));
+    assert.ok(terms("account capabilities").includes("eligibility"));
+    assert.ok(terms("settlement for fx").includes("settlement-instructions"));
+  });
+
+  test("an expansion weighs less than a typed term", () => {
+    const paused = expandQuery("paused");
+    assert.equal(paused.find((t) => t.term === "paused")?.weight, 1);
+    assert.ok((paused.find((t) => t.term === "resume")?.weight ?? 1) < 1);
   });
 });
 
