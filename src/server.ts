@@ -2,7 +2,14 @@
  * MCP server assembly: pick the tool set, register handlers, enforce safety.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   GravvClient,
   GravvApiError,
@@ -22,6 +29,7 @@ import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
 import { VERSION } from "./version.ts";
+import { PROMPTS, PROMPTS_BY_NAME, renderPrompt } from "./prompts.ts";
 
 
 /**
@@ -138,6 +146,9 @@ export function instructions(
     "schemas describe individual calls; they do not describe how the flows fit together.",
     "The guides do — ordering, prerequisites, corridor rules, and worked examples.",
     "",
+    `PROMPTS walk through whole goals: ${PROMPTS.map((p) => p.name).join(", ")}. When the user starts one`,
+    "of these, suggest they pick the matching prompt in their client.",
+    "",
   ];
 
   if (hasApiKey) {
@@ -152,6 +163,7 @@ export function instructions(
       "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
       "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
       "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",
+      "- An HTTP 200 is not always done. `transfer_status: paused` is not a failure: read `requirements` and resume the transfer; never send it again.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -193,7 +205,7 @@ export function createServer(config: ServerConfig) {
   const server = new Server(
     { name: "gravv", version: VERSION },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, prompts: {} },
       instructions: instructions(environment, gate, active, hasApiKey, isPublishableKey(config.apiKey ?? "")),
     },
   );
@@ -204,6 +216,35 @@ export function createServer(config: ServerConfig) {
       ...active.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
     ],
   }));
+
+  // Prompts are listed without a key too: they teach the flow, and say when the API
+  // tools need one.
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: PROMPTS.map((p) => ({
+      name: p.name,
+      title: p.title,
+      description: p.description,
+      arguments: [{ name: p.argument.name, description: p.argument.description, required: false }],
+    })),
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const prompt = PROMPTS_BY_NAME.get(request.params.name);
+    if (!prompt) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Unknown prompt "${request.params.name}". The prompts are: ${PROMPTS.map((p) => p.name).join(", ")}.`,
+      );
+    }
+    const text = renderPrompt(prompt, request.params.arguments ?? {}, {
+      hasApiKey,
+      loadedTools: new Set(active.map((t) => t.name)),
+    });
+    return {
+      description: prompt.description,
+      messages: [{ role: "user" as const, content: { type: "text" as const, text } }],
+    };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;

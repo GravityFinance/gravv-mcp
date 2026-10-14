@@ -22,9 +22,24 @@ describe("collectDocsLinks", () => {
     assert.deepEqual(
       links.map((l) => [pageUrl(l, DEFAULT_DOCS_ORIGIN), l.where]),
       [
+        // Pages marked * answer only once the docs pull requests that add them are merged.
+        [`${DEFAULT_DOCS_ORIGIN}/getting-started/onboard-your-first-customer`, ["prompt onboard-customer"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/cards/view-card-sensitive-details/overview`, ["blocked getCardSensitiveDetails"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/accounts/overview`, ["prompt open-account"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/cards/card-kyc/overview`, ["prompt issue-card"]], // *
+        [`${DEFAULT_DOCS_ORIGIN}/platform/cards/overview`, ["prompt issue-card"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/collections/collections-overview`, ["prompt collect-payment"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/foreign-exchange/overview`, ["prompt convert-currency"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/settlement-instructions/overview`, ["prompt convert-currency"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/transfers/crypto-transfers`, ["prompt send-crypto"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/transfers/overview`, ["prompt send-payout", "prompt send-remittance"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/transfers/paused-transfers`, ["prompt fix-stuck-transfer"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/platform/wallets/create-a-wallet`, ["tool getGravvDocPage"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/wallets/overview`, ["prompt collect-payment"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/webhooks/webhooks-overview`, ["prompt reconcile", "prompt fix-stuck-transfer"]],
+        [`${DEFAULT_DOCS_ORIGIN}/recipes/bank-payouts/overview`, ["prompt send-payout"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/recipes/remit-funds-to-a-recipient`, ["tool getGravvDocPage"]],
+        [`${DEFAULT_DOCS_ORIGIN}/recipes/remittance-and-crypto/overview`, ["prompt send-remittance", "prompt send-crypto"]], // *
       ],
     );
   });

@@ -160,11 +160,12 @@ describe("initialize", () => {
     }
   });
 
-  test("declares the tools capability and ships instructions", async () => {
+  test("declares the tools and prompts capabilities and ships instructions", async () => {
     const one = new Session();
     try {
       const res = await one.handshake();
       assert.ok(res.result.capabilities.tools, "clients gate tools/list on this");
+      assert.ok(res.result.capabilities.prompts, "clients gate prompts/list on this");
       assert.equal(typeof res.result.instructions, "string");
       assert.ok(res.result.instructions.length > 100);
     } finally {
@@ -181,7 +182,7 @@ describe("baseline methods", () => {
 
   test("returns -32601 for a method the server does not implement", async () => {
     // Clients probe for optional capabilities. A crash or a hang here breaks the session.
-    for (const method of ["resources/list", "prompts/list", "completion/complete"]) {
+    for (const method of ["resources/list", "completion/complete"]) {
       const res = await s.request(method);
       assert.equal(res.error?.code, -32601, `${method} should report method-not-found`);
     }
@@ -218,6 +219,32 @@ describe("tools/list", () => {
     const names = ((await s.request("tools/list")).result.tools as any[]).map((t) => t.name);
     assert.ok(names.includes("searchGravvDocs"));
     assert.ok(names.includes("getGravvDocPage"));
+  });
+});
+
+describe("prompts", () => {
+  test("prompts/list returns the ten goal prompts", async () => {
+    const prompts = (await s.request("prompts/list")).result.prompts as any[];
+    assert.equal(prompts.length, 10);
+    for (const p of prompts) {
+      assert.match(p.name, /^[a-z-]+$/);
+      assert.ok(p.description, `${p.name} needs a description`);
+      for (const a of p.arguments ?? []) assert.equal(a.required, false, `${p.name} ${a.name}`);
+    }
+  });
+
+  test("prompts/get returns a user message", async () => {
+    const res = await s.request("prompts/get", { name: "send-payout", arguments: { rail: "ach" } });
+    const [message] = res.result.messages;
+    assert.equal(message.role, "user");
+    assert.equal(message.content.type, "text");
+    assert.match(message.content.text, /A US bank account by ACH/);
+  });
+
+  test("an unknown prompt is a protocol error, not a crash", async () => {
+    const res = await s.request("prompts/get", { name: "noSuchPrompt" });
+    assert.equal(res.error?.code, -32602);
+    assert.equal((await s.request("ping")).result !== undefined, true, "the session still answers");
   });
 });
 
