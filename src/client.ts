@@ -229,7 +229,7 @@ export class GravvClient {
         res = await this.doFetch(url, {
           method: tool.method.toUpperCase(),
           headers,
-          body: body === undefined ? undefined : JSON.stringify(body),
+          body: body === undefined ? undefined : canonicalJson(body),
           signal: controller.signal,
         });
       } catch (err) {
@@ -282,6 +282,23 @@ export class GravvClient {
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
   }
+}
+
+/**
+ * JSON with every object's keys sorted, recursively; arrays keep their order.
+ *
+ * The gateway's idempotency check hashes the raw body bytes, and a model resending "the
+ * same arguments" does not reliably keep their order. Without this, a resend under the
+ * first call's key gets 422 idempotency_key_reused exactly when the key matters. The API
+ * decodes JSON without regard to key order, so it reads the same request.
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(v).sort()) sorted[k] = (v as Record<string, unknown>)[k];
+    return sorted;
+  });
 }
 
 /** The gateway's rule for an Idempotency-Key: 1-255 printable ASCII characters. */

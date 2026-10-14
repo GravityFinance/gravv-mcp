@@ -1,11 +1,19 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GravvClient, GravvApiError, RateLimiter, extractErrorMessage, hintFor } from "../src/client.ts";
+import {
+  GravvClient,
+  GravvApiError,
+  RateLimiter,
+  canonicalJson,
+  extractErrorMessage,
+  hintFor,
+} from "../src/client.ts";
 import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 /** Records what the client sent and replays canned responses. */
 function stub(responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>) {
-  const calls: Array<{ url: string; method: string; headers: Record<string, string>; body: any }> = [];
+  const calls: Array<{ url: string; method: string; headers: Record<string, string>; body: any; raw?: string }> =
+    [];
   let i = 0;
   const fetchImpl = (async (url: any, init: any) => {
     calls.push({
@@ -13,6 +21,7 @@ function stub(responses: Array<{ status: number; body?: unknown; headers?: Recor
       method: init.method,
       headers: init.headers,
       body: init.body ? JSON.parse(init.body) : undefined,
+      raw: init.body,
     });
     const r = responses[Math.min(i++, responses.length - 1)]!;
     return new Response(r.body === undefined ? "" : JSON.stringify(r.body), {
@@ -159,6 +168,39 @@ describe("auth and idempotency", () => {
     ]);
     const res = await client(fetchImpl).call(createCustomer, { body: {} });
     assert.equal(res.replayed, true, "a replay must be distinguishable from a fresh execution");
+  });
+});
+
+describe("request bodies are serialised the same way every time", () => {
+  test("the same arguments in another order give the same bytes", async () => {
+    const transfer = TOOLS_BY_NAME.get("createTransfer")!;
+    const a = {
+      amount: 5,
+      client_reference: "inv-114",
+      source: { id: "acc_1", currency: "USD" },
+      destination: { type: "external_account", id: "ext_1" },
+      meta: [{ b: 1, a: 2 }],
+    };
+    const b = {
+      meta: [{ a: 2, b: 1 }],
+      destination: { id: "ext_1", type: "external_account" },
+      source: { currency: "USD", id: "acc_1" },
+      client_reference: "inv-114",
+      amount: 5,
+    };
+    const first = stub([{ status: 200, body: { data: {} } }]);
+    const second = stub([{ status: 200, body: { data: {} } }]);
+    await client(first.fetchImpl).call(transfer, a, { idempotencyKey: "same" });
+    await client(second.fetchImpl).call(transfer, b, { idempotencyKey: "same" });
+    assert.equal(first.calls[0]!.raw, second.calls[0]!.raw);
+  });
+
+  test("canonicalJson sorts keys at every depth and keeps array order", () => {
+    assert.equal(
+      canonicalJson({ b: [3, 1, { d: 1, c: 2 }], a: { z: null, y: "x" } }),
+      '{"a":{"y":"x","z":null},"b":[3,1,{"c":2,"d":1}]}',
+    );
+    assert.equal(canonicalJson({ a: undefined, b: 1 }), '{"b":1}');
   });
 });
 
