@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
 import { OUTCOME_LOOKUPS, UPPER_CASE_ARGS } from "./curation.ts";
+import { TRANSFER_LIMIT_CODES, errorFixFor } from "./fix-hints.ts";
 import { VERSION } from "./version.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
@@ -619,7 +620,13 @@ function refusedBeforeRunning(status: number, message: string, body: unknown): b
 export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = "", body: unknown = null): boolean {
   if (safeToRepeat(tool)) return false;
   if (status === 0 || status === 408) return true;
-  if (status === 400) return isServerFault400(message);
+  if (status === 400) {
+    // Some known refusals start "failed to" or mention an internal error, and look like a
+    // server fault; their fix hint says whether the call can have run.
+    const fix = errorFixFor(tool.name, status, message, body);
+    if (fix) return fix.outcomeKnown === false;
+    return isServerFault400(message);
+  }
   return status >= 500 && status !== 501 && !refusedBeforeRunning(status, message, body);
 }
 
@@ -757,13 +764,7 @@ function hint5xxByCause(tool: GeneratedTool, status: number, message: string, bo
 }
 
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
-const LIMIT_CODES = new Set([
-  "ERROR_CODE_LIMIT_EXCEEDED",
-  "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
-  "ERROR_CODE_PER_TRANSFER_LIMIT_EXCEEDED",
-  "ERROR_CODE_MONTHLY_LIMIT_EXCEEDED",
-  "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED",
-]);
+const LIMIT_CODES = new Set(TRANSFER_LIMIT_CODES);
 
 /** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
 function hint422(code: string | undefined): string {
@@ -825,6 +826,10 @@ function statusHint(
     /kyc|kyb|not verified|unverified|insufficient|balance|inactive|not active|pending|frozen|not allowed|limit/i.test(
       message,
     );
+
+  // An answer the scenarios name has its own next step, ahead of what its status means.
+  const fix = errorFixFor(tool.name, status, message, body);
+  if (fix) return fix.hint;
 
   switch (status) {
     case 0:
