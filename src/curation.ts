@@ -317,6 +317,30 @@ export const ENUM_RESTRICTIONS: Record<string, { remove: string[]; because: stri
 };
 
 /**
+ * Replacement text for descriptions that come from the vendored specs.
+ *
+ * A tool's description is the spec's summary and description followed by curation text,
+ * so a curation fix alone leaves a false spec sentence in front of the corrected one, and
+ * the model reads both. The specs are byte copies of client-docs (scripts/sync-specs.ts),
+ * so editing them here would be undone by the next sync. The correction lives here until
+ * the docs fix the spec text at its source.
+ *
+ * `whileSpecSays` is the false text the spec still carries. Generation fails once it is
+ * gone, so an override cannot outlive the reason it exists: when the spec is fixed and
+ * synced, the override is deleted.
+ */
+export interface DescriptionOverride {
+  /** Text the vendored spec still carries (in the operation or a parameter description). */
+  whileSpecSays: string;
+  /** Replaces the spec `description`, the part after the summary. */
+  description?: string;
+  /** Replaces the description of the named input properties. */
+  params?: Record<string, string>;
+}
+
+export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {};
+
+/**
  * Names a model is likely to reach for that map to blocked operations.
  *
  * Without this, asking for `getCardSensitiveDetails` returns a bare "unknown tool" and
