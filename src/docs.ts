@@ -8,12 +8,17 @@
  *
  * Source of truth is the published docs site, which serves two machine-readable files:
  *
- *   /llms.txt        index — title, URL and description for all 177 pages, grouped by section
- *   /llms-full.txt   the entire corpus, ~1 MB, pages delimited by a `---` line
+ *   /llms.txt        index — title, URL and description for every page, grouped by section
+ *   /llms-full.txt   the entire corpus, ~1 MB; each page is a `---` line, then `# Title`,
+ *                    its description, and the body
  *
- * They align positionally (verified 177/177 by title), so zipping them yields a fully
- * attributed corpus with no scraping and no API key. Docs are public, so these tools
- * work before a merchant has credentials — an agent can learn Gravv during evaluation.
+ * The two files are not guaranteed to list pages in the same order. On 13 October 2026 one
+ * page sat second in the index and 72nd in the corpus, so pairing by position left 71
+ * pages with only their one-line description, 68 of them with no text at all. Each page
+ * is therefore found by its own header and paired with the index entry of the same title,
+ * using the description and the URL to tell repeated titles apart. Docs are public, so
+ * these tools work before a merchant has credentials — an agent can learn Gravv during
+ * evaluation.
  */
 
 const DOCS_ORIGIN = "https://gravv-docs.syntext.dev";
@@ -30,6 +35,12 @@ export interface DocPage {
   section: string;
   description: string;
   content: string;
+}
+
+export interface DocsStats {
+  pages: number;
+  unmatchedEntries: number;
+  unmatchedPages: number;
 }
 
 export interface SearchHit {
@@ -164,6 +175,7 @@ function expandQuery(query: string): Array<{ term: string; weight: number }> {
 export class DocsIndex {
   private pages: DocPage[] = [];
   private df = new Map<string, number>();
+  private counts: DocsStats = { pages: 0, unmatchedEntries: 0, unmatchedPages: 0 };
   private fetchedAt = 0;
   private inflight: Promise<void> | null = null;
   private readonly origin: string;
@@ -198,40 +210,12 @@ export class DocsIndex {
     const index = await indexRes.text();
     const corpus = await corpusRes.text();
 
-    // --- index: entries in document order, tagged with their `## Section` heading ---
-    const entries: Array<{ title: string; url: string; description: string; section: string }> = [];
-    let section = "";
-    for (const line of index.split("\n")) {
-      const sec = /^##\s+(.+)$/.exec(line);
-      if (sec) {
-        section = sec[1]!.trim();
-        continue;
-      }
-      const m = /^-\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)(?::\s*(.*))?$/.exec(line);
-      if (m) entries.push({ title: m[1]!, url: m[2]!, description: (m[3] ?? "").trim(), section });
-    }
-
-    // --- corpus: drop the banner, then one chunk per page, in the same order ---
-    const chunks = corpus.split("\n---\n").slice(1);
-
-    const pages: DocPage[] = [];
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i]!;
-      const chunk = chunks[i];
-      // Alignment is positional. If it ever breaks, fall back to the description rather
-      // than silently pairing a page with the wrong body.
-      const chunkTitle = chunk?.trim().split("\n")[0]?.replace(/^#+\s*/, "").trim();
-      const aligned = chunkTitle && chunkTitle.toLowerCase() === entry.title.toLowerCase();
-
-      pages.push({
-        title: entry.title,
-        slug: entry.url.replace(`${this.origin}/`, "").replace(/\.md$/, ""),
-        url: entry.url,
-        section: entry.section,
-        description: entry.description,
-        content: aligned ? chunk!.trim() : entry.description,
-      });
-    }
+    const entries = parseIndex(index);
+    const { pages, unmatchedEntries, unmatchedPages } = pairPages(
+      entries,
+      parseCorpus(corpus, entries),
+      (url) => url.replace(`${this.origin}/`, "").replace(/\.md$/, ""),
+    );
 
     // Document frequency for IDF weighting.
     const df = new Map<string, number>();
@@ -243,6 +227,7 @@ export class DocsIndex {
 
     this.pages = pages;
     this.df = df;
+    this.counts = { pages: pages.length, unmatchedEntries, unmatchedPages };
     this.fetchedAt = Date.now();
   }
 
@@ -315,11 +300,214 @@ export class DocsIndex {
     return [...new Set(this.pages.map((p) => p.section))].filter(Boolean);
   }
 
-  /** Exposed for tests. */
-  async pageCount(): Promise<number> {
+  /**
+   * How the last load went: pages indexed, index entries that found no page text (they
+   * fall back to their description), and corpus pages that matched no entry (dropped,
+   * as they have no URL). Exposed for tests.
+   */
+  async stats(): Promise<DocsStats> {
     await this.ensureLoaded();
-    return this.pages.length;
+    return { ...this.counts };
   }
+}
+
+// ---- parsing and pairing ------------------------------------------------------
+
+export interface IndexEntry {
+  title: string;
+  url: string;
+  description: string;
+  section: string;
+}
+
+export interface CorpusPage {
+  title: string;
+  /** The paragraph under the title: the page's description on the live site. */
+  lead: string;
+  /** The paragraph under the title matches the entry's description: surely a page start. */
+  header: boolean;
+  /** The whole page, header included, `---` rules inside it kept. */
+  content: string;
+}
+
+/** Entries of llms.txt in document order, each tagged with its `## Section` heading. */
+export function parseIndex(index: string): IndexEntry[] {
+  const entries: IndexEntry[] = [];
+  let section = "";
+  for (const line of index.replace(/\r\n?/g, "\n").split("\n")) {
+    const sec = /^##\s+(.+)$/.exec(line);
+    if (sec) {
+      section = sec[1]!.trim();
+      continue;
+    }
+    const m = /^-\s+\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)(?::\s*(.*))?$/.exec(line);
+    if (m) entries.push({ title: m[1]!.trim(), url: m[2]!, description: (m[3] ?? "").trim(), section });
+  }
+  return entries;
+}
+
+/** Case and whitespace folded, for comparing titles and descriptions. */
+function fold(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/** One description may be a shortened copy of the other. */
+function sameDescription(a: string, b: string): boolean {
+  const x = fold(a);
+  const y = fold(b);
+  if (!x || !y) return false;
+  return x === y || x.startsWith(y) || y.startsWith(x);
+}
+
+/**
+ * Pages of llms-full.txt, found by their own header.
+ *
+ * Pages are separated by a `---` line, but a page can contain one too (a Markdown rule,
+ * or front matter). Splitting on every `---` cut such a page short and shifted every page
+ * after it. So a segment is a candidate page only when it opens with `# Title` for a title
+ * the index lists. It is a sure page (`header`) when the paragraph under the title is that
+ * entry's description, as on the live site, or the entry has none. Any other segment is
+ * put back onto the page before it, `---` included; so is a candidate that pairPages
+ * leaves unpaired, which is how a `---` and a heading inside a page stay in that page.
+ * The banner before the first page is dropped.
+ */
+export function parseCorpus(corpus: string, entries: IndexEntry[]): CorpusPage[] {
+  const descriptions = new Map<string, string[]>();
+  for (const e of entries) {
+    const key = fold(e.title);
+    descriptions.set(key, [...(descriptions.get(key) ?? []), e.description]);
+  }
+
+  const pages: CorpusPage[] = [];
+  for (const segment of corpus.replace(/\r\n?/g, "\n").split(/^---[ \t]*$/m)) {
+    const text = segment.trim();
+    const title = /^#\s+(.+)$/.exec(text.split("\n")[0] ?? "")?.[1]?.trim() ?? "";
+    const lead = text.split(/\n\s*\n/)[1]?.trim() ?? "";
+    const known = title ? descriptions.get(fold(title)) : undefined;
+
+    if (known) {
+      const header = known.some((d) => d === "" || sameDescription(d, lead));
+      pages.push({ title, lead, header, content: text });
+    } else if (pages.length > 0) {
+      pages[pages.length - 1]!.content += `\n\n---\n\n${text}`;
+    }
+  }
+  return pages;
+}
+
+/** Words of a URL path that can say which of two same-titled pages it is. */
+const GENERIC_URL_WORDS = new Set([
+  "overview", "platform", "api", "reference", "index", "v1", "get", "post", "put", "patch", "delete",
+]);
+
+/** A URL's path without the `.md` suffix; the text itself when it is not a URL. */
+function urlPath(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/\.md$/, "");
+  } catch {
+    return url.replace(/\.md$/, "");
+  }
+}
+
+function urlWords(url: string): string[] {
+  return urlPath(url)
+    .toLowerCase()
+    .split(/[/\-_.]+/)
+    .filter((w) => w.length > 2 && !GENERIC_URL_WORDS.has(w));
+}
+
+/** `<Endpoint method="POST" path="/v1/wallets" />` → `post-v1-wallets`, as reference URLs end. */
+function endpointSlug(content: string): string | null {
+  const m = /<Endpoint\s+method="(\w+)"\s+path="([^"]+)"/.exec(content);
+  if (!m) return null;
+  return `${m[1]!.toLowerCase()}-${m[2]!.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`.replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Pairs index entries with corpus pages by title, whatever order either file is in.
+ *
+ * Titles repeat (the guide and the reference page for "Create a wallet"; three pages
+ * called "Overview"), so each same-title candidate is scored:
+ *
+ *   +4  the page's description line matches the entry's
+ *   +8  a reference page's endpoint matches the end of the entry's URL
+ *   ≤1  the words of the entry's URL appear in the page
+ *
+ * Measured on the live files: the collections and webhooks overviews share both title and
+ * description, and only the URL words tell them apart; without them, 136 of 300 shuffles
+ * of the corpus paired the two the wrong way round. Pairs are taken best score first,
+ * then by rank among same-titled pages, then in index order.
+ */
+export function pairPages(
+  entries: IndexEntry[],
+  corpus: CorpusPage[],
+  slugOf: (url: string) => string,
+): { pages: DocPage[]; unmatchedEntries: number; unmatchedPages: number } {
+  const entriesByTitle = new Map<string, number[]>();
+  entries.forEach((e, i) => {
+    const key = fold(e.title);
+    entriesByTitle.set(key, [...(entriesByTitle.get(key) ?? []), i]);
+  });
+
+  const candidates: Array<{ score: number; distance: number; entry: number; page: number }> = [];
+  const rankOfTitle = new Map<string, number>();
+  corpus.forEach((page, p) => {
+    const key = fold(page.title);
+    const rank = rankOfTitle.get(key) ?? 0;
+    rankOfTitle.set(key, rank + 1);
+
+    const body = page.content.toLowerCase();
+    const endpoint = endpointSlug(page.content);
+    (entriesByTitle.get(key) ?? []).forEach((e, k) => {
+      const entry = entries[e]!;
+      let score = 0;
+      if (sameDescription(entry.description, page.lead)) score += 4;
+      if (endpoint && urlPath(entry.url).toLowerCase().split("/").pop() === endpoint) score += 8;
+      const words = urlWords(entry.url);
+      if (words.length > 0) {
+        score += words.reduce((s, w) => s + Math.min(count(body, w), 50) / 50, 0) / words.length;
+      }
+      candidates.push({ score, distance: Math.abs(rank - k), entry: e, page: p });
+    });
+  });
+
+  candidates.sort((a, b) => b.score - a.score || a.distance - b.distance || a.entry - b.entry);
+  const pageFor = new Map<number, number>();
+  const usedPages = new Set<number>();
+  for (const c of candidates) {
+    if (pageFor.has(c.entry) || usedPages.has(c.page)) continue;
+    pageFor.set(c.entry, c.page);
+    usedPages.add(c.page);
+  }
+
+  // A candidate that is not a sure header and found no entry was a `---` and a heading
+  // inside the page before it: put it back there.
+  const content = corpus.map((c) => c.content);
+  let host = -1;
+  let unmatchedPages = 0;
+  corpus.forEach((page, p) => {
+    if (usedPages.has(p) || page.header || host < 0) {
+      host = p;
+      if (!usedPages.has(p)) unmatchedPages++;
+      return;
+    }
+    content[host] += `\n\n---\n\n${content[p]}`;
+  });
+
+  const pages = entries.map((entry, i): DocPage => {
+    const p = pageFor.get(i);
+    return {
+      title: entry.title,
+      slug: slugOf(entry.url),
+      url: entry.url,
+      section: entry.section,
+      description: entry.description,
+      // An entry with no page keeps its description rather than borrowing another page's body.
+      content: p === undefined ? entry.description : content[p]!,
+    };
+  });
+
+  return { pages, unmatchedEntries: entries.length - pageFor.size, unmatchedPages };
 }
 
 function count(haystack: string, needle: string): number {

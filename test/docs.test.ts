@@ -3,22 +3,28 @@ import assert from "node:assert/strict";
 import { DocsIndex } from "../src/docs.ts";
 
 /**
- * Fixture mirroring the real shape of the docs site: an llms.txt index grouped by
- * `## Section`, and an llms-full.txt whose pages align positionally with it.
+ * Fixture in the shape of the live docs site: an llms.txt index grouped by `## Section`,
+ * and an llms-full.txt where each page is a `---` line, `# Title`, its description and
+ * the body. The two files are not in the same order, as on 13 October 2026.
  */
+const GENERIC = "Guides and API reference for integrating with Gravv.";
+
 const INDEX = `# Gravv
 
 > Integration guides for building with Gravv.
 
 ## Get Started
 
+- [Overview](https://docs.test/index.md): Integration guides for building with Gravv.
 - [Authentication](https://docs.test/getting-started/authentication.md): Authenticate requests with your Api-Key header.
 - [Idempotent requests](https://docs.test/getting-started/idempotent-requests.md): Safely retry a write without performing it twice.
 
 ## Developer Platform
 
-- [Create a wallet](https://docs.test/platform/wallets/create-a-wallet.md): Create a blockchain wallet for a customer.
+- [Create a wallet](https://docs.test/platform/wallets/create-a-wallet.md): ${GENERIC}
 - [Wallets](https://docs.test/platform/wallets/overview.md)
+- [Overview](https://docs.test/platform/collections/collections-overview.md): ${GENERIC}
+- [Overview](https://docs.test/platform/webhooks/webhooks-overview.md): ${GENERIC}
 
 ## Recipes
 
@@ -29,29 +35,83 @@ const INDEX = `# Gravv
 - [Create a wallet](https://docs.test/api-reference/wallets/post-v1-wallets.md): Create a new blockchain wallet for a customer on the specified network.
 `;
 
-const CORPUS = [
-  `# Gravv — Full Documentation`,
-  `# Authentication\n\nUse the Api-Key header on every request. Gravv derives the tenant from the key, so clients must not send an x-tenant-id header.`,
-  `# Idempotent requests\n\nAll authenticated POST requests require an Idempotency-Key. Reusing a key with a different payload returns 422 Unprocessable Entity.`,
-  `# Create a wallet\n\nCreate a wallet for a customer on polygon, stellar, ethereum or solana. Wallet provisioning is asynchronous; poll until an address appears.`,
-  `# Wallets\n\nWallets hold stablecoin balances on supported blockchain networks. Each wallet belongs to a customer.`,
-  `# Remit funds to a recipient\n\nThis recipe creates an external recipient, waits until the recipient is active, and transfers funds from a funded Gravv account.`,
-  `# Create a wallet\n\nPOST /v1/wallets. Body requires customer_id and network.`,
-].join("\n---\n");
+/** One llms-full.txt page: header (title and description), then the body. */
+function page(title: string, description: string, body: string): string {
+  return `\n# ${title}\n\n${description ? `${description}\n\n` : ""}${body}\n`;
+}
 
-function index() {
+/** The pages in index order. Bodies carry `---` the way real Markdown can. */
+const PAGES = [
+  page("Overview", "Integration guides for building with Gravv.", "Move money in stablecoins with one API."),
+  page(
+    "Authentication",
+    "Authenticate requests with your Api-Key header.",
+    "Use the Api-Key header on every request. Gravv derives the tenant from the key, so clients must not send an x-tenant-id header.",
+  ),
+  page(
+    "Idempotent requests",
+    "Safely retry a write without performing it twice.",
+    "All authenticated POST requests require an Idempotency-Key.\n\n---\n\n# Reusing a key\n\nReusing a key with a different payload returns 422 Unprocessable Entity.",
+  ),
+  page(
+    "Create a wallet",
+    GENERIC,
+    "Create a wallet for a customer on polygon, stellar, ethereum or solana. The address comes back at once.\n\n---\n\n# Overview\n\nThe wallet lifecycle starts at creation and ends when the wallet is archived.",
+  ),
+  page("Wallets", "", "Wallets hold stablecoin balances on supported blockchain networks. Each wallet belongs to a customer."),
+  page(
+    "Overview",
+    GENERIC,
+    "Collections accept payments from payers. A collection settles to the customer's wallet once the payer pays.",
+  ),
+  page("Overview", GENERIC, "Webhooks send an event to your endpoint when a resource changes. Verify each webhook signature."),
+  page(
+    "Remit funds to a recipient",
+    "Add an external recipient and transfer funds to them.",
+    "---\ntitle: Remit funds\n---\n\nThis recipe creates an external recipient, waits until the recipient is active, and transfers funds from a funded Gravv account.",
+  ),
+  page(
+    "Create a wallet",
+    "Create a new blockchain wallet for a customer on the specified network.",
+    `<Endpoint method="POST" path="/v1/wallets" />\n\nPOST /v1/wallets. Body requires customer_id and network.`,
+  ),
+];
+
+function corpus(order: number[] = PAGES.map((_, i) => i)): string {
+  return ["# Gravv — Full Documentation\n", ...order.map((i) => PAGES[i]!)].join("\n---\n");
+}
+
+/** The served order: the index's third page comes last, as the playground did on 13 October. */
+const CORPUS = corpus([0, 1, 3, 4, 5, 6, 7, 8, 2]);
+
+function index(corpusText = CORPUS, indexText = INDEX) {
   const fetchImpl = (async (url: any) => {
     const u = String(url);
-    if (u.endsWith("/llms.txt")) return new Response(INDEX, { status: 200 });
-    if (u.endsWith("/llms-full.txt")) return new Response(CORPUS, { status: 200 });
+    if (u.endsWith("/llms.txt")) return new Response(indexText, { status: 200 });
+    if (u.endsWith("/llms-full.txt")) return new Response(corpusText, { status: 200 });
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
   return new DocsIndex({ origin: "https://docs.test", fetchImpl });
 }
 
+/** Every indexed page, through the public API. */
+async function allPages(docs: DocsIndex) {
+  const slugs = [...INDEX.matchAll(/\(https:\/\/docs\.test\/(.+?)\.md\)/g)].map((m) => m[1]!);
+  return Promise.all(slugs.map(async (slug) => (await docs.getPage(slug))!));
+}
+
 describe("docs index", () => {
-  test("parses the index and corpus into aligned pages", async () => {
-    assert.equal(await index().pageCount(), 6);
+  test("pairs every index entry with its own page text", async () => {
+    assert.deepEqual(await index().stats(), { pages: 9, unmatchedEntries: 0, unmatchedPages: 0 });
+    const docs = index();
+    const lines = INDEX.split("\n").filter((l) => l.startsWith("- ["));
+    for (const line of lines) {
+      const slug = /\(https:\/\/docs\.test\/(.+)\.md\)/.exec(line)![1]!;
+      const p = await docs.getPage(slug);
+      assert.ok(p, slug);
+      // Every page has body text beyond its title and description.
+      assert.ok(p.content.length > `# ${p.title}\n\n${p.description}`.length + 20, `${slug} has no body`);
+    }
   });
 
   test("captures sections from the ## headings", async () => {
@@ -64,7 +124,65 @@ describe("docs index", () => {
     assert.ok(page);
     assert.equal(page.title, "Create a wallet");
     assert.equal(page.section, "Developer Platform");
-    assert.match(page.content, /asynchronous/);
+    assert.match(page.content, /comes back at once/);
+  });
+
+  test("tells same-titled pages apart by description, endpoint and URL", async () => {
+    const docs = index();
+    assert.match((await docs.getPage("index"))!.content, /one API/);
+    assert.match((await docs.getPage("platform/collections/collections-overview"))!.content, /payer pays/);
+    assert.match((await docs.getPage("platform/webhooks/webhooks-overview"))!.content, /webhook signature/);
+    assert.match((await docs.getPage("api-reference/wallets/post-v1-wallets"))!.content, /customer_id and network/);
+  });
+
+  test("a shuffled corpus gives every page the same text", async () => {
+    const reference = new Map<string, string>();
+    for (const p of await allPages(index())) reference.set(p.slug, p.content);
+
+    const shuffles = [
+      [8, 7, 6, 5, 4, 3, 2, 1, 0],
+      [6, 5, 0, 8, 1, 3, 7, 2, 4],
+      [5, 6, 3, 8, 2, 0, 4, 1, 7],
+      [2, 0, 1, 6, 5, 8, 3, 7, 4],
+    ];
+    for (const order of shuffles) {
+      const shuffled = await allPages(index(corpus(order)));
+      assert.equal(shuffled.length, reference.size);
+      for (const p of shuffled) assert.equal(p.content, reference.get(p.slug), `${p.slug} with order ${order}`);
+    }
+  });
+
+  test("a --- inside a page does not cut it short", async () => {
+    const docs = index();
+    const idem = (await docs.getPage("getting-started/idempotent-requests"))!;
+    assert.match(idem.content, /Idempotency-Key[\s\S]*---[\s\S]*422 Unprocessable Entity/);
+
+    // The rule is followed by a heading that is also a page title ("Overview").
+    const guide = (await docs.getPage("platform/wallets/create-a-wallet"))!;
+    assert.match(guide.content, /comes back at once[\s\S]*---\n\n# Overview\n\nThe wallet lifecycle/);
+
+    // Front matter inside a page.
+    const recipe = (await docs.getPage("recipes/remit-funds-to-a-recipient"))!;
+    assert.match(recipe.content, /title: Remit funds[\s\S]*waits until the recipient is active/);
+  });
+
+  test("an entry with no page keeps its description, and a page with no entry is counted", async () => {
+    const extraIndex = INDEX.replace(
+      "## Recipes\n",
+      "## Recipes\n\n- [Not published yet](https://docs.test/recipes/later.md): Coming soon.\n",
+    );
+    // A second page with a listed title and description has no entry left to pair with.
+    const extraCorpus = `${CORPUS}\n---\n${page("Authentication", "Authenticate requests with your Api-Key header.", "Old copy.")}`;
+    const docs = index(extraCorpus, extraIndex);
+    assert.deepEqual(await docs.stats(), { pages: 10, unmatchedEntries: 1, unmatchedPages: 1 });
+    assert.equal((await docs.getPage("recipes/later"))!.content, "Coming soon.");
+  });
+
+  test("a section under a title the index does not list stays with the page before it", async () => {
+    // It cannot be told from a `---` and a heading inside that page, so no text is lost.
+    const docs = index(`${CORPUS}\n---\n${page("Unlisted", "Not in the index.", "Trailing text.")}`);
+    assert.deepEqual(await docs.stats(), { pages: 9, unmatchedEntries: 0, unmatchedPages: 0 });
+    assert.match((await docs.getPage("getting-started/idempotent-requests"))!.content, /# Unlisted[\s\S]*Trailing text/);
   });
 });
 
