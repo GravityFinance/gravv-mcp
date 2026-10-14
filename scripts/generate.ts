@@ -164,8 +164,8 @@ interface Generated {
   /**
    * Path parameters that must ALSO appear in the body. The specs occasionally declare
    * the same identifier in both places — see PUT /v1/customers/{customer_id}, where the
-   * docs state the path value is cosmetic and the service reads the body one. We expose
-   * a single argument and write it to both.
+   * spec marks the body value required (the gateway overwrites it with the path value).
+   * We expose a single argument and write it to both.
    */
   alsoInBody: string[];
   movesMoney: boolean;

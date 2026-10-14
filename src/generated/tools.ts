@@ -308,7 +308,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Create a new internal account for a customer. For sandbox and testing integrations, we recommend using `polygon` as the `blockchain_network`.\n\nPREREQUISITE: the customer must exist and have completed KYC. Check getCustomerKycStatus first — an account cannot be opened for an unverified customer.",
+    "description": "Create an account — Create a new internal account for a customer. For sandbox and testing integrations, we recommend using `polygon` as the `blockchain_network`.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2258,7 +2258,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts",
-    "description": "Add an external account — Adds a new external account for transfers to accounts that are not created with Gravv. ## Async setup contract Registering an external account with our payment partners runs asynchronously. The response status code tells you the outcome: - **`200 OK`:** The external account is fully registered with at least one partner. The `status` field is `active`. You can initiate transfers immediately. - **`202 Accepted`:** the external account record is created and a background worker calls our partners. The `status` field is `pending`. To learn when it changes to `active`, either check the status by calling `GET /v1/external-accounts/{external_account_id}` until it is `active`, or subscribe to the `payee.setup.*` webhook events. - **`400 Bad Request`:** Input validation failed. Fix the input and retry. A duplicate POST with the same `account_number` (or `iban`), `currency`, and `payee_type` for the same customer is idempotent and returns the existing record.\n\nRETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
+    "description": "Add an external account — Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and mobile_money payees return HTTP 200 with status `active`. Track a pending payee with getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in data.payee_id.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3735,7 +3735,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Get a single external account — Retrieve details of a specific external account. Use this endpoint to check the `status` after a `202 Accepted` from `POST /v1/external-accounts`, calling it until the status changes to `active`.",
+    "description": "Get a single external account — Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is `active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with code ERROR_CODE_NOT_FOUND.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5162,7 +5162,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/process",
-    "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: processing may be handed to a background worker rather than completing inline. Do not assume the response is terminal — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "description": "Process account application — Process the submitted application with the relevant provider.\n\nASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5223,7 +5223,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5286,7 +5286,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit",
-    "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
+    "description": "Submit account application — Mark the application as submitted for provider processing.\n\nORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5316,7 +5316,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/{id}/submit-and-process",
-    "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: combines submit and process. May still complete in the background — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "description": "Submit and process application — Combine submission and processing into a single call.\n\nASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6459,14 +6459,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "put",
     "path": "/v1/customers/{customer_id}",
-    "description": "Update a customer — Update details of a specific customer. The path `customer_id` parameter is cosmetic — the service reads `customer_id` from the request body (marked required there). Only provided fields are updated.",
+    "description": "Update a customer — Update details of a customer. The customer is taken from the path customer_id; a customer_id in the body is overwritten by the path value. Only provided fields are updated.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Cosmetic path parameter — the service resolves the customer from `customer_id` in the request body, not this value."
+          "description": "Customer to update. Taken from the path; any body value is overwritten."
         },
         "first_name": {
           "type": "string",

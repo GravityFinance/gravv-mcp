@@ -61,7 +61,7 @@ describe("request building", () => {
 
   test("writes an identifier declared in both path and body to both places", () => {
     // PUT /v1/customers/{customer_id} declares customer_id in the path AND requires it
-    // in the body; the docs note the path value is cosmetic. One argument, two homes.
+    // in the body; the gateway uses the path value. One argument, two homes.
     const { fetchImpl } = stub([{ status: 200 }]);
     const { url, body } = client(fetchImpl).buildRequest(updateCustomer, {
       customer_id: "cus_1",
@@ -264,6 +264,8 @@ describe("hints distinguish malformed requests from state preconditions", () => 
     for (const msg of ["Customer has no KYC", "insufficient balance", "account is inactive"]) {
       const h = await hintFor(400, msg);
       assert.match(h, /state precondition/i, `wrong hint for "${msg}"`);
+      assert.match(h, /getCustomer\b/, `the KYC pointer must be getCustomer for "${msg}"`);
+      assert.doesNotMatch(h, /getCustomerKycStatus/);
       assert.doesNotMatch(h, /Idempotency-Key/, `must not blame idempotency for "${msg}"`);
     }
   });

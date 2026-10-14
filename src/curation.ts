@@ -339,6 +339,34 @@ export interface DescriptionOverride {
 }
 
 export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
+  // ---- customers -----------------------------------------------------------
+  updateCustomer: {
+    whileSpecSays: "Cosmetic path parameter",
+    description:
+      "Update details of a customer. The customer is taken from the path customer_id; a customer_id in the " +
+      "body is overwritten by the path value. Only provided fields are updated.",
+    params: { customer_id: "Customer to update. Taken from the path; any body value is overwritten." },
+  },
+
+  // ---- external accounts ---------------------------------------------------
+  createExternalAccount: {
+    whileSpecSays: "is idempotent and returns the existing",
+    description:
+      "Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and " +
+      "fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and " +
+      "mobile_money payees return HTTP 200 with status `active`. Track a pending payee with " +
+      "getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A " +
+      "duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in " +
+      "data.payee_id.",
+  },
+  getExternalAccount: {
+    whileSpecSays: "calling it until the status changes to",
+    description:
+      "Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is " +
+      "`active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with " +
+      "code ERROR_CODE_NOT_FOUND.",
+  },
+
   // ---- fx ------------------------------------------------------------------
   // The fx spec predates the current API: its request fields and the approval and
   // rate-lock claims are all out of date. The schemas stay as generated until the spec
@@ -462,22 +490,22 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have completed KYC. Check getCustomerKycStatus first — an account cannot be opened for an unverified customer.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
 
   createExternalAccount:
-    "RETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
+    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
     "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
 
   submitAccountApplication:
-    "ORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
+    "ORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
 
   processAccountApplication:
-    "ASYNC: processing may be handed to a background worker rather than completing inline. Do not assume the response is terminal — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "ASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
 
   submitAndProcessAccountApplication:
-    "ASYNC: combines submit and process. May still complete in the background — poll getAccountApplication until status is APPROVED or REJECTED.",
+    "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
     "ASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
@@ -506,7 +534,7 @@ export const PREREQUISITES: Record<string, string> = {
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Poll getCustomerKycStatus for the outcome — verification is asynchronous and driven by the provider.",
+    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
 
   uploadCustomerKycDocument:
     "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
