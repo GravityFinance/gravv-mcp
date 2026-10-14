@@ -43,7 +43,7 @@ export interface GeneratedTool {
 export const TOOLS: GeneratedTool[] = [
   {
     "name": "activateFeature",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
     "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.",
@@ -307,7 +307,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "checkFeatureEligibility",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/eligibility",
     "description": "Check feature eligibility — Lists the requirements a customer has met, and those still pending, for one feature. The call only reads data, but it is a POST and needs an Idempotency-Key. A repeated key returns the cached answer for 24 hours, so use a new key for each check. Every error is HTTP 400.",
@@ -5961,7 +5961,7 @@ export const TOOLS: GeneratedTool[] = [
   },
   {
     "name": "listFeatures",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "get",
     "path": "/v1/risk/features",
     "description": "List available features — Returns the feature catalogue. With `customer_id`, `activated` shows which features are active for that customer. The order is not fixed. Every error on this route is HTTP 400.",
@@ -6893,6 +6893,87 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": true,
     "sandboxOnly": true,
     "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "startCardholderKyc",
+    "toolset": "cards",
+    "method": "post",
+    "path": "/v1/risk/start-kyc",
+    "description": "Start KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer to verify. Other fields are ignored."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
+  },
+  {
+    "name": "startCardholderKycS2S",
+    "toolset": "cards",
+    "method": "post",
+    "path": "/v1/risk/start-kyc-s2s",
+    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer to verify. Upload the required documents for this customer first.",
+          "example": "aabe0a33-6716-42e2-bbca-7abf1a8bd91c"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
   },
   {
     "name": "startCustomerKyc",
@@ -8982,6 +9063,161 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "settlement-instructions.yaml"
+  },
+  {
+    "name": "uploadCardholderKycDocument",
+    "toolset": "cards",
+    "method": "post",
+    "path": "/v1/risk/upload-document",
+    "description": "Upload document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and sub-type again replaces the earlier file. Keep files under 5 MB.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer this document belongs to",
+          "example": "b84d9a52-2978-43e5-9b86-eac9839e1146"
+        },
+        "metadata": {
+          "type": "object",
+          "required": [
+            "idDocType",
+            "country"
+          ],
+          "properties": {
+            "idDocType": {
+              "type": "string",
+              "description": "Type of document, in lower case. Individual customers need a `selfie` plus one of `passport`, `id_card` or `drivers_license`. Business customers need one of `company_doc`, `registration_certificate` or `formation_document`. These names differ from the customer KYC upload; do not mix the two upload flows for one customer.",
+              "enum": [
+                "passport",
+                "id_card",
+                "drivers_license",
+                "selfie",
+                "residence_permit",
+                "utility_bill",
+                "bank_card",
+                "vehicle_registration_certificate",
+                "other",
+                "registration_certificate",
+                "company_doc",
+                "formation_document",
+                "ownership_document",
+                "proof_of_address",
+                "proof_of_address_document"
+              ],
+              "example": "passport"
+            },
+            "idDocSubType": {
+              "type": "string",
+              "description": "Which side of the document this is. Send the back of a card as a second upload with `BACK_SIDE`.",
+              "enum": [
+                "FRONT_SIDE",
+                "BACK_SIDE"
+              ],
+              "example": "FRONT_SIDE"
+            },
+            "country": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3,
+              "description": "Issuing country as an ISO 3166-1 alpha-3 code. Required for every type, including `selfie`.",
+              "example": "NGA"
+            },
+            "firstName": {
+              "type": "string",
+              "description": "First name as shown on the document",
+              "example": "John",
+              "maxLength": 100
+            },
+            "middleName": {
+              "type": "string",
+              "description": "Middle name as shown on the document",
+              "example": "Michael",
+              "maxLength": 100
+            },
+            "lastName": {
+              "type": "string",
+              "description": "Last name as shown on the document",
+              "example": "Doe",
+              "maxLength": 100
+            },
+            "issuedDate": {
+              "type": "string",
+              "format": "date",
+              "description": "Issue date as YYYY-MM-DD",
+              "example": "2020-01-15"
+            },
+            "validUntil": {
+              "type": "string",
+              "format": "date",
+              "description": "Expiry date as YYYY-MM-DD",
+              "example": "2030-01-15"
+            },
+            "number": {
+              "type": "string",
+              "description": "Document number",
+              "example": "A12345678",
+              "maxLength": 50
+            },
+            "dob": {
+              "type": "string",
+              "format": "date",
+              "description": "Date of birth as YYYY-MM-DD",
+              "example": "1990-05-20"
+            },
+            "placeOfBirth": {
+              "type": "string",
+              "description": "Place of birth as shown on the document",
+              "example": "New York, NY",
+              "maxLength": 100
+            }
+          }
+        },
+        "content": {
+          "type": "string",
+          "format": "byte",
+          "description": "The file as plain standard base64. The decoded file must be a JPEG, PNG or PDF. Keep files under 5 MB; larger files fail with a 400.",
+          "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        },
+        "filename": {
+          "type": "string",
+          "description": "Name of the file. It must end in `.jpg`, `.jpeg`, `.png` or `.pdf`, in any case.",
+          "example": "passport_front.jpg",
+          "maxLength": 255,
+          "pattern": "\\.([Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Pp][Dd][Ff])$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "metadata",
+        "content",
+        "filename"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "metadata",
+      "content",
+      "filename"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
   },
   {
     "name": "uploadCustomerKycDocument",

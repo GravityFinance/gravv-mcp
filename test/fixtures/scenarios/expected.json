@@ -207,10 +207,8 @@
     "tool": "createCustomer"
   },
   "S-CRD-01.5": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by startCustomerKyc (POST /v1/customers/kyc/start)."
-    ]
+    "outcome": "ok",
+    "tool": "startCardholderKyc"
   },
   "S-CRD-01.6": {
     "outcome": "ok",
@@ -245,16 +243,12 @@
     "tool": "getCard"
   },
   "S-CRD-02.1": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document)."
-    ]
+    "outcome": "ok",
+    "tool": "uploadCardholderKycDocument"
   },
   "S-CRD-02.2": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s)."
-    ]
+    "outcome": "ok",
+    "tool": "startCardholderKycS2S"
   },
   "S-CRD-03.1": {
     "outcome": "ok",

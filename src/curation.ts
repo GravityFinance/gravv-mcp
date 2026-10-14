@@ -45,7 +45,6 @@ export const TOOLSETS = [
   "fx",
   "collections",
   "kyc",
-  "features",
   "webhooks",
   "sandbox",
 ] as const;
@@ -60,6 +59,16 @@ export type Toolset = (typeof TOOLSETS)[number];
 export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
   approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
   "payment-links": "payment links are retired from the Gravv API",
+};
+
+/**
+ * Toolset names merged into another toolset. A saved configuration that names one loads
+ * the toolset it moved to, with a warning, so it keeps the tools it had.
+ */
+export const MOVED_TOOLSETS: Readonly<Record<string, Toolset>> = {
+  // The feature tools are the card issuance flow (activateFeature with virtual_cards),
+  // and card KYC lives with cards too.
+  features: "cards",
 };
 
 /** Toolsets that load only when named, or with --toolsets=all. */
@@ -106,7 +115,10 @@ export function parseToolsets(
 
   const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
   const bad = requested.filter(
-    (t) => !(TOOLSETS as readonly string[]).includes(t) && !Object.hasOwn(RETIRED_TOOLSETS, t),
+    (t) =>
+      !(TOOLSETS as readonly string[]).includes(t) &&
+      !Object.hasOwn(RETIRED_TOOLSETS, t) &&
+      !Object.hasOwn(MOVED_TOOLSETS, t),
   );
   if (bad.length) throw new UnknownToolsetError(bad);
 
@@ -116,7 +128,13 @@ export function parseToolsets(
       warn(`toolset "${t}" was removed in 0.3.2 (${RETIRED_TOOLSETS[t]}); ignoring it.`);
       continue;
     }
-    kept.push(t as Toolset);
+    if (Object.hasOwn(MOVED_TOOLSETS, t)) {
+      const to = MOVED_TOOLSETS[t]!;
+      warn(`toolset "${t}" was merged into "${to}" in 0.4.0; loading "${to}" instead.`);
+      if (!kept.includes(to)) kept.push(to);
+      continue;
+    }
+    if (!kept.includes(t as Toolset)) kept.push(t as Toolset);
   }
   if (kept.length === 0 && requested.length > 0) {
     warn("no API toolsets left to load; starting with the documentation tools only.");
@@ -223,6 +241,15 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/cards/applications/new": { name: "createCardApplication", toolset: "cards" },
   "GET /v1/cards/applications": { name: "listCardApplications", toolset: "cards" },
   "GET /v1/cards/applications/{application_id}": { name: "getCardApplication", toolset: "cards" },
+  // Card KYC: verification of a cardholder for card issuance, separate from customer KYC
+  // (kyc toolset). Names follow the spec operationIds.
+  "POST /v1/risk/start-kyc": { name: "startCardholderKyc", toolset: "cards" },
+  "POST /v1/risk/start-kyc-s2s": { name: "startCardholderKycS2S", toolset: "cards" },
+  "POST /v1/risk/upload-document": { name: "uploadCardholderKycDocument", toolset: "cards" },
+  // The feature routes are how a card is issued in live (activateFeature, virtual_cards).
+  "GET /v1/risk/features": { name: "listFeatures", toolset: "cards" },
+  "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "cards" },
+  "POST /v1/risk/features/activate": { name: "activateFeature", toolset: "cards" },
 
   // ---- wallets -------------------------------------------------------------
   "POST /v1/wallets": { name: "createWallet", toolset: "wallets" },
@@ -255,11 +282,6 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/collections/cards/{card_id}": { name: "getSavedCard", toolset: "collections" },
   "DELETE /v1/collections/cards/{card_id}": { name: "deleteSavedCard", toolset: "collections" },
 
-  // ---- features ------------------------------------------------------------
-  "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
-  "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "features" },
-  "POST /v1/risk/features/activate": { name: "activateFeature", toolset: "features" },
-
   // ---- sandbox -------------------------------------------------------------
   // Test-only routes. Default on, but each is hidden unless the key is a sandbox key
   // (SANDBOX_ONLY), so a live server never advertises them.
@@ -280,10 +302,6 @@ export const NAMES: Record<string, Op> = {
  *    use the client-side decryption flow documented under
  *    platform/cards/view-card-sensitive-details/.
  *
- *  - Superseded KYC. /v1/risk/* is replaced by /v1/customers/kyc/*. Exposing both
- *    gives the model two plausible paths for the same job and it will sometimes pick
- *    the deprecated one.
- *
  *  - Retired. Payment links are no longer part of the Gravv API, and the docs Phase 3
  *    sync removed their specification. The entries stay as the written record, so a
  *    caller who asks for them is told why they are gone.
@@ -299,10 +317,6 @@ export const BLOCKED: Record<string, string> = {
     "Returns the encrypted card PIN. Use the client-side decryption flow instead.",
   "PUT /v1/cards/{card_id}/pin":
     "Sets a card PIN, which requires handling cardholder data. Not exposed over MCP.",
-  "POST /v1/risk/start-kyc": "Superseded by startCustomerKyc (POST /v1/customers/kyc/start).",
-  "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
-  "POST /v1/risk/upload-document":
-    "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
   "POST /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
@@ -394,9 +408,12 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardPin:
     "Not available over MCP: returns the encrypted card PIN. Use the client-side decryption flow.",
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
-  startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
-  startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
-  uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
+  startRiskKyc:
+    "Renamed: POST /v1/risk/start-kyc is card KYC for a cardholder, now the tool startCardholderKyc. For a customer's own KYC use startCustomerKyc.",
+  startRiskKycS2S:
+    "Renamed: POST /v1/risk/start-kyc-s2s is now startCardholderKycS2S (card KYC). For a customer's own KYC use startCustomerKycS2S.",
+  uploadRiskDocument:
+    "Renamed: POST /v1/risk/upload-document is now uploadCardholderKycDocument (card KYC). For a customer's own KYC use uploadCustomerKycDocument.",
   createPaymentLink:
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
   listPaymentLinks:
@@ -622,6 +639,16 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   },
   uploadCustomerKycDocument: { lookup: "getCustomerKycDocuments" },
   activateFeature: { lookup: "listFeatures, and read the feature's status" },
+  startCardholderKyc: {
+    lookup: "getCustomer, and read the kyc status; do not start it again in a loop, as each start is billed",
+  },
+  startCardholderKycS2S: {
+    lookup: "getCustomer, and read the kyc status; do not start it again in a loop, as each start is billed",
+  },
+  uploadCardholderKycDocument: {
+    lookup:
+      "no tool lists card KYC documents, so resend with the same key, which returns the first upload's answer if it landed",
+  },
   simulateDeposit: {
     lookup:
       "listTransactions with account_id set to the account (newest first), and look for the test deposit; each new key makes a new deposit",

@@ -5,6 +5,7 @@ import {
   CONFIRM_OPS,
   DEFAULT_TOOLSETS,
   MONEY_OPS,
+  MOVED_TOOLSETS,
   OUTCOME_LOOKUPS,
   RETIRED_TOOLSETS,
   TOOLSETS,
@@ -88,6 +89,36 @@ describe("toolsets", () => {
     assert.match(warnings[0]!, /payment-links/);
   });
 
+  test("a moved name loads the toolset it moved to, with a warning", () => {
+    const warnings: string[] = [];
+    assert.deepEqual(parseToolsets("features,customers", (m) => warnings.push(m)), ["cards", "customers"]);
+    assert.match(warnings[0]!, /"features" was merged into "cards"/);
+    assert.deepEqual(parseToolsets("cards,features"), ["cards"], "named once even when both are given");
+    for (const [from, to] of Object.entries(MOVED_TOOLSETS)) {
+      assert.equal((TOOLSETS as readonly string[]).includes(from), false, `${from} is not a toolset any more`);
+      assert.ok((TOOLSETS as readonly string[]).includes(to), `${to} must be a toolset`);
+    }
+  });
+
+  test("card KYC and the feature tools are in cards", () => {
+    for (const name of [
+      "startCardholderKyc",
+      "startCardholderKycS2S",
+      "uploadCardholderKycDocument",
+      "listFeatures",
+      "checkFeatureEligibility",
+      "activateFeature",
+    ]) {
+      assert.equal(TOOLS_BY_NAME.get(name)?.toolset, "cards", name);
+    }
+  });
+
+  test("the old card KYC names point at the new ones", () => {
+    assert.match(BLOCKED_TOOL_NAMES.startRiskKyc!, /startCardholderKyc\b/);
+    assert.match(BLOCKED_TOOL_NAMES.startRiskKycS2S!, /startCardholderKycS2S/);
+    assert.match(BLOCKED_TOOL_NAMES.uploadRiskDocument!, /uploadCardholderKycDocument/);
+  });
+
   test("only retired names leave no API toolsets, rather than widening to the defaults", () => {
     const warnings: string[] = [];
     assert.deepEqual(parseToolsets("approvals", (m) => warnings.push(m)), []);
@@ -136,7 +167,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 30);
+    assert.equal(keyed.length, 33);
   });
 
   test("the exempt POSTs do not offer it", () => {
