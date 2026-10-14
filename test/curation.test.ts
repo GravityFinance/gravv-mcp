@@ -39,7 +39,6 @@ const REMOVED = [
   "deletePaymentLink",
   "updatePaymentLinkStatus",
   "getPublicPaymentLink",
-  "deleteSavedCard",
 ];
 
 describe("removed tools", () => {
@@ -127,6 +126,7 @@ const CONFIRMED: Record<string, { route: string; why: string }> = {
   deleteAccountApplication: { route: "DELETE /v1/accounts/applications/{id}", why: "cannot be restored" },
   activateFeature: { route: "POST /v1/risk/features/activate", why: "can issue a card; no deactivate route" },
   deleteSettlementInstruction: { route: "DELETE /v1/settlement-instructions/{id}", why: "cannot be restored" },
+  deleteSavedCard: { route: "DELETE /v1/collections/cards/{card_id}", why: "cannot be restored" },
 };
 
 describe("idempotency_key argument", () => {

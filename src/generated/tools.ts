@@ -4001,6 +4001,58 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts.yaml"
   },
   {
+    "name": "deleteSavedCard",
+    "toolset": "collections",
+    "method": "delete",
+    "path": "/v1/collections/cards/{card_id}",
+    "description": "Delete saved card — Removes a saved card. Send the owner's `customer_id` and the `card_token` in the body: the card deleted is the one named by `card_token`, not by the path. A request without a body fails with `EOF`. A token that matches no active card returns `card already deleted`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "description": "The saved card `id`. It does not choose the card."
+        },
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The card owner's customer ID",
+          "example": "f827e428-c497-4b21-8855-99d978909c28"
+        },
+        "card_token": {
+          "type": "string",
+          "description": "Token of the card to delete",
+          "example": "tokn_80aebb6ea2594a74bc"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        }
+      },
+      "required": [
+        "card_id",
+        "customer_id",
+        "card_token"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "card_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "card_token"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": true,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "collections.yaml"
+  },
+  {
     "name": "deleteSettlementInstruction",
     "toolset": "fx",
     "method": "delete",
@@ -8564,6 +8616,285 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "customers.yaml"
+  },
+  {
+    "name": "updateExternalAccount",
+    "toolset": "external-accounts",
+    "method": "patch",
+    "path": "/v1/external-accounts/{external_account_id}",
+    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202; get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its state; add a new one instead. This route needs no Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "external_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the external account"
+        },
+        "account_name": {
+          "type": "string",
+          "description": "Cannot be cleared"
+        },
+        "account_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iban": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "routing_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "institution_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "account_owner_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "individual",
+            "business",
+            null
+          ]
+        },
+        "institution_country_iso_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payment_rail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ach",
+            "wire",
+            "rtp",
+            null
+          ]
+        },
+        "bank_account_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "checking",
+            "savings",
+            null
+          ]
+        },
+        "bank_address_line_1": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_city": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_postal_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_country": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_financial_institution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_routing_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_address1": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_address2": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_city": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_zip_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_country": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "address_line1": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 34,
+              "example": "350 Fifth Avenue"
+            },
+            "address_line2": {
+              "type": "string",
+              "maxLength": 35
+            },
+            "house_building_number": {
+              "type": "string",
+              "maxLength": 35
+            },
+            "city": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "New York"
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "NY"
+            },
+            "postal_code": {
+              "type": "string",
+              "description": "Checked against the country's postal code format",
+              "example": "10118"
+            },
+            "country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            }
+          },
+          "required": [],
+          "description": "A new address needs `address_line1`, `city` and `country`. It cannot be cleared."
+        },
+        "national_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "national_id_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pix_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "external_account_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "external_account_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "account_name",
+      "account_number",
+      "iban",
+      "bic",
+      "routing_number",
+      "bank_name",
+      "institution_id",
+      "account_owner_type",
+      "institution_country_iso_code",
+      "payment_rail",
+      "bank_account_type",
+      "bank_address_line_1",
+      "bank_city",
+      "bank_state",
+      "bank_postal_code",
+      "bank_country",
+      "intermediary_financial_institution",
+      "intermediary_bank_routing_number",
+      "intermediary_bank_address1",
+      "intermediary_bank_address2",
+      "intermediary_bank_city",
+      "intermediary_bank_state",
+      "intermediary_bank_zip_code",
+      "intermediary_bank_country",
+      "address",
+      "national_id",
+      "national_id_type",
+      "pix_key"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "external-accounts.yaml"
   },
   {
     "name": "updateSettlementInstruction",

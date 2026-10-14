@@ -117,6 +117,19 @@ describe("request building", () => {
     assert.equal("confirm" in (body as object), false, "confirm is an MCP concern, not an API field");
   });
 
+  test("deleteSavedCard sends customer_id and card_token in the DELETE body", async () => {
+    const { calls, fetchImpl } = stub([{ status: 200, body: { data: { success: true }, error: null } }]);
+    await client(fetchImpl).call(TOOLS_BY_NAME.get("deleteSavedCard")!, {
+      card_id: "card_1",
+      customer_id: "cus_1",
+      card_token: "tokn_1",
+      confirm: true,
+    });
+    assert.equal(calls[0]!.method, "DELETE");
+    assert.ok(calls[0]!.url.endsWith("/v1/collections/cards/card_1"));
+    assert.deepEqual(calls[0]!.body, { customer_id: "cus_1", card_token: "tokn_1" });
+  });
+
   test("a new settlement instruction's currency is sent in upper case; the list filter is not", () => {
     const { fetchImpl } = stub([{ status: 200 }]);
     const c = client(fetchImpl);

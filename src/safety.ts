@@ -281,6 +281,11 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
         `If it can go ahead, the payout is released and cannot be reversed from the API.`
       );
     }
+    case "deleteSavedCard":
+      return (
+        `Remove the saved card with token ${text(b.card_token) ?? "(unspecified)"} for customer ` +
+        `${text(b.customer_id) ?? "(unspecified)"}. The token chooses the card, not card_id. This cannot be undone.`
+      );
     case "deleteSettlementInstruction":
       return (
         `Delete settlement instruction ${text(args.id) ?? "(unspecified)"}. It cannot be read, used or restored ` +

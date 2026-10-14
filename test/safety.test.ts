@@ -191,6 +191,13 @@ describe("confirm-only gating", () => {
     assert.match(result!.willDo, /Delete settlement instruction si_1\. .*no default/);
   });
 
+  test("a saved-card delete names the token, which is what chooses the card", () => {
+    const tool = TOOLS_BY_NAME.get("deleteSavedCard")!;
+    const body = { customer_id: "cus_1", card_token: "tokn_1" };
+    const result = gate().check(tool, { card_id: "card_1", ...body }, { method: "DELETE", path: tool.path, body });
+    assert.match(result!.willDo, /token tokn_1 for customer cus_1\. The token chooses the card/);
+  });
+
   test("feature activation names the feature and the customer", () => {
     const body = { customer_id: "cus_1", feature_id: "virtual_cards" };
     const result = gate().check(activate, body, { method: "POST", path: "/v1/risk/features/activate", body });

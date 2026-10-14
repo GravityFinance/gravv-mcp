@@ -1101,7 +1101,8 @@
     "tool": "getExternalAccount"
   },
   "S-PAY-09.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
   },
   "S-PAY-10.1": {
     "outcome": "ok",
@@ -1336,7 +1337,8 @@
     "tool": "createExternalAccount"
   },
   "S-REM-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
   },
   "S-REM-06.3": {
     "outcome": "ok",
@@ -1687,10 +1689,8 @@
     "tool": "listSavedCards"
   },
   "S-COL-05.3": {
-    "outcome": "blocked",
-    "problems": [
-      "The API needs customer_id and card_token in a JSON body, and the vendored spec declares none, so every call would fail with EOF."
-    ]
+    "outcome": "ok",
+    "tool": "deleteSavedCard"
   },
   "S-COL-06.1": {
     "outcome": "ok",

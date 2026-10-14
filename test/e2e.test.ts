@@ -223,7 +223,6 @@ describe("end-to-end over MCP stdio", () => {
         "approveTransfer",
         "searchWebhookIngestion",
         "createPaymentLink",
-        "deleteSavedCard",
       ]) {
         assert.ok(!names.includes(blocked), `${blocked} must never appear, even with --toolsets=all`);
       }
