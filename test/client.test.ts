@@ -19,7 +19,7 @@ function stub(responses: Array<{ status: number; body?: unknown; headers?: Recor
     calls.push({
       url: String(url),
       method: init.method,
-      headers: init.headers,
+      headers: { ...init.headers }, // a copy: the client may change a header between attempts
       body: init.body ? JSON.parse(init.body) : undefined,
       raw: init.body,
     });
@@ -327,6 +327,69 @@ describe("retries", () => {
     const { calls, fetchImpl } = stub([{ status: 409, body: { error: "still running" } }]);
     await assert.rejects(client(fetchImpl).call(createCustomer, { body: {} }));
     assert.equal(calls.length, 3);
+  });
+
+  test("a rate-limited POST is retried under a new key", async () => {
+    waits = [];
+    const { calls, fetchImpl } = stub([
+      { status: 429, body: { data: null, error: "Too many request" } },
+      { status: 200, body: { data: { ok: true } } },
+    ]);
+    const res = await client(fetchImpl).call(createCustomer, { body: {} });
+    assert.equal(calls.length, 2);
+    const [first, second] = calls.map((c) => c.headers["Idempotency-Key"]);
+    assert.ok(first && second);
+    assert.notEqual(first, second, "the 429 is stored under the first key, so a same-key retry gets it back");
+    assert.equal(res.idempotencyKey, second, "the result names the key that ran");
+    assert.equal(res.retriedWithNewKey, true);
+    assert.deepEqual(waits, [6000], "the limiter sends no Retry-After, so the default wait applies");
+  });
+
+  test("a caller's key that gets a 429 is not swapped or retried", async () => {
+    const { calls, fetchImpl } = stub([{ status: 429, body: { data: null, error: "Too many request" } }]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }, { idempotencyKey: "mine" }),
+      (e: GravvApiError) =>
+        e.status === 429 && /Look the result up first/.test(e.hint ?? "") && /without idempotency_key/.test(e.hint ?? ""),
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.headers["Idempotency-Key"], "mine");
+  });
+
+  test("a 429 a service sent is not retried on a keyed POST", async () => {
+    for (const idempotencyKey of [undefined, "mine"]) {
+      const { calls, fetchImpl } = stub([{ status: 429, body: { data: null, error: "quota exhausted" } }]);
+      await assert.rejects(
+        client(fetchImpl).call(createCustomer, { body: {} }, { idempotencyKey }),
+        (e: GravvApiError) =>
+          e.status === 429 &&
+          /after it reached it/.test(e.hint ?? "") &&
+          /Look the result up first/.test(e.hint ?? "") &&
+          !/Rate limited by the gateway/.test(e.hint ?? ""),
+      );
+      assert.equal(calls.length, 1);
+    }
+  });
+
+  test("a POST that stays rate limited says it already retried with a new key", async () => {
+    const { calls, fetchImpl } = stub([{ status: 429, body: { data: null, error: "Too many request" } }]);
+    await assert.rejects(
+      client(fetchImpl).call(createCustomer, { body: {} }),
+      (e: GravvApiError) => /already retried with a new key/.test(e.hint ?? ""),
+    );
+    assert.equal(calls.length, 3);
+    assert.equal(new Set(calls.map((c) => c.headers["Idempotency-Key"])).size, 3);
+  });
+
+  test("a rate-limited GET is retried, with no key", async () => {
+    const { calls, fetchImpl } = stub([
+      { status: 429, body: { data: null, error: "Too many request" } },
+      { status: 200, body: { data: {} } },
+    ]);
+    const res = await client(fetchImpl).call(getAccount, { account_id: "a" });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1]!.headers["Idempotency-Key"], undefined);
+    assert.equal(res.retriedWithNewKey, false);
   });
 
   test("does not retry a 400 — the request is wrong, not unlucky", async () => {

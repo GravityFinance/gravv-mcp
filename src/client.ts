@@ -111,6 +111,11 @@ export interface CallResult {
   idempotencyKey?: string;
   /** True when the gateway replayed a stored response rather than re-executing. */
   replayed: boolean;
+  /**
+   * True when the gateway's rate limiter refused an earlier attempt and this server
+   * retried under a new key. The refused attempts did not run.
+   */
+  retriedWithNewKey: boolean;
   status: number;
 }
 
@@ -211,6 +216,10 @@ export class GravvClient {
       idempotencyKey = opts.idempotencyKey ?? randomUUID();
       headers["Idempotency-Key"] = idempotencyKey;
     }
+    // A key the caller passed may still guard a first call whose outcome is unknown, so
+    // it is never swapped for another.
+    const keySupplied = idempotencyKey !== undefined && opts.idempotencyKey !== undefined;
+    let retriedWithNewKey = false;
     if (body !== undefined) headers["Content-Type"] = "application/json";
 
     // 409 means an identical request is still in flight; the gateway asks for a 1s
@@ -254,7 +263,7 @@ export class GravvClient {
       if (res.ok) {
         // Every gateway response is wrapped as { data, error }.
         const data = parsed && typeof parsed === "object" && "data" in parsed ? parsed.data : parsed;
-        return { data, idempotencyKey, replayed, status: res.status };
+        return { data, idempotencyKey, replayed, retriedWithNewKey, status: res.status };
       }
 
       const apiMessage = extractErrorMessage(parsed, res.statusText);
@@ -266,14 +275,26 @@ export class GravvClient {
         continue;
       }
 
-      if (res.status === 429 && attempt < maxAttempts) {
+      // The idempotency middleware runs before the rate limiter, so the limiter's 429 is
+      // stored under its key for 24 hours and a same-key retry only gets it back. That 429
+      // also proves the request never ran, so a key this server made is swapped for a new
+      // one. A caller's key is not: it may guard a first call whose outcome is unknown. A
+      // 429 that a service sent after the request reached it proves nothing, so a keyed
+      // call is not retried then.
+      const rateLimited = res.status === 429 && attempt < maxAttempts;
+      if (rateLimited && (idempotencyKey === undefined || (!keySupplied && isGatewayRateLimit(apiMessage)))) {
         const retryAfter = Number(res.headers.get("Retry-After") ?? 6);
         await this.sleep(Math.max(1, retryAfter) * 1000);
         lastError = new GravvApiError(String(apiMessage), 429, parsed);
+        if (idempotencyKey !== undefined) {
+          idempotencyKey = randomUUID();
+          headers["Idempotency-Key"] = idempotencyKey;
+          retriedWithNewKey = true;
+        }
         continue;
       }
 
-      let hint = hintFor(res.status, tool, apiMessage, parsed);
+      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied });
       if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
         hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
       }
@@ -352,6 +373,44 @@ function errorCode(body: unknown): string | undefined {
   return typeof b.code === "string" && b.code ? b.code : undefined;
 }
 
+/**
+ * The gateway rate limiter's own 429 (`{"data":null,"error":"Too many request"}`). It
+ * answers before the request reaches any service. A service can also answer 429, after
+ * the request reached it.
+ */
+function isGatewayRateLimit(message: string): boolean {
+  return /too many request/i.test(message);
+}
+
+/**
+ * Where to look to learn whether a call took effect, for hints that say "look it up
+ * first".
+ */
+function lookupFor(_tool: GeneratedTool): string {
+  return "the matching get or list tool";
+}
+
+/** Extra facts about the call that change what a hint should say. */
+export interface HintContext {
+  /** The caller passed the idempotency key; this server did not make it. */
+  keySupplied?: boolean;
+}
+
+const RATE_LIMITED =
+  "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
+
+function hint429(tool: GeneratedTool, message: string, ctx: HintContext): string {
+  if (!tool.needsIdempotency) return RATE_LIMITED;
+  const lookUp = `Look the result up first (${lookupFor(tool)}); if nothing landed, call again without idempotency_key.`;
+  if (!isGatewayRateLimit(message)) {
+    return `The service refused this call with a 429 after it reached it, and that answer is kept for 24 hours under its key. ${lookUp}`;
+  }
+  if (ctx.keySupplied) {
+    return `${RATE_LIMITED} The earlier call under this idempotency_key left no stored answer, so the key no longer protects against a double send, and this 429 is now kept under it. ${lookUp}`;
+  }
+  return `${RATE_LIMITED} This server already retried with a new key.`;
+}
+
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
 const LIMIT_CODES = new Set([
   "ERROR_CODE_LIMIT_EXCEEDED",
@@ -393,6 +452,7 @@ export function hintFor(
   tool: GeneratedTool,
   message = "",
   body: unknown = null,
+  ctx: HintContext = {},
 ): string | undefined {
   const mentionsIdempotency = /idempotenc/i.test(message);
 
@@ -428,7 +488,7 @@ export function hintFor(
     case 422:
       return hint422(errorCode(body));
     case 429:
-      return "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
+      return hint429(tool, message, ctx);
     default:
       return undefined;
   }

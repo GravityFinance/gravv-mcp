@@ -329,6 +329,8 @@ export function createServer(config: ServerConfig) {
       if (result.replayed) {
         payload.note =
           "This response was replayed from a previous identical request rather than re-executed. No new operation was performed.";
+      } else if (result.retriedWithNewKey) {
+        payload.note = "Rate limited first; retried with a new key. The earlier attempts did not run.";
       }
 
       return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
