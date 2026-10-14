@@ -19,22 +19,33 @@ export type Method = "get" | "post" | "put" | "patch" | "delete";
 /** `GET /v1/accounts` — the key format used throughout this file. */
 export const opKey = (method: string, path: string) => `${method.toUpperCase()} ${path}`;
 
-export type Toolset =
-  | "customers"
-  | "accounts"
-  | "account-applications"
-  | "approvals"
-  | "transfers"
-  | "transactions"
-  | "external-accounts"
-  | "cards"
-  | "wallets"
-  | "fx"
-  | "collections"
-  | "payment-links"
-  | "kyc"
-  | "features"
-  | "webhooks";
+/**
+ * Every toolset name, in the order the CLI help lists them. The `Toolset` type, the CLI's
+ * list of valid names and the default set are all derived from this one list, so a name
+ * cannot be added or retired in one place and forgotten in another.
+ */
+export const TOOLSETS = [
+  "customers",
+  "accounts",
+  "account-applications",
+  "approvals",
+  "transfers",
+  "transactions",
+  "external-accounts",
+  "cards",
+  "wallets",
+  "fx",
+  "collections",
+  "payment-links",
+  "kyc",
+  "features",
+  "webhooks",
+] as const;
+
+export type Toolset = (typeof TOOLSETS)[number];
+
+/** Toolsets that load only when named, or with --toolsets=all. */
+export const OPT_IN_TOOLSETS: ReadonlySet<Toolset> = new Set<Toolset>(["account-applications"]);
 
 /**
  * Loaded when the operator passes no --toolsets flag: everything except
@@ -49,22 +60,30 @@ export type Toolset =
  * Account onboarding is a deliberate, infrequent flow; `--toolsets=all` or
  * `--toolsets=account-applications` turns it on when it is actually needed.
  */
-export const DEFAULT_TOOLSETS: Toolset[] = [
-  "customers",
-  "accounts",
-  "transfers",
-  "transactions",
-  "external-accounts",
-  "kyc",
-  "cards",
-  "wallets",
-  "fx",
-  "collections",
-  "payment-links",
-  "features",
-  "webhooks",
-  "approvals",
-];
+export const DEFAULT_TOOLSETS: Toolset[] = TOOLSETS.filter((t) => !OPT_IN_TOOLSETS.has(t));
+
+/** Raised for a --toolsets / GRAVV_TOOLSETS name that is not a toolset. */
+export class UnknownToolsetError extends Error {
+  constructor(names: string[]) {
+    super(`unknown toolset(s): ${names.join(", ")}\nAvailable: ${TOOLSETS.join(", ")}`);
+    this.name = "UnknownToolsetError";
+  }
+}
+
+/**
+ * Parse a --toolsets / GRAVV_TOOLSETS value. No value means the default set; "all" means
+ * every toolset. An unknown name throws, so a typo fails loudly instead of silently
+ * loading less than was asked for.
+ */
+export function parseToolsets(raw: string | undefined): Toolset[] | "all" {
+  if (!raw) return DEFAULT_TOOLSETS;
+  if (raw === "all") return "all";
+
+  const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const bad = requested.filter((t) => !(TOOLSETS as readonly string[]).includes(t));
+  if (bad.length) throw new UnknownToolsetError(bad);
+  return requested as Toolset[];
+}
 
 interface Op {
   name: string;

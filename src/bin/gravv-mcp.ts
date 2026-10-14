@@ -8,25 +8,9 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
-import { DEFAULT_TOOLSETS, type Toolset } from "../curation.ts";
+import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 
-const VALID_TOOLSETS: Toolset[] = [
-  "customers",
-  "accounts",
-  "account-applications",
-  "approvals",
-  "transfers",
-  "transactions",
-  "external-accounts",
-  "cards",
-  "wallets",
-  "fx",
-  "collections",
-  "payment-links",
-  "kyc",
-  "features",
-  "webhooks",
-];
+const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
 
 function usage(): string {
   return `gravv-mcp — MCP server for the Gravv payments API
@@ -69,22 +53,13 @@ async function main() {
   // so an agent can learn the API during evaluation before credentials exist.
   const apiKey = process.env.GRAVV_API_KEY || undefined;
 
-  const raw = arg("toolsets") ?? process.env.GRAVV_TOOLSETS;
   let toolsets: Toolset[] | "all";
-  if (!raw) {
-    toolsets = DEFAULT_TOOLSETS;
-  } else if (raw === "all") {
-    toolsets = "all";
-  } else {
-    const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
-    const bad = requested.filter((t) => !VALID_TOOLSETS.includes(t as Toolset));
-    if (bad.length) {
-      process.stderr.write(
-        `error: unknown toolset(s): ${bad.join(", ")}\nAvailable: ${VALID_TOOLSETS.join(", ")}\n`,
-      );
-      process.exit(1);
-    }
-    toolsets = requested as Toolset[];
+  try {
+    toolsets = parseToolsets(arg("toolsets") ?? process.env.GRAVV_TOOLSETS);
+  } catch (err) {
+    if (!(err instanceof UnknownToolsetError)) throw err;
+    process.stderr.write(`error: ${err.message}\n`);
+    process.exit(1);
   }
 
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");
