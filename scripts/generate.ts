@@ -107,24 +107,39 @@ function deref(node: any, doc: Json, seen: Set<string> = new Set(), depth = 0): 
   for (const [k, v] of Object.entries(node)) out[k] = deref(v, doc, seen, depth + 1);
 
   // allOf is composition — merge the branches into the parent so the model sees one
-  // flat object rather than a construct most MCP clients ignore.
+  // flat schema rather than a construct most MCP clients ignore. The merged node takes
+  // its type from the branches: a scalar wrapped in allOf (a string enum $ref with a
+  // sibling description) must stay a string, not become an object with an enum.
   if (Array.isArray(out.allOf)) {
-    const merged: Json = { type: "object", properties: {}, required: [] as string[] };
+    const merged: Json = {};
+    const props: Json = {};
+    const req: string[] = [];
+    let hasProps = false;
     for (const branch of out.allOf) {
       if (branch?.type && !merged.type) merged.type = branch.type;
-      Object.assign(merged.properties, branch?.properties ?? {});
-      if (Array.isArray(branch?.required)) merged.required.push(...branch.required);
+      if (branch?.properties) {
+        hasProps = true;
+        Object.assign(props, branch.properties);
+      }
+      if (Array.isArray(branch?.required)) req.push(...branch.required);
       for (const [k, v] of Object.entries(branch ?? {})) {
         if (!["properties", "required", "type", "allOf"].includes(k) && !(k in merged)) merged[k] = v;
       }
     }
     delete out.allOf;
-    const { properties = {}, required = [], ...rest } = out;
+    const { properties, required, ...rest } = out;
+    const allRequired = [...new Set([...req, ...(Array.isArray(required) ? required : [])])];
+    const { type, ...others } = merged;
+    if (!hasProps && !properties && (type ?? rest.type) !== "object") {
+      // A scalar or array: keep its own type, with no object keywords added.
+      return { ...(type ? { type } : {}), ...others, ...rest, ...(allRequired.length ? { required: allRequired } : {}) };
+    }
     return {
-      ...merged,
+      type: type ?? "object",
+      properties: { ...props, ...(properties ?? {}) },
+      required: allRequired,
+      ...others,
       ...rest,
-      properties: { ...merged.properties, ...properties },
-      required: [...new Set([...merged.required, ...required])],
     };
   }
 

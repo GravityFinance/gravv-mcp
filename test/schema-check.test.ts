@@ -102,6 +102,21 @@ describe("tool schemas", () => {
     }
   });
 
+  test("no enum sits on an object type", () => {
+    // The generator once merged allOf into `type: object` whatever the branches said, so a
+    // string enum reached through allOf (a $ref with a sibling description) asked for an
+    // object. A value the API reads as a string would then fail any validating client.
+    const walk = (node: unknown, at: string): string[] => {
+      if (node === null || typeof node !== "object") return [];
+      if (Array.isArray(node)) return node.flatMap((n, i) => walk(n, `${at}[${i}]`));
+      const n = node as Record<string, unknown>;
+      const own = n.type === "object" && Array.isArray(n.enum) ? [at] : [];
+      return [...own, ...Object.entries(n).flatMap(([k, v]) => walk(v, `${at}.${k}`))];
+    };
+    const found = [...TOOLS, ...MANUAL_TOOLS].flatMap((tool) => walk(tool.inputSchema, tool.name));
+    assert.deepEqual(found, []);
+  });
+
   test("only the known pattern is outside ECMAScript", () => {
     // JSON Schema patterns are ECMAScript regular expressions. The KYC upload spec writes
     // an inline (?i) flag, which a validating client cannot compile. It is pinned here so
