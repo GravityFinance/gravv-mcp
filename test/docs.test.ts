@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { DocsIndex, slugFromUrl } from "../src/docs.ts";
+import { DEFAULT_DOCS_ORIGIN, DocsIndex, parseDocsOrigin, slugFromUrl } from "../src/docs.ts";
 import { createServer } from "../src/server.ts";
 
 /**
@@ -218,6 +218,35 @@ describe("slugs", () => {
   test("a page can be fetched by its full docs URL", async () => {
     const page = await index().getPage("https://docs.test/recipes/remit-funds-to-a-recipient.md");
     assert.equal(page?.title, "Remit funds to a recipient");
+  });
+});
+
+describe("docs origin", () => {
+  test("accepts an http or https URL and drops trailing slashes", () => {
+    assert.equal(parseDocsOrigin("https://docs.example/"), "https://docs.example");
+    assert.equal(parseDocsOrigin(" https://example.com/docs// "), "https://example.com/docs");
+    assert.equal(parseDocsOrigin("http://127.0.0.1:8080"), "http://127.0.0.1:8080");
+    assert.equal(parseDocsOrigin(DEFAULT_DOCS_ORIGIN), DEFAULT_DOCS_ORIGIN);
+  });
+
+  test("refuses what is not a docs origin", () => {
+    for (const bad of ["docs.example", "ftp://docs.example", "https://docs.example/?v=1", "https://docs.example/#top", "https://u:p@docs.example"]) {
+      assert.throws(() => parseDocsOrigin(bad), /docs origin/, bad);
+    }
+  });
+
+  test("the index reads llms.txt and llms-full.txt under the origin's path", async () => {
+    const asked: string[] = [];
+    const docs = new DocsIndex({
+      origin: "https://example.com/docs",
+      fetchImpl: (async (url: any) => {
+        asked.push(String(url));
+        const moved = INDEX.replaceAll("https://docs.test/", "https://example.com/docs/");
+        return new Response(String(url).endsWith("/llms.txt") ? moved : CORPUS, { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    assert.equal((await docs.getPage("platform/wallets/overview"))?.title, "Wallets");
+    assert.deepEqual(asked.sort(), ["https://example.com/docs/llms-full.txt", "https://example.com/docs/llms.txt"]);
   });
 });
 

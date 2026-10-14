@@ -9,11 +9,29 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** A one-page docs site in the shape of the live llms.txt and llms-full.txt. */
+const docsIndex = (port: number) => `# Gravv
+
+## Guides
+
+- [Stub guide](http://127.0.0.1:${port}/docs/guides/stub-guide.md): A page only the stub docs site has.
+`;
+const DOCS_CORPUS = `# Gravv — Full Documentation
+
+---
+
+# Stub guide
+
+A page only the stub docs site has.
+
+Zebracorn payouts settle on the stub docs site.
+`;
 
 let gateway: Server;
 let gatewayPort: number;
@@ -30,6 +48,13 @@ before(async () => {
         headers: req.headers as any,
         body: raw ? JSON.parse(raw) : undefined,
       });
+
+      // A docs site under /docs, for --docs-origin. The docs need no key.
+      if (req.url === "/docs/llms.txt" || req.url === "/docs/llms-full.txt") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end(req.url.endsWith("full.txt") ? DOCS_CORPUS : docsIndex(gatewayPort));
+        return;
+      }
 
       // Reject anything missing the auth header, the way the gateway would.
       if (req.headers["api-key"] !== "grvSec_sandbox_e2e") {
@@ -481,6 +506,59 @@ describe("end-to-end over MCP stdio", () => {
       assert.match(mcp.stderr, /warning: This is a publishable key/);
     } finally {
       mcp.kill();
+    }
+  });
+
+  test("--docs-origin points the documentation tools at another docs site", async () => {
+    const origin = `http://127.0.0.1:${gatewayPort}/docs`;
+    const mcp = new McpProcess([`--docs-origin=${origin}/`], { GRAVV_API_KEY: "" });
+    try {
+      await mcp.initialize();
+      assert.match(mcp.stderr, new RegExp(`docs=${origin}\\n`));
+
+      const search = JSON.parse(textOf(await mcp.request("tools/call", { name: "searchGravvDocs", arguments: { query: "zebracorn" } })));
+      assert.equal(search.results[0].slug, "guides/stub-guide");
+      assert.equal(search.results[0].section, "Guides");
+
+      const page = textOf(await mcp.request("tools/call", { name: "getGravvDocPage", arguments: { slug: "guides/stub-guide" } }));
+      assert.match(page, /Zebracorn payouts/);
+
+      const unknown = await mcp.request("tools/call", { name: "searchGravvDocs", arguments: { query: "zebracorn", section: "Home" } });
+      assert.equal(unknown.result.isError, true);
+      assert.match(textOf(unknown), /The sections are: Guides\./);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("GRAVV_DOCS_ORIGIN does the same, and docs links follow it", async () => {
+    const origin = `http://127.0.0.1:${gatewayPort}/docs`;
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+      GRAVV_DOCS_ORIGIN: origin,
+    });
+    try {
+      await mcp.initialize();
+      const search = JSON.parse(textOf(await mcp.request("tools/call", { name: "searchGravvDocs", arguments: { query: "zebracorn" } })));
+      assert.equal(search.results[0].slug, "guides/stub-guide");
+
+      const blocked = textOf(await mcp.request("tools/call", { name: "getCardSensitiveDetails", arguments: {} }));
+      assert.match(blocked, new RegExp(`see ${origin}/platform/cards/view-card-sensitive-details/overview`));
+      assert.doesNotMatch(blocked, /syntext/);
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a docs origin that is not a URL stops the server with the reason", () => {
+    for (const bad of ["not-a-url", "ftp://docs.example", "https://docs.example/?q=1"]) {
+      const run = spawnSync(
+        process.execPath,
+        ["--experimental-strip-types", join(root, "src", "bin", "gravv-mcp.ts"), `--docs-origin=${bad}`],
+        { env: { ...process.env, GRAVV_API_KEY: "" }, input: "", encoding: "utf8", timeout: 15_000 },
+      );
+      assert.equal(run.status, 1, bad);
+      assert.match(run.stderr, /error: docs origin/, bad);
     }
   });
 

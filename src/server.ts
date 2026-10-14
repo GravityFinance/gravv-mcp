@@ -17,7 +17,7 @@ import {
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
-import { DocsIndex } from "./docs.ts";
+import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -295,7 +295,8 @@ export function createServer(config: ServerConfig) {
       // Three distinct reasons a name can miss, and the model should stop retrying for
       // different reasons in each case.
       const blocked = BLOCKED_TOOL_NAMES[name];
-      if (blocked) return errorResult(`${name}: ${blocked}`);
+      // Docs links follow GRAVV_DOCS_ORIGIN, as the doc search does.
+      if (blocked) return errorResult(`${name}: ${blocked.replaceAll(DEFAULT_DOCS_ORIGIN, docs.origin)}`);
 
       const known = TOOLS_BY_NAME.get(name);
       if (known) {

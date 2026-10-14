@@ -21,7 +21,39 @@
  * evaluation.
  */
 
-const DOCS_ORIGIN = "https://gravv-docs.syntext.dev";
+/**
+ * Where the docs are published today. GRAVV_DOCS_ORIGIN or --docs-origin overrides it,
+ * so a move of the docs site needs no code change, and the docs links the server hands
+ * out are built from this one value.
+ */
+export const DEFAULT_DOCS_ORIGIN = "https://gravv-docs.syntext.dev";
+
+export class InvalidDocsOriginError extends Error {
+  constructor(raw: string, why: string) {
+    super(`docs origin "${raw}" ${why}. Give the docs site's address, such as ${DEFAULT_DOCS_ORIGIN}.`);
+    this.name = "InvalidDocsOriginError";
+  }
+}
+
+/**
+ * Check a docs origin from the command line or the environment: an http or https URL,
+ * optionally with a path, and nothing after it. Returns it without trailing slashes.
+ */
+export function parseDocsOrigin(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new InvalidDocsOriginError(raw, "is not a URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new InvalidDocsOriginError(raw, "must start with https:// (or http://)");
+  }
+  if (url.search || url.hash || url.username || url.password) {
+    throw new InvalidDocsOriginError(raw, "must not carry a query, a fragment or credentials");
+  }
+  return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+}
 
 /** Refetch interval. Docs change on their own cadence; an hour keeps a long-running server current. */
 const CACHE_TTL_MS = 60 * 60 * 1000;
@@ -198,12 +230,13 @@ export class DocsIndex {
   private refreshError: string | null = null;
   private retryAt = 0;
   private inflight: Promise<void> | null = null;
-  private readonly origin: string;
+  /** The docs site this index reads, without a trailing slash. */
+  readonly origin: string;
   private readonly doFetch: typeof fetch;
   private readonly now: () => number;
 
   constructor(opts: { origin?: string; fetchImpl?: typeof fetch; now?: () => number } = {}) {
-    this.origin = (opts.origin ?? DOCS_ORIGIN).replace(/\/+$/, "");
+    this.origin = (opts.origin ?? DEFAULT_DOCS_ORIGIN).replace(/\/+$/, "");
     this.doFetch = opts.fetchImpl ?? fetch;
     this.now = opts.now ?? Date.now;
   }

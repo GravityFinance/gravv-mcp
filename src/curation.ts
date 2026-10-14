@@ -15,6 +15,14 @@
  *   5. OUTCOME_LOOKUPS — where to look when a write's outcome is unknown
  */
 
+import { DEFAULT_DOCS_ORIGIN } from "./docs.ts";
+
+/**
+ * Docs links are built from the one origin, so a move of the docs site changes one value.
+ * The server swaps in GRAVV_DOCS_ORIGIN, when set, before it hands the text out.
+ */
+const SENSITIVE_DETAILS_GUIDE = `${DEFAULT_DOCS_ORIGIN}/platform/cards/view-card-sensitive-details/overview`;
+
 export type Method = "get" | "post" | "put" | "patch" | "delete";
 
 /** `GET /v1/accounts` — the key format used throughout this file. */
@@ -259,7 +267,7 @@ export const NAMES: Record<string, Op> = {
  */
 export const BLOCKED: Record<string, string> = {
   "GET /v1/cards/{card_id}/sensitive-details":
-    "Returns card PAN and CVV. Use the client-side decryption flow instead: https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview",
+    `Returns card PAN and CVV. Use the client-side decryption flow instead: ${SENSITIVE_DETAILS_GUIDE}`,
   "GET /v1/cards/{card_id}/pin":
     "Returns the encrypted card PIN. Use the client-side decryption flow instead.",
   "PUT /v1/cards/{card_id}/pin":
@@ -452,7 +460,7 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
  */
 export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardSensitiveDetails:
-    "Not available over MCP: this returns the card PAN and CVV, which must not enter a model's context. Merchants retrieve these client-side with their own key pair — see https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview",
+    `Not available over MCP: this returns the card PAN and CVV, which must not enter a model's context. Merchants retrieve these client-side with their own key pair — see ${SENSITIVE_DETAILS_GUIDE}`,
   getCardPin:
     "Not available over MCP: returns the encrypted card PIN. Use the client-side decryption flow.",
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
