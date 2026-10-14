@@ -441,6 +441,18 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
       "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
   },
 
+  // ---- cards ---------------------------------------------------------------
+  // The card account is the business's own, one for every cardholder, and leaving it out
+  // fails with an internal error (gap-check card-account-trace.md §3).
+  activateFeature: {
+    whileSpecSays: "Leave it out to use the customer's card account.",
+    params: {
+      "provider_data.account_id":
+        "Your business's active card account, the same for every cardholder: listAccounts with account_type card " +
+        "and status active. Always send it.",
+    },
+  },
+
   // ---- collections ---------------------------------------------------------
   // The route takes card methods, but this tool offers bank_transfer only
   // (ENUM_RESTRICTIONS), so the card sentences describe a call the tool cannot make.
@@ -592,7 +604,7 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. After a failed call, fix the request and leave idempotency_key out.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account is your business's own, one for all its cards: type card, currency USD, under the business's own customer id; it is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
 
   updateAccountStatus:
     "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
@@ -625,10 +637,10 @@ export const PREREQUISITES: Record<string, string> = {
     "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
   createExternalAccount:
-    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
+    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
 
   uploadTransferDocument:
     "Upload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB): the server reads it and fills content, file_name and content_type.",
@@ -670,7 +682,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
   createCardApplication:
-    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
 
   createCard:
     "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
@@ -700,16 +712,16 @@ export const PREREQUISITES: Record<string, string> = {
     "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
 
   createCardPaymentIntent:
-    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
+    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. client_reference must be unique across collections and payment intents. MOVES MONEY: requires confirm: true.",
 
   createCollection:
-    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.",
+    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals. client_reference must be unique across collections and payment intents.",
 
   chargeSavedCard:
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
+    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
 
   uploadCustomerKycDocument:
     "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; keep sandbox files under about 500 KB) in place of base64 content.",
@@ -718,7 +730,7 @@ export const PREREQUISITES: Record<string, string> = {
     "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
 
   startCustomerKycS2S:
-    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
+    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
 
   getWebhookHistory:
     "Use an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
