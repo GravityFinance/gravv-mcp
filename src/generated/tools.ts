@@ -28,10 +28,16 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
-  /** Requires confirm: true, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
+  /** The route rejects unknown body fields: undeclared arguments are not passed through. */
+  closedBody: boolean;
+  /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
+  /** Requires confirm: true (every money-moving tool, and the irreversible ones). */
+  needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
+  /** Works only with a sandbox key: hidden and refused on any other. */
+  sandboxOnly: boolean;
   /** Source spec filename, for traceability. */
   spec: string;
 }
@@ -39,22 +45,22 @@ export interface GeneratedTool {
 export const TOOLS: GeneratedTool[] = [
   {
     "name": "activateFeature",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
-    "description": "Activate a feature — Activate a specific feature for a customer. You must provide the feature_id and any required provider_data as specified in the feature's requirements.",
+    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the customer activating the feature",
+          "description": "ID of the customer",
           "example": "302dabcb-d4fd-4a00-a80b-afad70982614"
         },
         "feature_id": {
           "type": "string",
-          "description": "ID of the feature to activate",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -65,10 +71,61 @@ export const TOOLS: GeneratedTool[] = [
           ],
           "example": "virtual_cards"
         },
+        "activated_by": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Optional ID of the user who made the request. An invalid value is ignored."
+        },
         "provider_data": {
           "type": "object",
-          "description": "Additional data required by the feature provider",
+          "description": "Data the feature needs. Only `virtual_cards` reads it today; it is required for that feature. Send numbers as JSON numbers.",
+          "properties": {
+            "annual_remuneration": {
+              "type": "number",
+              "minimum": 1000,
+              "description": "Cardholder's yearly income. Required for `virtual_cards`.",
+              "example": 12000
+            },
+            "estimated_monthly_limit": {
+              "type": "number",
+              "minimum": 1,
+              "description": "Expected monthly card spend. Required for `virtual_cards`. When a card is issued during activation, it also becomes that card's daily limit.",
+              "example": 200
+            },
+            "account_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Always send it for `virtual_cards`: the id of your business's card account (type `card`, status `active`). The same card account backs every cardholder. Leaving it out fails with `cards service: internal server error`.",
+              "example": "5d9e677f-f071-4881-a861-7cdcebacd9d5"
+            },
+            "funding": {
+              "type": "object",
+              "description": "How the card is funded",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "shared",
+                    "own"
+                  ]
+                },
+                "card_group_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Only with `mode` `shared`"
+                }
+              }
+            },
+            "ip_address": {
+              "type": "string",
+              "description": "Replaced by the IP address of the calling server when one is present. You do not need to send it."
+            }
+          },
           "additionalProperties": true
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         },
         "idempotency_key": {
           "type": "string",
@@ -90,11 +147,15 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [
       "customer_id",
       "feature_id",
+      "activated_by",
       "provider_data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -102,13 +163,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders/{order_id}/cancel",
-    "description": "Cancel order — Cancels an order that hasn't executed yet. Orders that are already in a final state, or in a state that doesn't allow cancellation, can't be cancelled. The `Idempotency-Key` header is required; requests without it are rejected.\n\nOnly an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
+    "description": "Cancel an order — Cancels a `waiting_approval` or `pending` order whose debit is not in progress. Cancelling does not return money that was already debited; contact support for that. The request has no body.\n\nOnly an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "order_id": {
           "type": "string",
-          "description": "The order reference returned when the order was created."
+          "format": "uuid",
+          "description": "The `order_id` returned when the order was created"
         },
         "confirm": {
           "type": "boolean",
@@ -134,8 +196,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -143,10 +208,20 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents/charge",
-    "description": "Charge card — Charges a saved card token. Use this for server-to-server charges when you already hold a card token — for example, for recurring or merchant-initiated transactions. Billing fields are optional. Any field you omit falls back to the customer record on file. Fields you provide take precedence and are saved to the resulting charge record.\n\nMOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
+    "description": "Charge card — Charges a saved card against an open payment intent, server to server. Use it for repeat charges after the payer saved a card. The card must be saved under the intent's `client_customer_id`. A saved card can be charged at most 5 times in 24 hours, and each charge can be at most 3 times the card's first payment. A declined charge returns HTTP 400 with a sentence such as `The card has insufficient funds: payment declined`.\n\nMOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "payment_intent_id": {
+          "type": "string",
+          "description": "The `intent_id`, with its `pi_` prefix",
+          "example": "pi_429f578b-675a-4b68-abe3-856cd976257f"
+        },
+        "card_token": {
+          "type": "string",
+          "description": "A saved card token, saved under the intent's `client_customer_id`",
+          "example": "tokn_80aebb6ea2594a74bc"
+        },
         "first_name": {
           "type": "string",
           "example": "Jane"
@@ -167,7 +242,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "date_of_birth": {
           "type": "string",
-          "description": "Accepts YYYY-MM-DD",
+          "description": "`YYYY-MM-DD`, `MM/DD/YYYY` or `DD/MM/YYYY`",
           "example": "1990-05-12"
         },
         "billing_address1": {
@@ -184,20 +259,13 @@ export const TOOLS: GeneratedTool[] = [
         },
         "billing_zip": {
           "type": "string",
+          "description": "Checked against the billing country",
           "example": "94105"
         },
         "billing_country": {
           "type": "string",
           "description": "ISO 3166-1 alpha-2",
           "example": "US"
-        },
-        "payment_intent_id": {
-          "type": "string",
-          "example": "pi_429f578b-..."
-        },
-        "card_token": {
-          "type": "string",
-          "example": "tokn_80aebb6ea2594a74bc215a64"
         },
         "confirm": {
           "type": "boolean",
@@ -221,6 +289,8 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
+      "payment_intent_id",
+      "card_token",
       "first_name",
       "last_name",
       "email",
@@ -230,28 +300,28 @@ export const TOOLS: GeneratedTool[] = [
       "billing_city",
       "billing_state",
       "billing_zip",
-      "billing_country",
-      "payment_intent_id",
-      "card_token"
+      "billing_country"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
     "name": "checkFeatureEligibility",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/eligibility",
-    "description": "Check feature eligibility — Check if a customer is eligible for a specific feature and get the list of requirements",
+    "description": "Check feature eligibility — Lists the requirements a customer has met, and those still pending, for one feature. The call only reads data, but it is a POST and needs an Idempotency-Key. A repeated key returns the cached answer for 24 hours, so use a new key for each check. Every error is HTTP 400.\n\nThe provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "feature_id": {
           "type": "string",
-          "description": "The unique identifier of the feature to check eligibility for",
-          "example": "virtual_cards",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -259,11 +329,13 @@ export const TOOLS: GeneratedTool[] = [
             "usd_account",
             "gbp_account",
             "international_transfers"
-          ]
+          ],
+          "example": "virtual_cards"
         },
         "customer_id": {
           "type": "string",
-          "description": "The customer ID to check eligibility for",
+          "format": "uuid",
+          "description": "ID of the customer",
           "example": "5793f1ea-91f0-4892-9705-d37e0592dd3a"
         },
         "idempotency_key": {
@@ -288,8 +360,11 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -334,8 +409,11 @@ export const TOOLS: GeneratedTool[] = [
       "agreement_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -343,28 +421,54 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Create a new internal account for a customer. For sandbox and testing integrations, we recommend using `polygon` as the `blockchain_network`.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
+    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers use the account application flow instead. Your business opens its one card account here, with its own customer id; it starts `pending`. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "currency": {
-          "type": "string",
-          "description": "Currency code for the account",
+          "description": "Currency code. Each bank supports fewer currencies than this list: `lead_bank` USD, EUR, GBP, MXN and BRL; `cross_river_bank` USD; `nigerian_bank` NGN. Call `GET /v1/accounts/capabilities` first. For a `non_custodial` (wallet-only) account any non-empty label, such as `USDC`, is accepted and stored as written.",
           "example": "USD",
-          "enum": [
-            "USD",
-            "EUR",
-            "MXN",
-            "NGN"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "USD",
+                "CAD",
+                "MXN",
+                "EUR",
+                "GBP",
+                "CHF",
+                "NGN",
+                "KES",
+                "ZAR",
+                "GHS",
+                "UGX",
+                "TZS",
+                "EGP",
+                "XOF",
+                "XAF",
+                "BRL"
+              ]
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Any label, for `type` `non_custodial` only"
+            }
           ]
         },
         "type": {
           "type": "string",
-          "description": "Type of account",
+          "description": "Type of account. `card`, `auto_sweep` and `default` are only for your business's own accounts: send your own customer id (the `customer_id` on an account whose `category` is `main`). An end customer's id is refused. One `card` account backs every card you issue, and a business can hold only one.",
           "example": "regular",
           "enum": [
             "regular",
-            "savings"
+            "savings",
+            "collection",
+            "non_custodial",
+            "card",
+            "auto_sweep",
+            "default"
           ]
         },
         "label": {
@@ -381,19 +485,38 @@ export const TOOLS: GeneratedTool[] = [
         },
         "blockchain_network": {
           "type": "string",
-          "description": "Blockchain network for the account",
+          "description": "Network of the account's wallet, in lower case. `lead_bank` takes arbitrum, avalanche_c_chain, base, celo, ethereum, optimism, polygon, solana, stellar, tempo and tron. `cross_river_bank` takes polygon, ethereum, solana, base, bsc, flow_evm, canton and tron. NGN accounts always use polygon. Only polygon, ethereum, base, solana and stellar work end to end today, so prefer those.",
           "example": "polygon",
           "enum": [
             "polygon",
-            "stellar",
             "ethereum",
+            "base",
             "solana",
-            "avalanche"
+            "stellar",
+            "arbitrum",
+            "avalanche_c_chain",
+            "celo",
+            "optimism",
+            "tempo",
+            "tron",
+            "bsc",
+            "flow_evm",
+            "canton"
           ]
+        },
+        "bank": {
+          "type": "string",
+          "description": "Bank to open the account with. Leave it out to let Gravv choose the first bank that supports the currency, network and type.",
+          "enum": [
+            "lead_bank",
+            "cross_river_bank",
+            "nigerian_bank"
+          ],
+          "example": "lead_bank"
         },
         "wallet_address": {
           "type": "string",
-          "description": "Blockchain wallet address to associate with the account.",
+          "description": "An existing wallet of yours on `blockchain_network`. Leave it out to create a new wallet.",
           "example": "0xf73bdd069dc31aa8f334b177b175936ba98237a2"
         },
         "idempotency_key": {
@@ -422,11 +545,15 @@ export const TOOLS: GeneratedTool[] = [
       "label",
       "customer_id",
       "blockchain_network",
+      "bank",
       "wallet_address"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -455,10 +582,10 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
+          "description": "Application data including KYC information and account configuration.",
           "required": [
             "account_type",
-            "currency",
-            "blockchain_network"
+            "currency"
           ],
           "properties": {
             "individual": {
@@ -558,6 +685,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -589,14 +717,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -678,6 +799,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -746,6 +913,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -777,17 +945,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -819,17 +981,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -861,14 +1017,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -967,6 +1116,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -998,14 +1148,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -1087,6 +1230,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -1175,6 +1364,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -1206,14 +1396,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -1384,6 +1567,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },
@@ -1391,9 +1594,12 @@ export const TOOLS: GeneratedTool[] = [
               "type": "string",
               "enum": [
                 "regular",
-                "savings"
+                "savings",
+                "card",
+                "auto_sweep",
+                "collection"
               ],
-              "description": "Kind of account to open (for example, regular or savings). This is the account type, not the customer type. Use the top-level application_type field for individual vs business.",
+              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -1403,18 +1609,18 @@ export const TOOLS: GeneratedTool[] = [
             },
             "blockchain_network": {
               "type": "string",
-              "description": "Blockchain network to back the account (for example, polygon or stellar).",
+              "description": "Network of the account's wallet, in lower case. Required by every bank that issues a wallet, which is most of them. Use `polygon` for sandbox testing.",
               "example": "polygon"
             },
             "wallet_address": {
               "type": "string",
-              "description": "Blockchain wallet address to associate with the account.",
+              "description": "Address of an existing wallet of yours on `blockchain_network`. Send it together with `wallet_id`, or send neither.",
               "example": "0xf73bdd069dc31aa8f334b177b175936ba98237a2"
             },
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "UUID of an existing Gravv wallet to link to the account.",
+              "description": "ID of an existing wallet of yours. Send it together with `wallet_address`, or send neither.",
               "example": "123e4567-e89b-12d3-a456-426614174000"
             },
             "label": {
@@ -1424,12 +1630,12 @@ export const TOOLS: GeneratedTool[] = [
             },
             "agreement_id": {
               "type": "string",
-              "description": "ID of the provider agreement associated with this application.",
+              "description": "ID of the signed terms of service agreement. Set it while the application is `draft` or `rejected`, or use the terms of service route while it is `draft`.",
               "example": "agr_123"
             },
             "tos_link": {
               "type": "string",
-              "description": "URL to the terms of service the applicant must accept.",
+              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
@@ -1440,8 +1646,7 @@ export const TOOLS: GeneratedTool[] = [
                 "source": "web"
               }
             }
-          },
-          "description": "Application data including KYC information and account configuration."
+          }
         },
         "idempotency_key": {
           "type": "string",
@@ -1467,46 +1672,383 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
-    "name": "createCard",
-    "toolset": "cards",
+    "name": "createAccountV2",
+    "toolset": "accounts",
     "method": "post",
-    "path": "/v1/cards",
-    "description": "Create card — Create a new card for a customer.",
+    "path": "/v2/accounts",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the customer to create a card for",
+          "description": "An existing customer whose KYC is completed. It is checked before every other field.",
+          "example": "0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33"
+        },
+        "customer_type": {
+          "type": "string",
+          "description": "`individual` or `business`. Always send it: bank choice and routing use the value you send. Defaults to the customer's profile type.",
+          "enum": [
+            "individual",
+            "business"
+          ],
+          "example": "individual"
+        },
+        "account_type": {
+          "type": "string",
+          "description": "Account type from the capabilities, such as `operating`, `yield` or `revenue`. Defaults to `operating`.",
+          "example": "operating"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "Three-letter ISO 4217 code",
+          "example": "USD"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main",
+          "description": "Defaults to `multi_currency` for NGN and `main` for other currencies."
+        },
+        "label": {
+          "type": "string",
+          "description": "Your label for the account, at most 255 bytes",
+          "example": "Jane USD"
+        },
+        "bank_code": {
+          "type": "string",
+          "description": "A `bank_code` from `GET /v1/accounts/capabilities`. Leave it out to use the highest-priority bank that fits.",
+          "example": "cross_river_bank"
+        },
+        "network": {
+          "type": "string",
+          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`; refused otherwise. It must be one of the bank's `token_options`. Prefer polygon, ethereum, base or solana, which work end to end.",
+          "enum": [
+            "stellar",
+            "polygon",
+            "ethereum",
+            "base",
+            "solana",
+            "avalanche_c_chain",
+            "sui",
+            "tron",
+            "bsc",
+            "flow_evm",
+            "canton",
+            "bitcoin",
+            "celo",
+            "gnosis",
+            "arbitrum",
+            "optimism",
+            "xdc",
+            "tempo"
+          ],
+          "example": "polygon"
+        },
+        "wallet_id": {
+          "type": "string",
+          "description": "An existing wallet of yours to use instead of `network`. Send one, not both."
+        },
+        "account_structure": {
+          "type": "string",
+          "description": "For banks that offer FBO accounts only",
+          "enum": [
+            "fbo_account",
+            "subledger"
+          ]
+        },
+        "parent_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The FBO account, with `account_structure` `subledger`"
+        },
+        "data": {
+          "type": "object",
+          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`. Fields the customer record already answers are filled in for you.",
+          "properties": {
+            "root": {
+              "type": "object",
+              "description": "Applicant fields for an individual, or business fields for a business. Include `citizenship_country` or `incorporation_country`, which routing reads. Do not put `network` or `wallet_id` here.",
+              "additionalProperties": true
+            },
+            "parties": {
+              "type": "array",
+              "description": "Business only; refused for individuals. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record.",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "ID of an associated person on the customer record"
+                  },
+                  "documents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "ID of a document already on file"
+                        },
+                        "document_type": {
+                          "type": "string",
+                          "description": "Type of a new document. Required with `content`.",
+                          "enum": [
+                            "national_id",
+                            "passport",
+                            "drivers_license",
+                            "permanent_resident_card",
+                            "employment_authorization",
+                            "other",
+                            "proof_of_address",
+                            "selfie_photo",
+                            "tax_form_w8ben",
+                            "signed_terms_document",
+                            "articles_of_incorporation",
+                            "ownership_document",
+                            "control_structure",
+                            "compliance_document",
+                            "tax_id_letter",
+                            "bank_statement",
+                            "source_of_funds",
+                            "denial_explanation_letter",
+                            "regulatory_action_explanation"
+                          ],
+                          "example": "passport"
+                        },
+                        "document_type_side": {
+                          "type": "string",
+                          "description": "Which side, for identity documents sent one side at a time",
+                          "enum": [
+                            "front",
+                            "back"
+                          ],
+                          "default": "front"
+                        },
+                        "document_subtype": {
+                          "type": "string",
+                          "description": "Optional sub-type"
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "The file as standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB decoded.",
+                          "example": "<base64>"
+                        },
+                        "filename": {
+                          "type": "string",
+                          "example": "passport.jpg"
+                        },
+                        "issuing_country": {
+                          "type": "string",
+                          "description": "Issuing country as an alpha-2 code. Required for every type except `selfie_photo`.",
+                          "example": "GB"
+                        },
+                        "number": {
+                          "type": "string",
+                          "description": "Document number. Required for identity documents.",
+                          "example": "123456789"
+                        },
+                        "issued_date": {
+                          "type": "string",
+                          "description": "Issue date as YYYY-MM-DD. Required for identity documents.",
+                          "example": "2020-01-15"
+                        },
+                        "expiration_date": {
+                          "type": "string",
+                          "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
+                          "example": "2030-01-14"
+                        },
+                        "file_path": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "documents": {
+              "type": "array",
+              "description": "Root documents. When you send none, documents on the customer record are used.",
+              "items": {
+                "type": "object",
+                "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "ID of a document already on file"
+                  },
+                  "document_type": {
+                    "type": "string",
+                    "description": "Type of a new document. Required with `content`.",
+                    "enum": [
+                      "national_id",
+                      "passport",
+                      "drivers_license",
+                      "permanent_resident_card",
+                      "employment_authorization",
+                      "other",
+                      "proof_of_address",
+                      "selfie_photo",
+                      "tax_form_w8ben",
+                      "signed_terms_document",
+                      "articles_of_incorporation",
+                      "ownership_document",
+                      "control_structure",
+                      "compliance_document",
+                      "tax_id_letter",
+                      "bank_statement",
+                      "source_of_funds",
+                      "denial_explanation_letter",
+                      "regulatory_action_explanation"
+                    ],
+                    "example": "passport"
+                  },
+                  "document_type_side": {
+                    "type": "string",
+                    "description": "Which side, for identity documents sent one side at a time",
+                    "enum": [
+                      "front",
+                      "back"
+                    ],
+                    "default": "front"
+                  },
+                  "document_subtype": {
+                    "type": "string",
+                    "description": "Optional sub-type"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "The file as standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB decoded.",
+                    "example": "<base64>"
+                  },
+                  "filename": {
+                    "type": "string",
+                    "example": "passport.jpg"
+                  },
+                  "issuing_country": {
+                    "type": "string",
+                    "description": "Issuing country as an alpha-2 code. Required for every type except `selfie_photo`.",
+                    "example": "GB"
+                  },
+                  "number": {
+                    "type": "string",
+                    "description": "Document number. Required for identity documents.",
+                    "example": "123456789"
+                  },
+                  "issued_date": {
+                    "type": "string",
+                    "description": "Issue date as YYYY-MM-DD. Required for identity documents.",
+                    "example": "2020-01-15"
+                  },
+                  "expiration_date": {
+                    "type": "string",
+                    "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
+                    "example": "2030-01-14"
+                  },
+                  "file_path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "customer_type",
+      "account_type",
+      "currency",
+      "category",
+      "label",
+      "bank_code",
+      "network",
+      "wallet_id",
+      "account_structure",
+      "parent_account_id",
+      "data"
+    ],
+    "alsoInBody": [],
+    "closedBody": true,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "createCard",
+    "toolset": "cards",
+    "method": "post",
+    "path": "/v1/cards",
+    "description": "Create a card — Issues a virtual or physical card once the customer's application is `approved`. The first card gets the application's ID. Each further card needs a new Idempotency-Key; a customer can hold 10 cards, not counting blocked ones. A PIN is set for you; read it with `GET /v1/cards/{card_id}/pin`. Fund the card with a transfer whose destination is the card.\n\nPREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
           "example": "9e3cccad-e9ae-47a0-81ee-063af0159310"
         },
         "card_limit": {
           "type": "number",
-          "description": "Maximum spending limit on the card",
+          "exclusiveMinimum": 0,
+          "description": "Spending limit in whole USD per day. Decimals are dropped.",
           "example": 50
-        },
-        "name_on_card": {
-          "type": "string",
-          "description": "Name to be printed on the card",
-          "example": "Jane Doe"
         },
         "card_type": {
           "type": "string",
-          "description": "Type of card to create",
           "enum": [
             "virtual",
             "physical"
-          ],
-          "example": "virtual"
+          ]
+        },
+        "name_on_card": {
+          "type": "string",
+          "maxLength": 100,
+          "example": "Jane Doe"
         },
         "shipping_address": {
           "type": "object",
+          "description": "Required for a physical card. `address_line2` is not read.",
           "required": [
             "address_line1",
             "city",
@@ -1518,35 +2060,37 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "address_line1": {
               "type": "string",
-              "example": "1800 N Pole St"
-            },
-            "address_line2": {
-              "type": "string",
-              "example": "Suite 202"
+              "maxLength": 255,
+              "example": "201 Allen St"
             },
             "city": {
               "type": "string",
+              "maxLength": 100,
               "example": "New York"
             },
             "state": {
               "type": "string",
-              "example": "US-NY"
+              "maxLength": 100,
+              "example": "New York"
             },
             "postal_code": {
               "type": "string",
-              "example": "100983"
+              "description": "Send it as a string, so leading zeros are kept",
+              "example": "10002"
             },
             "country_code": {
               "type": "string",
+              "description": "Alpha-2 code",
               "example": "US"
             },
             "phone_number": {
               "type": "string",
+              "minLength": 10,
+              "maxLength": 20,
               "example": "12125550123"
             },
             "method": {
               "type": "string",
-              "description": "Shipping method",
               "enum": [
                 "standard",
                 "express",
@@ -1557,8 +2101,36 @@ export const TOOLS: GeneratedTool[] = [
               ],
               "example": "standard"
             }
-          },
-          "description": "The shipping address for delivering a physical card.\nProvide this field only when the card type is physical.\n"
+          }
+        },
+        "funding": {
+          "type": "object",
+          "description": "How the card is funded. `shared` joins a card group and shares its balance; without `card_group_id` it joins the cardholder's default group. `own` gives the card its own balance. Leave it out to use the application's group.",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "shared",
+                "own"
+              ]
+            },
+            "card_group_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Only with `shared`"
+            },
+            "ip_address": {
+              "type": "string",
+              "description": "Cardholder's IP address, for `own` on some live cards"
+            },
+            "annual_remuneration": {
+              "type": "number",
+              "description": "Cardholder's yearly income, for `own` on some live cards"
+            }
+          }
         },
         "idempotency_key": {
           "type": "string",
@@ -1571,8 +2143,8 @@ export const TOOLS: GeneratedTool[] = [
       "required": [
         "customer_id",
         "card_limit",
-        "name_on_card",
-        "card_type"
+        "card_type",
+        "name_on_card"
       ],
       "additionalProperties": true
     },
@@ -1582,13 +2154,17 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [
       "customer_id",
       "card_limit",
-      "name_on_card",
       "card_type",
-      "shipping_address"
+      "name_on_card",
+      "shipping_address",
+      "funding"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -1596,37 +2172,80 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/applications/new",
-    "description": "Create card application — Initiate a new card application request for a customer.",
+    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the customer creating the card application",
+          "description": "The cardholder. Their `basic` KYC must be completed. For a business card, an associated person of the business.",
           "example": "9e3cccad-e9ae-47a0-81ee-063af0159310"
         },
         "account_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the account to link the card application to",
-          "example": "2d52eb6d-4fac-44db-a225-d0e6aa13b0e3"
+          "description": "Your active account of type `card`",
+          "example": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23"
         },
         "annual_remuneration": {
           "type": "number",
-          "description": "Customer's annual income or renumeration",
-          "example": 120000
+          "exclusiveMinimum": 0,
+          "description": "Cardholder's yearly income in USD",
+          "example": 60000
         },
         "estimated_monthly_limit": {
           "type": "number",
-          "description": "Estimated monthly limit the customer expects to use",
-          "example": 200
+          "exclusiveMinimum": 0,
+          "description": "Expected monthly spend in USD, not more than `annual_remuneration`",
+          "example": 2000
         },
         "ip_address": {
           "type": "string",
-          "format": "ipv4",
-          "description": "IP address of the request origin",
-          "example": "12.23.31.23"
+          "description": "The cardholder's IP address",
+          "example": "203.0.113.24"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ],
+          "default": "individual"
+        },
+        "business_customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Required with `type: business`. The business must have completed KYB and have a `business_name`, which is printed on the card."
+        },
+        "funding": {
+          "type": "object",
+          "description": "How the card is funded. `shared` joins a card group and shares its balance; without `card_group_id` it joins the cardholder's default group. `own` gives the card its own balance. Leave it out to use the application's group.",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "shared",
+                "own"
+              ]
+            },
+            "card_group_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Only with `shared`"
+            },
+            "ip_address": {
+              "type": "string",
+              "description": "Cardholder's IP address, for `own` on some live cards"
+            },
+            "annual_remuneration": {
+              "type": "number",
+              "description": "Cardholder's yearly income, for `own` on some live cards"
+            }
+          }
         },
         "idempotency_key": {
           "type": "string",
@@ -1638,10 +2257,10 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
+        "account_id",
         "annual_remuneration",
         "estimated_monthly_limit",
-        "ip_address",
-        "account_id"
+        "ip_address"
       ],
       "additionalProperties": true
     },
@@ -1653,11 +2272,17 @@ export const TOOLS: GeneratedTool[] = [
       "account_id",
       "annual_remuneration",
       "estimated_monthly_limit",
-      "ip_address"
+      "ip_address",
+      "type",
+      "business_customer_id",
+      "funding"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -1665,241 +2290,90 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections/cards/payment-intents",
-    "description": "Create payment intent — Creates a card payment intent and returns a payment link for the hosted checkout UI. _**If you provide a `card_token`, the service automatically initiates a charge after creating the intent.**_\n\nWithout card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
+    "description": "Create payment intent — Creates a card payment intent. It lasts 24 hours and allows at most 5 charge attempts. Without `card_token`, the response has a `payment_link` for the payer. With `card_token`, Gravv charges the saved card at once. The response is then HTTP 200 whatever the outcome, so check `data.status`.\n\nWithout card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. client_reference must be unique across collections and payment intents. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
+          "description": "Your Gravv customer. The customer record must have a phone number and a date of birth.",
           "example": "f827e428-c497-4b21-8855-99d978909c28"
         },
         "client_customer_id": {
           "type": "string",
+          "description": "Your reference for the customer. Saved cards are looked up by this value, so use the same one every time.",
           "example": "merchant-user-123"
         },
         "amount": {
           "type": "string",
+          "description": "USD amount in major units, as a string with at most 2 decimal places.",
           "example": "3.50"
-        },
-        "currency": {
-          "type": "string",
-          "example": "USD"
-        },
-        "client_reference": {
-          "type": "string",
-          "example": "order-abc-123"
-        },
-        "destination": {
-          "type": "object",
-          "required": [
-            "destination_type",
-            "id"
-          ],
-          "properties": {
-            "destination_type": {
-              "type": "string",
-              "enum": [
-                "internal_crypto_wallet",
-                "internal_account",
-                "external_crypto_wallet"
-              ],
-              "example": "internal_crypto_wallet"
-            },
-            "id": {
-              "type": "string",
-              "format": "uuid",
-              "description": "Account ID or wallet ID, depending on destination_type",
-              "example": "b628ff35-429b-48f7-bcf0-6a49df106fc6"
-            },
-            "wallet_address": {
-              "type": "string",
-              "description": "Required when destination_type is external_crypto_wallet",
-              "example": "0x445906a6766927c5da8b2fca0e0db5d7b5565ef8"
-            },
-            "network": {
-              "type": "string",
-              "description": "Required when destination_type is external_crypto_wallet",
-              "enum": [
-                "polygon",
-                "stellar",
-                "ethereum",
-                "solana",
-                "avalanche"
-              ],
-              "example": "polygon"
-            }
-          }
-        },
-        "source": {
-          "type": "object",
-          "required": [
-            "source_type",
-            "id",
-            "methods"
-          ],
-          "properties": {
-            "source_type": {
-              "type": "string",
-              "enum": [
-                "external"
-              ],
-              "example": "external"
-            },
-            "id": {
-              "type": "string",
-              "description": "Source identifier required by the provider",
-              "example": "src_80aebb6ea2594a74bc215a64"
-            },
-            "methods": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "card"
-                ]
-              },
-              "example": [
-                "card"
-              ]
-            }
-          }
-        },
-        "card_token": {
-          "type": "string",
-          "description": "Saved card token from listSavedCards. When set, the card is charged at once.",
-          "example": "tokn_80aebb6ea2594a74bc215a64"
-        },
-        "metadata": {
-          "type": "object",
-          "additionalProperties": true,
-          "example": {
-            "order_id": "ord_123"
-          }
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
-        },
-        "idempotency_key": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 255,
-          "pattern": "^[\\x20-\\x7E]+$",
-          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
-        }
-      },
-      "required": [
-        "customer_id",
-        "client_customer_id",
-        "amount",
-        "currency",
-        "client_reference",
-        "destination",
-        "source"
-      ],
-      "additionalProperties": true
-    },
-    "pathParams": [],
-    "queryParams": [],
-    "bodyMode": "inline",
-    "bodyProps": [
-      "customer_id",
-      "client_customer_id",
-      "amount",
-      "currency",
-      "client_reference",
-      "destination",
-      "source",
-      "card_token",
-      "metadata"
-    ],
-    "alsoInBody": [],
-    "movesMoney": true,
-    "needsIdempotency": true,
-    "spec": "collections.yaml"
-  },
-  {
-    "name": "createCollection",
-    "toolset": "collections",
-    "method": "post",
-    "path": "/v1/collections",
-    "description": "Initiate a collection — Initiates a bank-transfer collection. The response carries the payment instructions for the payer.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "amount": {
-          "type": "string",
-          "description": "Amount to collect",
-          "example": "50"
         },
         "currency": {
           "type": "string",
           "minLength": 3,
           "maxLength": 3,
-          "pattern": "^[A-Z]{3}$",
-          "description": "Three-letter uppercase ISO 4217 currency code",
           "example": "USD"
         },
         "country": {
           "type": "string",
-          "description": "Alpha-2 country code",
-          "example": "ET"
-        },
-        "customer_id": {
-          "type": "string",
-          "description": "Unique customer identifier",
-          "format": "uuid",
-          "example": "04dfb2e5-1274-4214-b5fd-3415fde7dc17"
-        },
-        "client_customer_id": {
-          "type": "string",
-          "description": "A unique identifier assigned by the client to reference the customer when storing payment details",
-          "example": "checkers_user"
+          "description": "Alpha-2 country code, stored on the intent. Card availability still uses the customer's address country.",
+          "example": "US"
         },
         "client_reference": {
           "type": "string",
-          "description": "Client unique reference",
-          "example": "9d8184a1-4a19-b74d-4797-9896aed01332"
+          "description": "Your reference. It must be unique across your collections and payment intents.",
+          "example": "order-abc-123"
+        },
+        "card_token": {
+          "type": "string",
+          "description": "A saved card token from `GET /v1/collections/cards`. When you send it, the card is charged at once.",
+          "example": "tokn_80aebb6ea2594a74bc"
+        },
+        "save_card": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ask the checkout to save the card"
+        },
+        "redirect_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Where to send the payer after checkout. Gravv adds `payment_intent_id` and `client_reference` to it.",
+          "example": "https://example.com/checkout/done"
+        },
+        "asset": {
+          "type": "string",
+          "description": "Stablecoin to settle in. If you leave it out, USD settles as USDC.",
+          "example": "USDC"
+        },
+        "network": {
+          "type": "string",
+          "description": "Settlement network. If you send it, it must match the destination.",
+          "enum": [
+            "polygon",
+            "ethereum",
+            "base",
+            "stellar",
+            "solana",
+            "avalanche"
+          ],
+          "example": "polygon"
         },
         "metadata": {
           "type": "object",
-          "description": "Custom JSON data that will be returned in webhook notifications for this transaction",
+          "description": "Your own data, returned in webhooks for this collection. At most 50 keys. The keys `provider_response`, `internal_transaction_id` and `system_metadata` are reserved. For `bank_transfer`, put the payer's bank account number in `bank_account_number`.",
           "additionalProperties": true,
-          "example": {
-            "order_id": "12345",
-            "customer_notes": "Express delivery requested"
-          }
-        },
-        "source": {
-          "oneOf": [
-            {
-              "title": "Card",
-              "type": "object",
-              "required": [
-                "source_type",
-                "methods"
-              ],
-              "properties": {
-                "source_type": {
-                  "type": "string",
-                  "enum": [
-                    "external"
-                  ],
-                  "example": "external"
-                },
-                "methods": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": [
-                      "bank_transfer"
-                    ]
-                  }
-                }
-              }
+          "properties": {
+            "bank_account_number": {
+              "type": "string",
+              "description": "The payer's bank account number, for `bank_transfer`",
+              "example": "0123456789"
             }
-          ]
+          },
+          "example": {
+            "order_id": "12345"
+          }
         },
         "destination": {
           "oneOf": [
@@ -1918,12 +2392,12 @@ export const TOOLS: GeneratedTool[] = [
                     "internal_account",
                     "internal_crypto_wallet"
                   ],
-                  "example": "internal_account"
+                  "example": "internal_crypto_wallet"
                 },
                 "id": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Provide an account ID if destination_type is internal_account, or a wallet ID if destination_type is internal_crypto_wallet",
+                  "description": "An account ID for `internal_account`, or a wallet ID for `internal_crypto_wallet`",
                   "example": "88d645b6-6d27-4d20-ae1b-9469343156fa"
                 }
               }
@@ -1946,16 +2420,270 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "wallet_address": {
                   "type": "string",
-                  "description": "Wallet address for the external crypto wallet",
-                  "example": 3.901967180566737e+47
+                  "minLength": 26,
+                  "description": "Address of the external wallet. Gravv checks only its length, so check that the address is on `network`. Funds sent to a wrong address are lost.",
+                  "example": "0x445906a6766927c5da8b2fca0e0db5d7b5565ef8"
                 },
                 "network": {
                   "type": "string",
-                  "description": "Blockchain network for the crypto wallet",
+                  "description": "Settlement network",
                   "enum": [
                     "polygon",
-                    "stellar",
                     "ethereum",
+                    "base",
+                    "stellar",
+                    "solana",
+                    "avalanche"
+                  ],
+                  "example": "polygon"
+                }
+              }
+            }
+          ]
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "source_type",
+            "methods"
+          ],
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "enum": [
+                "external"
+              ],
+              "example": "external"
+            },
+            "methods": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "enum": [
+                  "card"
+                ]
+              },
+              "example": [
+                "card"
+              ]
+            }
+          }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "client_customer_id",
+        "amount",
+        "currency",
+        "destination",
+        "source"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "client_customer_id",
+      "amount",
+      "currency",
+      "country",
+      "client_reference",
+      "card_token",
+      "save_card",
+      "redirect_url",
+      "asset",
+      "network",
+      "metadata",
+      "destination",
+      "source"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": true,
+    "needsConfirm": true,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "collections.yaml"
+  },
+  {
+    "name": "createCollection",
+    "toolset": "collections",
+    "method": "post",
+    "path": "/v1/collections",
+    "description": "Initiate a collection — Starts a bank-transfer collection from a payer. The response carries the payment instructions and bank details. The funds settle in stablecoin to the destination. Bank transfer works in BJ, BW, BF, CM, CI, CG, GA, ML, MW, NG, RW, ZA, TZ, TG, UG and ZM, chosen by the customer's address country.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals. client_reference must be unique across collections and payment intents.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Your Gravv customer. The customer record must have a phone number and a date of birth. Its address country decides which methods are available; there is no `country` field.",
+          "example": "04dfb2e5-1274-4214-b5fd-3415fde7dc17"
+        },
+        "client_customer_id": {
+          "type": "string",
+          "description": "Your own reference for the customer",
+          "example": "checkers_user"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Amount in major units, as a string with at most 2 decimal places.",
+          "example": "50.00"
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3,
+          "description": "Three-letter ISO 4217 code in upper case. For `bank_transfer`, use the local currency of the customer's country.",
+          "example": "USD"
+        },
+        "asset": {
+          "type": "string",
+          "description": "Stablecoin to settle in, such as `USDC` or `USDT`. If you leave it out, USD settles as USDC, and a local currency settles as its tokenized asset where there is one.",
+          "example": "USDC"
+        },
+        "network": {
+          "type": "string",
+          "description": "Settlement network. If you send it, it must match the destination network.",
+          "enum": [
+            "polygon",
+            "ethereum",
+            "base",
+            "stellar",
+            "solana",
+            "avalanche"
+          ],
+          "example": "polygon"
+        },
+        "client_reference": {
+          "type": "string",
+          "description": "Your reference. It must be unique across your collections and payment intents. Gravv generates one if you leave it out.",
+          "example": "order-1001"
+        },
+        "is_anonymous": {
+          "type": "boolean",
+          "default": false,
+          "description": "Applies to the card checkout, which this tool does not offer. Leave it out."
+        },
+        "save_card": {
+          "type": "boolean",
+          "default": false,
+          "description": "Applies to the card checkout, which this tool does not offer. Leave it out."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Your own data, returned in webhooks for this collection. At most 50 keys. The keys `provider_response`, `internal_transaction_id` and `system_metadata` are reserved. For `bank_transfer`, put the payer's bank account number in `bank_account_number`.",
+          "additionalProperties": true,
+          "properties": {
+            "bank_account_number": {
+              "type": "string",
+              "description": "The payer's bank account number, for `bank_transfer`",
+              "example": "0123456789"
+            }
+          },
+          "example": {
+            "order_id": "12345"
+          }
+        },
+        "source": {
+          "title": "External source",
+          "type": "object",
+          "required": [
+            "source_type",
+            "methods"
+          ],
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "enum": [
+                "external"
+              ],
+              "example": "external"
+            },
+            "methods": {
+              "type": "array",
+              "minItems": 1,
+              "description": "Payment methods to offer. This tool takes `bank_transfer` alone: pix and mobile_money are rejected in every country, and card payments go through createCardPaymentIntent. Availability depends on the customer's address country.",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "bank_transfer"
+                ]
+              }
+            }
+          }
+        },
+        "destination": {
+          "oneOf": [
+            {
+              "title": "Internal destination",
+              "type": "object",
+              "required": [
+                "destination_type",
+                "id"
+              ],
+              "properties": {
+                "destination_type": {
+                  "type": "string",
+                  "description": "Type of internal destination",
+                  "enum": [
+                    "internal_account",
+                    "internal_crypto_wallet"
+                  ],
+                  "example": "internal_crypto_wallet"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "An account ID for `internal_account`, or a wallet ID for `internal_crypto_wallet`",
+                  "example": "88d645b6-6d27-4d20-ae1b-9469343156fa"
+                }
+              }
+            },
+            {
+              "title": "External crypto wallet",
+              "type": "object",
+              "required": [
+                "destination_type",
+                "wallet_address",
+                "network"
+              ],
+              "properties": {
+                "destination_type": {
+                  "type": "string",
+                  "enum": [
+                    "external_crypto_wallet"
+                  ],
+                  "example": "external_crypto_wallet"
+                },
+                "wallet_address": {
+                  "type": "string",
+                  "minLength": 26,
+                  "description": "Address of the external wallet. Gravv checks only its length, so check that the address is on `network`. Funds sent to a wrong address are lost.",
+                  "example": "0x445906a6766927c5da8b2fca0e0db5d7b5565ef8"
+                },
+                "network": {
+                  "type": "string",
+                  "description": "Settlement network",
+                  "enum": [
+                    "polygon",
+                    "ethereum",
+                    "base",
+                    "stellar",
                     "solana",
                     "avalanche"
                   ],
@@ -1978,12 +2706,10 @@ export const TOOLS: GeneratedTool[] = [
         }
       },
       "required": [
-        "amount",
-        "currency",
-        "country",
         "customer_id",
         "client_customer_id",
-        "client_reference",
+        "amount",
+        "currency",
         "source",
         "destination"
       ],
@@ -1993,19 +2719,25 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "amount",
-      "currency",
-      "country",
       "customer_id",
       "client_customer_id",
+      "amount",
+      "currency",
+      "asset",
+      "network",
       "client_reference",
+      "is_anonymous",
+      "save_card",
       "metadata",
       "source",
       "destination"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -2013,7 +2745,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "post",
     "path": "/v1/customers",
-    "description": "Add a customer — Create a new customer record.",
+    "description": "Add a customer — Creates an individual or business customer. A business is created with its associated persons in the same call, and each person becomes its own customer of type `ubo`. Each new customer gets `basic` and `intermediate` KYC records with status `not_started`, and a `customer.created` webhook. A duplicate email or `external_id` is a 400, not a 409.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2035,27 +2767,31 @@ export const TOOLS: GeneratedTool[] = [
               "properties": {
                 "first_name": {
                   "type": "string",
-                  "example": "john"
+                  "pattern": "^[A-Za-z\\s'-]+$",
+                  "description": "Letters, spaces, apostrophes and hyphens only."
                 },
                 "middle_name": {
                   "type": "string"
                 },
                 "last_name": {
                   "type": "string",
-                  "example": "doe"
+                  "pattern": "^[A-Za-z\\s'-]+$",
+                  "description": "Letters, spaces, apostrophes and hyphens only."
                 },
                 "email": {
                   "type": "string",
                   "format": "email",
-                  "example": "john.doe@example.com"
+                  "example": "ada.obi@example.com"
                 },
                 "phone": {
                   "type": "string",
-                  "example": "+15555550101"
+                  "description": "A valid phone number in international format with a leading `+`, such as `+2348031234567`. Fictional ranges such as +1 555-01xx are rejected.",
+                  "example": "+2348031234567"
                 },
                 "date_of_birth": {
                   "type": "string",
                   "format": "date",
+                  "description": "Date of birth as YYYY-MM-DD",
                   "example": "1990-04-16"
                 },
                 "gender": {
@@ -2065,10 +2801,11 @@ export const TOOLS: GeneratedTool[] = [
                     "female",
                     "other"
                   ],
-                  "example": "male"
+                  "example": "female"
                 },
                 "type": {
                   "type": "string",
+                  "description": "Lower case only.",
                   "enum": [
                     "individual"
                   ],
@@ -2076,7 +2813,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "external_id": {
                   "type": "string",
-                  "description": "Optional custom identifier for the customer provided by the business",
+                  "description": "Your own reference for the customer. It must be unique in your tenant.",
                   "example": "individual_12345"
                 },
                 "address": {
@@ -2091,7 +2828,7 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "address_line1": {
                       "type": "string",
-                      "example": "1800 N Pole St"
+                      "example": "12 Admiralty Way"
                     },
                     "address_line2": {
                       "type": "string",
@@ -2099,19 +2836,25 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "city": {
                       "type": "string",
-                      "example": "Orlando"
+                      "maxLength": 100,
+                      "example": "Lagos"
                     },
                     "postal_code": {
                       "type": "string",
-                      "example": "32801"
+                      "maxLength": 20,
+                      "example": "106104"
                     },
                     "state": {
                       "type": "string",
-                      "example": "US-FL"
+                      "pattern": "^[A-Z]{2}-[A-Z0-9]{2,3}$",
+                      "description": "ISO 3166-2 code, such as `NG-LA` or `US-FL`. It must belong to `country`.",
+                      "example": "NG-LA"
                     },
                     "country": {
                       "type": "string",
-                      "example": "US"
+                      "pattern": "^[A-Z]{2}$",
+                      "description": "ISO 3166-1 alpha-2 code in upper case, such as `NG`.",
+                      "example": "NG"
                     }
                   }
                 }
@@ -2136,11 +2879,12 @@ export const TOOLS: GeneratedTool[] = [
                 "email": {
                   "type": "string",
                   "format": "email",
-                  "description": "Business contact email",
-                  "example": "contact@acmecorp.com"
+                  "description": "Business contact email. It must use a company domain; free email domains such as gmail.com are rejected.",
+                  "example": "ops@acmecorp.com"
                 },
                 "type": {
                   "type": "string",
+                  "description": "Lower case only.",
                   "enum": [
                     "business"
                   ],
@@ -2148,36 +2892,41 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "business_name": {
                   "type": "string",
-                  "description": "Registered business name",
+                  "pattern": "^[A-Za-z0-9\\s'&,.()-]+$",
+                  "description": "Registered business name. Letters, digits, spaces and `' & , . ( ) -` only.",
                   "example": "Acme Corporation"
                 },
                 "phone": {
                   "type": "string",
-                  "example": "+15555550101"
+                  "description": "A valid phone number in international format with a leading `+`, such as `+2348031234567`. Fictional ranges such as +1 555-01xx are rejected.",
+                  "example": "+2348031234567"
                 },
                 "business_description": {
                   "type": "string",
-                  "description": "Short description of the business operations",
-                  "example": "Technology and software development"
+                  "description": "Short description of what the business does",
+                  "example": "Payments software"
                 },
                 "business_type": {
                   "type": "string",
                   "description": "Type of business entity",
-                  "example": "private_limited"
+                  "example": "private_limited",
+                  "maxLength": 100
                 },
                 "business_industry": {
                   "type": "string",
-                  "description": "The industry category that best describes your business",
-                  "example": "Technology"
+                  "description": "Industry of the business. An exact match of one of these sets `industry_code`: Agriculture, Forestry, Fishing and Hunting; Mining, Quarrying, and Oil and Gas Extraction; Utilities; Construction; Manufacturing; Wholesale Trade; Retail Trade; Transportation and Warehousing; Information. Any other value gives `999999`.",
+                  "example": "Information",
+                  "maxLength": 150
                 },
                 "registration_number": {
                   "type": "string",
                   "description": "Business registration number",
-                  "example": "RC-987654"
+                  "example": "RC-987654",
+                  "maxLength": 100
                 },
                 "external_id": {
                   "type": "string",
-                  "description": "Optional custom identifier for the customer provided by the business",
+                  "description": "Your own reference for the customer. It must be unique in your tenant.",
                   "example": "business_12345"
                 },
                 "address": {
@@ -2192,7 +2941,7 @@ export const TOOLS: GeneratedTool[] = [
                   "properties": {
                     "address_line1": {
                       "type": "string",
-                      "example": "1800 N Pole St"
+                      "example": "12 Admiralty Way"
                     },
                     "address_line2": {
                       "type": "string",
@@ -2200,25 +2949,32 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "city": {
                       "type": "string",
-                      "example": "Orlando"
+                      "maxLength": 100,
+                      "example": "Lagos"
                     },
                     "postal_code": {
                       "type": "string",
-                      "example": "32801"
+                      "maxLength": 20,
+                      "example": "106104"
                     },
                     "state": {
                       "type": "string",
-                      "example": "US-FL"
+                      "pattern": "^[A-Z]{2}-[A-Z0-9]{2,3}$",
+                      "description": "ISO 3166-2 code, such as `NG-LA` or `US-FL`. It must belong to `country`.",
+                      "example": "NG-LA"
                     },
                     "country": {
                       "type": "string",
-                      "example": "US"
+                      "pattern": "^[A-Z]{2}$",
+                      "description": "ISO 3166-1 alpha-2 code in upper case, such as `NG`.",
+                      "example": "NG"
                     }
                   }
                 },
                 "associated_persons": {
                   "type": "array",
-                  "description": "List of persons associated with the business (e.g. directors, owners)",
+                  "minItems": 1,
+                  "description": "Directors and owners of the business. Each becomes its own customer of type `ubo` and must complete KYC before the business can. Each email must be unique and differ from the business email.",
                   "items": {
                     "type": "object",
                     "required": [
@@ -2227,13 +2983,13 @@ export const TOOLS: GeneratedTool[] = [
                       "email",
                       "date_of_birth",
                       "gender",
-                      "phone",
                       "address"
                     ],
                     "properties": {
                       "first_name": {
                         "type": "string",
-                        "example": "Jane"
+                        "pattern": "^[A-Za-z\\s'-]+$",
+                        "description": "Letters, spaces, apostrophes and hyphens only."
                       },
                       "middle_name": {
                         "type": "string",
@@ -2241,12 +2997,13 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "last_name": {
                         "type": "string",
-                        "example": "Doe"
+                        "pattern": "^[A-Za-z\\s'-]+$",
+                        "description": "Letters, spaces, apostrophes and hyphens only."
                       },
                       "email": {
                         "type": "string",
                         "format": "email",
-                        "example": "jane.doe@example.com"
+                        "example": "jane.doe@acmecorp.com"
                       },
                       "date_of_birth": {
                         "type": "string",
@@ -2264,7 +3021,8 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "phone": {
                         "type": "string",
-                        "example": "+15555550102"
+                        "description": "A valid phone number in international format with a leading `+`, such as `+2348031234567`. Fictional ranges such as +1 555-01xx are rejected.",
+                        "example": "+2348031234567"
                       },
                       "address": {
                         "type": "object",
@@ -2278,7 +3036,7 @@ export const TOOLS: GeneratedTool[] = [
                         "properties": {
                           "address_line1": {
                             "type": "string",
-                            "example": "1800 N Pole St"
+                            "example": "12 Admiralty Way"
                           },
                           "address_line2": {
                             "type": "string",
@@ -2286,19 +3044,25 @@ export const TOOLS: GeneratedTool[] = [
                           },
                           "city": {
                             "type": "string",
-                            "example": "Orlando"
+                            "maxLength": 100,
+                            "example": "Lagos"
                           },
                           "postal_code": {
                             "type": "string",
-                            "example": "32801"
+                            "maxLength": 20,
+                            "example": "106104"
                           },
                           "state": {
                             "type": "string",
-                            "example": "US-FL"
+                            "pattern": "^[A-Z]{2}-[A-Z0-9]{2,3}$",
+                            "description": "ISO 3166-2 code, such as `NG-LA` or `US-FL`. It must belong to `country`.",
+                            "example": "NG-LA"
                           },
                           "country": {
                             "type": "string",
-                            "example": "US"
+                            "pattern": "^[A-Z]{2}$",
+                            "description": "ISO 3166-1 alpha-2 code in upper case, such as `NG`.",
+                            "example": "NG"
                           }
                         }
                       }
@@ -2328,8 +3092,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "wrapped",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -2337,521 +3104,219 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts",
-    "description": "Add an external account — Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and mobile_money payees return HTTP 200 with status `active`. Track a pending payee with getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in data.payee_id.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
+    "description": "Add an external account — Adds a bank account or mobile wallet that a customer pays out to. Use `GET /v1/external-accounts/institutions` for `institution_id`, and `POST /v1/external-accounts/verify` to check the holder's name first. `bank_account` and `mobile_money` return 200 with status `active`. `swift`, `sepa`, `ach_wire` and `fps` return 202 with status `pending` while setup runs. Get the account until it is `active` or `setup_failed`, or wait for the `external_account.active` or `external_account.setup_failed` webhook. A duplicate (same customer, holder name, and account and bank) is a 400 with code `ERROR_CODE_DUPLICATE_PAYEE` and the existing `payee_id`. Deleted and failed accounts count as duplicates.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "body": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The customer who owns this external account",
+          "example": "3130ca8b-8b32-4843-8623-bf83e766b86a"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code of the currency paid out",
+          "example": "USD"
+        },
+        "account_name": {
+          "type": "string",
+          "description": "Account holder's name. Unaccented letters, spaces and `' - . , & / ( )` only, starting with a letter, with no digits. It comes back in upper case, and may be replaced by the name the bank holds.",
+          "example": "Jane Doe"
+        },
+        "payee_type": {
+          "type": "string",
+          "description": "Leave it out to detect the type from the fields you send. Send it for a Mexican CLABE paid in MXN, which is otherwise read as `ach_wire`.",
+          "enum": [
+            "bank_account",
+            "mobile_money",
+            "swift",
+            "sepa",
+            "ach_wire",
+            "fps"
+          ],
+          "example": "bank_account"
+        },
+        "account_number": {
+          "type": "string",
+          "description": "4 to 34 letters and digits, with no spaces. Some countries have their own rule: 10 digits in Nigeria, 10 to 16 digits in Ghana, and 8 to 20 characters in Kenya.",
+          "example": "000123456789"
+        },
+        "iban": {
+          "type": "string",
+          "description": "IBAN, checked with mod 97. Required for `sepa`.",
+          "example": "DE89370400440532013000"
+        },
+        "bic": {
+          "type": "string",
+          "description": "BIC of 8 or 11 characters. Required for `swift`. The bank must be in the SWIFT directory; its `institution_id` and `bank_name` are filled in for you.",
+          "example": "DEUTDEFF"
+        },
+        "routing_number": {
+          "type": "string",
+          "description": "For `ach_wire`, a 9-digit ABA routing number. For `fps`, the sort code. For India, the IFSC.",
+          "example": "021000021"
+        },
+        "payment_rail": {
+          "type": "string",
+          "description": "Required for `ach_wire`; there is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
+          "enum": [
+            "ach",
+            "wire",
+            "rtp"
+          ],
+          "example": "wire"
+        },
+        "bank_account_type": {
+          "type": "string",
+          "enum": [
+            "checking",
+            "savings"
+          ]
+        },
+        "phone_number": {
+          "type": "string",
+          "description": "Mobile money number with the country code. Required for `mobile_money`.",
+          "example": "+256772123456"
+        },
+        "institution_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "An `id` from `GET /v1/external-accounts/institutions`. Required for MAD payouts and filled in from `bic` for `swift`."
+        },
+        "institution_country_iso_code": {
+          "type": "string",
+          "description": "Bank country as an alpha-2 code. It picks the account number rule. Defaults to the institution's country.",
+          "example": "NG"
+        },
+        "account_owner_type": {
+          "type": "string",
+          "description": "Required for `swift`, `sepa`, `ach_wire` and `fps`",
+          "enum": [
+            "individual",
+            "business"
+          ]
+        },
+        "bank_name": {
+          "type": "string",
+          "description": "Required for `sepa`, `ach_wire` and `fps`",
+          "example": "Example Bank"
+        },
+        "bank_address_line_1": {
+          "type": "string",
+          "description": "Required for `swift`"
+        },
+        "bank_city": {
+          "type": "string",
+          "description": "Required for `swift`"
+        },
+        "bank_state": {
+          "type": "string",
+          "description": "Required for `swift`"
+        },
+        "bank_postal_code": {
+          "type": "string",
+          "description": "Required for `swift`. Checked against `bank_country`."
+        },
+        "bank_country": {
+          "type": "string",
+          "description": "Required for `swift`"
+        },
+        "intermediary_financial_institution": {
+          "type": "string",
+          "description": "Optional intermediary bank for `swift`. Send all the intermediary fields or none; only `intermediary_bank_address2` is optional."
+        },
+        "intermediary_bank_routing_number": {
+          "type": "string"
+        },
+        "intermediary_bank_address1": {
+          "type": "string"
+        },
+        "intermediary_bank_address2": {
+          "type": "string"
+        },
+        "intermediary_bank_city": {
+          "type": "string"
+        },
+        "intermediary_bank_state": {
+          "type": "string"
+        },
+        "intermediary_bank_zip_code": {
+          "type": "string"
+        },
+        "intermediary_bank_country": {
+          "type": "string"
+        },
+        "address": {
           "type": "object",
+          "description": "The account holder's address. Required for `swift`, `sepa`, `ach_wire` and `fps`, and for some banks and payout corridors.",
           "properties": {
-            "account_name": {
+            "address_line1": {
               "type": "string",
-              "description": "Name of the account holder.",
-              "maxLength": 100,
-              "example": "Amina Bello"
+              "minLength": 4,
+              "maxLength": 34,
+              "example": "350 Fifth Avenue"
             },
-            "customer_id": {
+            "address_line2": {
               "type": "string",
-              "format": "uuid",
-              "description": "ID of the customer who owns the external account.",
-              "example": "373556ec-74e5-4cde-909c-b94d864915db"
+              "maxLength": 35
             },
-            "payment_rail": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "description": "Optional. US payment rail to use when `payee_type` is `ach_wire`. Accepted values: `ach` (ACH transfer) or `wire` (domestic wire). Defaults to `wire` when omitted.",
-              "enum": [
-                "ach",
-                "wire"
-              ],
-              "example": "ach"
+            "house_building_number": {
+              "type": "string",
+              "maxLength": 35
+            },
+            "city": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "New York"
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "NY"
+            },
+            "postal_code": {
+              "type": "string",
+              "description": "Checked against the country's postal code format",
+              "example": "10118"
+            },
+            "country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
             }
-          },
-          "required": [
-            "account_name",
-            "customer_id"
-          ],
-          "oneOf": [
-            {
-              "type": "object",
-              "title": "US Bank Account Recipient",
-              "required": [
-                "payee_type",
-                "account_number",
-                "routing_number",
-                "account_owner_type",
-                "account_type",
-                "currency",
-                "address"
-              ],
-              "properties": {
-                "payee_type": {
-                  "type": "string",
-                  "description": "Type of payee",
-                  "enum": [
-                    "ach_wire"
-                  ],
-                  "example": "ach_wire"
-                },
-                "account_number": {
-                  "type": "string",
-                  "description": "Bank account number",
-                  "example": "4401682860",
-                  "maxLength": 50
-                },
-                "bank_name": {
-                  "type": "string",
-                  "description": "Name of the bank",
-                  "example": "Example Community Bank",
-                  "maxLength": 100
-                },
-                "routing_number": {
-                  "type": "string",
-                  "description": "9-digit ABA routing number",
-                  "example": "101019644",
-                  "maxLength": 20
-                },
-                "account_owner_type": {
-                  "type": "string",
-                  "description": "Type of account owner",
-                  "enum": [
-                    "individual",
-                    "business"
-                  ],
-                  "example": "individual"
-                },
-                "account_type": {
-                  "type": "string",
-                  "description": "Type of bank account",
-                  "enum": [
-                    "savings",
-                    "checking"
-                  ],
-                  "example": "savings"
-                },
-                "currency": {
-                  "type": "string",
-                  "description": "Currency code",
-                  "enum": [
-                    "USD"
-                  ],
-                  "example": "USD"
-                },
-                "address": {
-                  "type": "object",
-                  "required": [
-                    "address_line1",
-                    "city",
-                    "postal_code",
-                    "country"
-                  ],
-                  "properties": {
-                    "address_line1": {
-                      "type": "string",
-                      "example": "1800 N Pole St"
-                    },
-                    "address_line2": {
-                      "type": "string",
-                      "example": "Suite 202"
-                    },
-                    "city": {
-                      "type": "string",
-                      "example": "Orlando"
-                    },
-                    "postal_code": {
-                      "type": "string",
-                      "example": "32801"
-                    },
-                    "state": {
-                      "type": "string",
-                      "example": "US-FL"
-                    },
-                    "country": {
-                      "type": "string",
-                      "example": "US"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "type": "object",
-              "title": "Sepa Recipient",
-              "description": "Sepa recipient",
-              "required": [
-                "payee_type",
-                "account_owner_type",
-                "iban",
-                "account_name",
-                "currency",
-                "customer_id",
-                "address"
-              ],
-              "properties": {
-                "payee_type": {
-                  "type": "string",
-                  "description": "Type of payee",
-                  "enum": [
-                    "sepa"
-                  ],
-                  "example": "sepa"
-                },
-                "account_owner_type": {
-                  "type": "string",
-                  "description": "Type of account owner",
-                  "enum": [
-                    "individual",
-                    "business"
-                  ],
-                  "example": "individual"
-                },
-                "iban": {
-                  "type": "string",
-                  "description": "International Bank Account Number",
-                  "example": "DE89370400440532013000",
-                  "maxLength": 50
-                },
-                "account_name": {
-                  "type": "string",
-                  "description": "Name of the account holder",
-                  "example": "Amina Bello",
-                  "maxLength": 100
-                },
-                "bank_name": {
-                  "type": "string",
-                  "description": "Bank name",
-                  "example": "Deutsche Bank"
-                },
-                "currency": {
-                  "type": "string",
-                  "description": "Currency code for the account",
-                  "example": "EUR",
-                  "enum": [
-                    "EUR"
-                  ]
-                },
-                "customer_id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "ID of the customer who owns this recipient",
-                  "example": "373556ec-74e5-4cde-909c-b94d864915db"
-                },
-                "address": {
-                  "type": "object",
-                  "required": [
-                    "address_line1",
-                    "city",
-                    "postal_code",
-                    "country"
-                  ],
-                  "properties": {
-                    "address_line1": {
-                      "type": "string",
-                      "example": "1800 N Pole St"
-                    },
-                    "address_line2": {
-                      "type": "string",
-                      "example": "Suite 202"
-                    },
-                    "city": {
-                      "type": "string",
-                      "example": "Orlando"
-                    },
-                    "postal_code": {
-                      "type": "string",
-                      "example": "32801"
-                    },
-                    "state": {
-                      "type": "string",
-                      "example": "US-FL"
-                    },
-                    "country": {
-                      "type": "string",
-                      "example": "US"
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "type": "object",
-              "properties": {
-                "payee_type": {
-                  "type": "string",
-                  "description": "Type of payee",
-                  "enum": [
-                    "swift"
-                  ],
-                  "example": "swift"
-                },
-                "account_owner_type": {
-                  "type": "string",
-                  "enum": [
-                    "individual",
-                    "business"
-                  ]
-                },
-                "bank_name": {
-                  "type": "string",
-                  "example": "Guaranty Trust Bank (GTBank)"
-                },
-                "account_number": {
-                  "type": "string",
-                  "description": "Bank account number",
-                  "example": "1245909283"
-                },
-                "iban": {
-                  "type": "string",
-                  "description": "International Bank Account Number",
-                  "example": "GB33BUKB20201555555555",
-                  "maxLength": 34
-                },
-                "bic": {
-                  "type": "string",
-                  "example": "NG2893A"
-                },
-                "currency": {
-                  "type": "string",
-                  "enum": [
-                    "USD"
-                  ]
-                },
-                "address": {
-                  "type": "object",
-                  "required": [
-                    "address_line1",
-                    "city",
-                    "postal_code",
-                    "country"
-                  ],
-                  "properties": {
-                    "address_line1": {
-                      "type": "string",
-                      "example": "1800 N Pole St"
-                    },
-                    "house_building_number": {
-                      "type": "string",
-                      "example": "1B"
-                    },
-                    "address_line2": {
-                      "type": "string",
-                      "example": "Suite 202"
-                    },
-                    "city": {
-                      "type": "string",
-                      "example": "Orlando"
-                    },
-                    "postal_code": {
-                      "type": "string",
-                      "example": "32801"
-                    },
-                    "state": {
-                      "type": "string",
-                      "example": "US-FL"
-                    },
-                    "country": {
-                      "type": "string",
-                      "example": "US"
-                    }
-                  }
-                }
-              },
-              "required": [
-                "payee_type",
-                "account_owner_type",
-                "bic",
-                "currency",
-                "address"
-              ],
-              "oneOf": [
-                {
-                  "title": "With account number",
-                  "required": [
-                    "account_number"
-                  ]
-                },
-                {
-                  "title": "With IBAN",
-                  "required": [
-                    "iban"
-                  ]
-                }
-              ],
-              "title": "Swift Recipient"
-            },
-            {
-              "type": "object",
-              "title": "Global Bank Recipient",
-              "required": [
-                "payee_type",
-                "currency",
-                "institution_id"
-              ],
-              "properties": {
-                "payee_type": {
-                  "type": "string",
-                  "description": "Type of payee",
-                  "enum": [
-                    "bank_account"
-                  ],
-                  "example": "bank_account"
-                },
-                "account_number": {
-                  "type": "string",
-                  "description": "Account number or phone number",
-                  "example": "4401682860",
-                  "maxLength": 50
-                },
-                "bank_name": {
-                  "type": "string",
-                  "description": "Name of the bank",
-                  "example": "Access Bank",
-                  "maxLength": 100
-                },
-                "iban": {
-                  "type": "string",
-                  "description": "International Bank Account Number",
-                  "example": "GB33BUKB20201555555555"
-                },
-                "institution_id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Institution ID",
-                  "example": "4b595668-98dc-4cbc-9ac6-1343b6127a58"
-                },
-                "currency": {
-                  "type": "string",
-                  "description": "Currency code for the account",
-                  "example": "NGN",
-                  "enum": [
-                    "NGN",
-                    "GHS",
-                    "KES",
-                    "UGX",
-                    "ZMW",
-                    "XOF",
-                    "BWP",
-                    "CDF",
-                    "XAF",
-                    "MWK",
-                    "RWF",
-                    "ZAR",
-                    "TZS",
-                    "BDT",
-                    "BIF",
-                    "CNY",
-                    "COP",
-                    "DOP",
-                    "EGP",
-                    "ETB",
-                    "GMD",
-                    "GTQ",
-                    "GNF",
-                    "INR",
-                    "ILS",
-                    "JOD",
-                    "LRD",
-                    "MRU",
-                    "MXN",
-                    "MAD",
-                    "MZN",
-                    "PKR",
-                    "PHP",
-                    "PLN",
-                    "AED",
-                    "SOS",
-                    "SLL",
-                    "TND",
-                    "TRY",
-                    "USD",
-                    "ZWL"
-                  ]
-                }
-              }
-            },
-            {
-              "type": "object",
-              "title": "Global Mobile Money Recipient",
-              "required": [
-                "payee_type",
-                "phone_number",
-                "currency",
-                "institution_id"
-              ],
-              "properties": {
-                "payee_type": {
-                  "type": "string",
-                  "description": "Type of payee",
-                  "enum": [
-                    "mobile_money"
-                  ],
-                  "example": "mobile_money"
-                },
-                "phone_number": {
-                  "type": "string",
-                  "description": "Mobile money account number or phone number",
-                  "example": "+233241234567"
-                },
-                "institution_id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Institution ID",
-                  "example": "4b595668-98dc-4cbc-9ac6-1343b6127a58"
-                },
-                "currency": {
-                  "type": "string",
-                  "description": "Currency code for the account",
-                  "example": "NGN",
-                  "enum": [
-                    "NGN",
-                    "GHS",
-                    "KES",
-                    "UGX",
-                    "ZMW",
-                    "XOF",
-                    "BWP",
-                    "CDF",
-                    "XAF",
-                    "MWK",
-                    "RWF",
-                    "ZAR",
-                    "TZS",
-                    "BDT",
-                    "BIF",
-                    "CNY",
-                    "COP",
-                    "DOP",
-                    "EGP",
-                    "ETB",
-                    "GMD",
-                    "GTQ",
-                    "GNF",
-                    "INR",
-                    "ILS",
-                    "JOD",
-                    "LRD",
-                    "MRU",
-                    "MXN",
-                    "MAD",
-                    "MZN",
-                    "PKR",
-                    "PHP",
-                    "PLN",
-                    "AED",
-                    "SOS",
-                    "SLL",
-                    "TND",
-                    "TRY",
-                    "USD",
-                    "ZWL"
-                  ]
-                }
-              }
-            }
-          ],
-          "description": "Request body. Choose exactly one shape: US Bank Account Recipient | Sepa Recipient | Swift Recipient | Global Bank Recipient | Global Mobile Money Recipient. "
+          }
+        },
+        "internal_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Your account that pays this external account"
+        },
+        "national_id": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "The holder's national ID. Send it with `national_id_type`. Some payout corridors need it, such as CURP or RFC for Mexico and CPF or CNPJ for Brazil."
+        },
+        "national_id_type": {
+          "type": "string",
+          "enum": [
+            "CURP",
+            "RFC",
+            "CPF",
+            "CNPJ",
+            "NIT",
+            "CC",
+            "PAN",
+            "BVN",
+            "NIN",
+            "OTHER"
+          ]
+        },
+        "pix_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 77,
+          "description": "PIX key, for payouts to Brazil"
         },
         "idempotency_key": {
           "type": "string",
@@ -2862,17 +3327,56 @@ export const TOOLS: GeneratedTool[] = [
         }
       },
       "required": [
-        "body"
+        "customer_id",
+        "currency",
+        "account_name"
       ],
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "pathParams": [],
     "queryParams": [],
-    "bodyMode": "wrapped",
-    "bodyProps": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "currency",
+      "account_name",
+      "payee_type",
+      "account_number",
+      "iban",
+      "bic",
+      "routing_number",
+      "payment_rail",
+      "bank_account_type",
+      "phone_number",
+      "institution_id",
+      "institution_country_iso_code",
+      "account_owner_type",
+      "bank_name",
+      "bank_address_line_1",
+      "bank_city",
+      "bank_state",
+      "bank_postal_code",
+      "bank_country",
+      "intermediary_financial_institution",
+      "intermediary_bank_routing_number",
+      "intermediary_bank_address1",
+      "intermediary_bank_address2",
+      "intermediary_bank_city",
+      "intermediary_bank_state",
+      "intermediary_bank_zip_code",
+      "intermediary_bank_country",
+      "address",
+      "internal_account_id",
+      "national_id",
+      "national_id_type",
+      "pix_key"
+    ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -2880,92 +3384,75 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders",
-    "description": "Create order — Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is debited at once: there is no approval step and no second user (`waiting_approval` is only for orders placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and `metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes from an older spec and still asks for some of them, so any value passes. The amount is the quote's. The `Idempotency-Key` header is required; this server sends one.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
+    "description": "Create an order — Trades a quote. With an API key there is no approval step: the order starts as `pending` and the source is debited at once. Then get the order until it is `completed` or `cancelled`. FX orders send no webhooks. If the error is `order source could not be charged`, an order may still exist; list your orders before you retry with a new quote.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "customer_id": {
+        "quote_id": {
+          "type": "string",
+          "description": "A quote from `POST /v1/fx/quote` that has not expired or been used",
+          "example": "GRVOTC_3F9A1C"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "`internal_account` or `internal_crypto_wallet`. For a destination, `external_account` means a settlement instruction, not a customer's external account.",
+              "enum": [
+                "internal_account",
+                "internal_crypto_wallet",
+                "external_account"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "description": "ID of your account, crypto wallet or settlement instruction"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "description": "Where the sold amount comes from: your account or crypto wallet holding at least `from_amount` in the FROM currency. It cannot be `external_account`."
+        },
+        "destination": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "`internal_account` or `internal_crypto_wallet`. For a destination, `external_account` means a settlement instruction, not a customer's external account.",
+              "enum": [
+                "internal_account",
+                "internal_crypto_wallet",
+                "external_account"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "description": "ID of your account, crypto wallet or settlement instruction"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "description": "Where the bought amount goes: your account or crypto wallet, or an active settlement instruction (`external_account`) in the TO currency."
+        },
+        "transaction_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the customer the order is created for.",
-          "example": "85034797-3ea1-4ad8-a952-becd67d74acc"
+          "description": "Optional ID to give the order. It becomes `order_id`."
         },
-        "order_type": {
+        "client_reference": {
           "type": "string",
-          "description": "A `market` order executes at the current rate once approved. A `limit` order waits until the rate reaches `target_rate`, then executes once approved.",
-          "enum": [
-            "market",
-            "limit"
-          ],
-          "example": "market"
+          "description": "Your reference. It does not have to be unique.",
+          "example": "inv-2026-1042"
         },
-        "pair": {
+        "metadata": {
           "type": "object",
-          "required": [
-            "base",
-            "quote"
-          ],
-          "properties": {
-            "base": {
-              "type": "string",
-              "description": "Base currency code (ISO 4217 or crypto ticker).",
-              "example": "USD"
-            },
-            "quote": {
-              "type": "string",
-              "description": "Quote currency code (ISO 4217 or crypto ticker).",
-              "example": "ZAR"
-            }
-          }
-        },
-        "amount": {
-          "type": "string",
-          "description": "Amount of the base currency to exchange. Must be greater than zero.",
-          "example": "1000"
-        },
-        "target_rate": {
-          "type": "string",
-          "description": "Required for `limit` orders. The rate at which the order should execute.",
-          "example": "17.50"
-        },
-        "side": {
-          "type": "string",
-          "description": "Side of the order. Defaults to `sell`.",
-          "enum": [
-            "buy",
-            "sell"
-          ],
-          "default": "sell",
-          "example": "sell"
-        },
-        "source_type": {
-          "type": "string",
-          "description": "Where the funds come from. Fiat base currencies are funded from an `account`; crypto base currencies from a `wallet`.",
-          "enum": [
-            "account",
-            "wallet"
-          ],
-          "example": "account"
-        },
-        "source_id": {
-          "type": "string",
-          "description": "ID of the source account or wallet.",
-          "example": "74653c7b-ae84-45ab-8085-2d2493f86d81"
-        },
-        "destination_type": {
-          "type": "string",
-          "description": "Where the proceeds settle. Use `ssi` to settle to a saved settlement instruction.",
-          "enum": [
-            "account",
-            "wallet",
-            "ssi"
-          ],
-          "example": "ssi"
-        },
-        "destination_id": {
-          "type": "string",
-          "description": "ID of the destination account, wallet, or settlement instruction.",
-          "example": "b23ffd0e-d0fc-432e-acc9-c396194121b3"
+          "description": "Your data, returned on the order",
+          "additionalProperties": true
         },
         "confirm": {
           "type": "boolean",
@@ -2980,10 +3467,7 @@ export const TOOLS: GeneratedTool[] = [
         }
       },
       "required": [
-        "customer_id",
-        "order_type",
-        "pair",
-        "amount"
+        "quote_id"
       ],
       "additionalProperties": true
     },
@@ -2991,34 +3475,153 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "customer_id",
-      "order_type",
-      "pair",
-      "amount",
-      "target_rate",
-      "side",
-      "source_type",
-      "source_id",
-      "destination_type",
-      "destination_id"
+      "quote_id",
+      "source",
+      "destination",
+      "transaction_id",
+      "client_reference",
+      "metadata"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
+  },
+  {
+    "name": "createSettlementInstruction",
+    "toolset": "fx",
+    "method": "post",
+    "path": "/v1/settlement-instructions",
+    "description": "Create a settlement instruction — Saves one of your own bank accounts or crypto wallets to receive FX order proceeds. Pass its `id` as the order destination with type `external_account`. Its currency must match the currency the order buys. The details are not checked with a bank, and there is no duplicate check.\n\nThese are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "instruction_type": {
+          "type": "string",
+          "description": "Exact lower case",
+          "enum": [
+            "bank_account",
+            "crypto_wallet"
+          ],
+          "example": "bank_account"
+        },
+        "account_name": {
+          "type": "string",
+          "description": "Name on the account or wallet",
+          "example": "Acme Treasury LLC"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency this destination receives, such as `USD` or `USDC`. It is stored as sent and filters match it exactly, so always send upper case.",
+          "example": "USD"
+        },
+        "is_default": {
+          "type": "boolean",
+          "default": false,
+          "description": "Make this the default for its currency. The old default is unset."
+        },
+        "account_number": {
+          "type": "string",
+          "description": "Required for `bank_account`",
+          "example": "000987654321"
+        },
+        "bank_name": {
+          "type": "string",
+          "description": "Required for `bank_account`",
+          "example": "Example Bank"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "routing_number": {
+          "type": "string",
+          "example": "026009593"
+        },
+        "swift_code": {
+          "type": "string"
+        },
+        "iban": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string",
+          "example": "US"
+        },
+        "address": {
+          "type": "object",
+          "description": "The bank's address, stored as sent",
+          "additionalProperties": true
+        },
+        "wallet_address": {
+          "type": "string",
+          "description": "Required for `crypto_wallet`. Its format is not checked, so check it yourself."
+        },
+        "network": {
+          "type": "string",
+          "description": "Required for `crypto_wallet`, such as `polygon` or `stellar`. Send lower case.",
+          "example": "polygon"
+        },
+        "memo": {
+          "type": "string",
+          "description": "Required when `network` is `stellar`"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "instruction_type",
+        "account_name",
+        "currency"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "instruction_type",
+      "account_name",
+      "currency",
+      "is_default",
+      "account_number",
+      "bank_name",
+      "bank_code",
+      "routing_number",
+      "swift_code",
+      "iban",
+      "country",
+      "address",
+      "wallet_address",
+      "network",
+      "memo"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "createTransfer",
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
+    "description": "Create a transfer — Sends money from a customer's account, crypto wallet or card to an account, crypto wallet, crypto address, card or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "source": {
           "type": "object",
-          "description": "Source of the transfer",
           "required": [
             "source_type",
             "id"
@@ -3026,53 +3629,63 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "source_type": {
               "type": "string",
+              "description": "A `card` source can only be withdrawn to its own card account.",
               "enum": [
                 "internal_account",
-                "internal_crypto_wallet"
-              ],
-              "description": "source can be `internal_account` or `internal_crypto_wallet`"
-            },
-            "crypto_asset": {
-              "type": "string",
-              "description": "Optional crypto asset type",
-              "example": "USDC"
+                "internal_crypto_wallet",
+                "card"
+              ]
             },
             "id": {
               "type": "string",
               "format": "uuid",
-              "description": "Use internal account ID or wallet ID"
+              "description": "ID of the account, crypto wallet or card (UUID version 4)",
+              "example": "b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8"
+            },
+            "currency": {
+              "type": "string",
+              "description": "Accepted, but the source's own currency is used",
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP"
+              ]
+            },
+            "crypto_asset": {
+              "type": "string",
+              "description": "Asset sent, such as `USDC` or `USDT`. Defaults to the network's usual asset.",
+              "example": "USDC"
             }
           }
         },
         "destination": {
           "oneOf": [
             {
-              "title": "External Account Destination",
+              "title": "External account",
               "type": "object",
               "required": [
-                "id",
-                "destination_type"
+                "destination_type",
+                "id"
               ],
               "properties": {
+                "destination_type": {
+                  "type": "string",
+                  "enum": [
+                    "external_account"
+                  ]
+                },
                 "id": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "External account ID"
-                },
-                "destination_type": {
-                  "type": "string",
-                  "description": "The transfer destination type",
-                  "enum": [
-                    "external_account"
-                  ],
-                  "example": "external_account"
+                  "description": "An `active` external account"
                 },
                 "rail": {
                   "type": "string",
-                  "description": "The transfer rail type",
+                  "description": "Payout rail. `ach`, `wire` and `rtp` are US domestic rails; `wire` is not an international wire. Leave it out, or send `globalbank`, for local bank and mobile money payouts.",
                   "enum": [
                     "ach",
                     "wire",
+                    "rtp",
                     "sepa",
                     "swift",
                     "fps",
@@ -3083,187 +3696,267 @@ export const TOOLS: GeneratedTool[] = [
               }
             },
             {
-              "title": "Internal Account Destination",
+              "title": "Internal account",
               "type": "object",
               "required": [
-                "id",
-                "destination_type"
+                "destination_type",
+                "id"
               ],
               "properties": {
-                "id": {
-                  "type": "string",
-                  "format": "uuid",
-                  "description": "Internal account ID"
-                },
                 "destination_type": {
                   "type": "string",
                   "enum": [
                     "internal_account"
-                  ],
-                  "example": "internal_account"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "An active account. For a `card` source, its own card account."
                 }
               }
             },
             {
-              "title": "Crypto Wallet Destination",
+              "title": "Internal crypto wallet",
               "type": "object",
               "required": [
-                "blockchain_network",
-                "wallet_address",
-                "destination_type"
+                "destination_type",
+                "id"
               ],
               "properties": {
-                "blockchain_network": {
+                "destination_type": {
                   "type": "string",
-                  "description": "Blockchain network (e.g., polygon, ethereum)",
                   "enum": [
-                    "polygon",
-                    "ethereum",
-                    "avalanche",
-                    "stellar",
-                    "solana",
-                    "sui",
-                    "tron"
-                  ],
-                  "example": "polygon"
+                    "internal_crypto_wallet"
+                  ]
                 },
-                "wallet_address": {
+                "id": {
                   "type": "string",
-                  "description": "Crypto wallet address",
-                  "example": "0x25a4c9853e761753ae18d6871731e305b8b0b2a4"
+                  "format": "uuid"
                 },
+                "crypto_asset": {
+                  "type": "string",
+                  "description": "Asset received. Between two wallets of the same customer, `USDT` to `USDC` or back converts the asset.",
+                  "enum": [
+                    "USDC",
+                    "USDT"
+                  ]
+                }
+              }
+            },
+            {
+              "title": "Crypto address",
+              "type": "object",
+              "required": [
+                "destination_type",
+                "wallet_address",
+                "blockchain_network"
+              ],
+              "properties": {
                 "destination_type": {
                   "type": "string",
                   "enum": [
                     "crypto_wallet"
+                  ]
+                },
+                "wallet_address": {
+                  "type": "string",
+                  "example": "0x25a4c9853e761753ae18d6871731e305b8b0b2a4"
+                },
+                "blockchain_network": {
+                  "type": "string",
+                  "description": "Must match the source's network, except for USDC moved between networks",
+                  "enum": [
+                    "avalanche",
+                    "ethereum",
+                    "polygon",
+                    "solana",
+                    "stellar",
+                    "tron",
+                    "sui",
+                    "base"
                   ],
-                  "example": "crypto_wallet"
+                  "example": "polygon"
                 },
                 "blockchain_memo": {
                   "type": "string",
-                  "description": "Required for only stellar network",
-                  "example": "x1we2e2348r3r34r3"
+                  "description": "Memo for addresses that need one, such as some stellar exchange addresses"
                 }
               }
             },
             {
-              "title": "Card Destination",
+              "title": "Card",
               "type": "object",
               "required": [
-                "id",
-                "destination_type"
+                "destination_type",
+                "id"
               ],
               "properties": {
+                "destination_type": {
+                  "type": "string",
+                  "enum": [
+                    "card"
+                  ]
+                },
                 "id": {
                   "type": "string",
                   "format": "uuid",
-                  "description": "Recipient card ID"
-                },
-                "destination_type": {
-                  "type": "string",
-                  "description": "The transfer destination type",
-                  "enum": [
-                    "card"
-                  ],
-                  "example": "card"
+                  "description": "ID of the card to fund"
                 }
               }
             }
           ]
         },
         "amount": {
-          "type": "number",
-          "description": "Transfer amount",
-          "example": 100.5
-        },
-        "additional_information": {
-          "type": "object",
-          "description": "Additional remitter information required for external bank account and mobile money beneficiaries",
-          "properties": {
-            "remitter_full_name": {
-              "type": "string",
-              "description": "Full name of the person sending the transfer",
-              "example": "John Doe"
-            },
-            "remitter_country": {
-              "type": "string",
-              "description": "Country code of the remitter (ISO 3166-1 alpha-2)",
-              "example": "US"
-            },
-            "remitter_document_number": {
-              "type": "string",
-              "description": "Document/ID number of the remitter",
-              "example": "A123456789"
-            },
-            "remitter_document_issue_date": {
-              "type": "string",
-              "format": "date",
-              "description": "Date when the remitter's document was issued",
-              "example": "2020-01-15"
-            },
-            "remitter_document_expiry_date": {
-              "type": "string",
-              "format": "date",
-              "description": "Date when the remitter's document expires",
-              "example": "2030-01-15"
-            },
-            "remitter_date_of_birth": {
-              "type": "string",
-              "format": "date",
-              "description": "Date of birth of the remitter",
-              "example": "1990-06-25"
-            },
-            "remitter_address": {
-              "type": "object",
-              "description": "Physical address of the remitter",
-              "properties": {
-                "address_line1": {
-                  "type": "string",
-                  "description": "Primary address line",
-                  "example": "123 Main Street"
-                },
-                "city": {
-                  "type": "string",
-                  "description": "City name",
-                  "example": "New York"
-                },
-                "state": {
-                  "type": "string",
-                  "description": "State or province code",
-                  "example": "NY"
-                },
-                "postal_code": {
-                  "type": "string",
-                  "description": "Postal or ZIP code",
-                  "example": "10001"
-                },
-                "country": {
-                  "type": "string",
-                  "description": "Country code (ISO 3166-1 alpha-2)",
-                  "example": "US"
-                }
-              }
-            },
-            "remitter_nationality": {
-              "type": "string",
-              "description": "Nationality of the remitter (ISO 3166-1 alpha-2 country code)",
-              "example": "US"
-            }
-          }
-        },
-        "description": {
           "type": "string",
-          "description": "Transfer description",
-          "example": "Transfer Testing"
+          "description": "Positive amount in major units of the source currency, with at most 2 decimal places. Send it as a string; a number is accepted but can lose precision.",
+          "example": "250.00"
         },
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Customer initiating the transfer"
+          "description": "The customer sending the transfer (UUID version 4)",
+          "example": "bb6c6022-f1d8-492f-80f0-7547134bb42f"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional note for your records",
+          "example": "Invoice 114"
         },
         "client_reference": {
           "type": "string",
-          "description": "Optional client reference for reconciliation"
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Your unique reference. On tenants whose limits are enforced, a reused reference returns the first transfer, or a 409 when the request differs. Send it so retries are not paid twice.",
+          "example": "inv-114"
+        },
+        "client_metadata": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "Your data, often JSON text, returned on the transaction"
+        },
+        "payment_rail_reference": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Note the receiving bank shows the payee. Plain ASCII, at most 140 characters. ACH allows 10 letters, digits or spaces. A US wire allows 35 letters, digits, spaces and / - ? : ( ) . , ' +. Other rails ignore it.",
+          "example": "INV 114"
+        },
+        "supporting_document_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "description": "Up to 5 IDs from `POST /v1/transfer/documents` for this customer, each unused. Needed when a payout requires a document; otherwise the transfer pauses for one.",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additional_information": {
+          "type": "object",
+          "description": "Sender details. Some payout routes need them; without them the transfer pauses with `sender_details_required`.",
+          "properties": {
+            "remitter_full_name": {
+              "type": "string",
+              "example": "John Doe"
+            },
+            "remitter_country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_document_number": {
+              "type": "string",
+              "example": "A123456789"
+            },
+            "remitter_document_issue_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2020-01-15"
+            },
+            "remitter_document_expiry_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2030-01-15"
+            },
+            "remitter_date_of_birth": {
+              "type": "string",
+              "description": "YYYY-MM-DD, not in the future",
+              "example": "1990-06-25"
+            },
+            "remitter_nationality": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_address": {
+              "type": "object",
+              "properties": {
+                "address_line1": {
+                  "type": "string",
+                  "example": "123 Main Street"
+                },
+                "city": {
+                  "type": "string",
+                  "example": "New York"
+                },
+                "state": {
+                  "type": "string",
+                  "example": "NY"
+                },
+                "postal_code": {
+                  "type": "string",
+                  "example": "10001"
+                },
+                "country": {
+                  "type": "string",
+                  "example": "US"
+                }
+              }
+            },
+            "remitter_verification": {
+              "type": "object",
+              "description": "Your record of how you verified the sender. When your limits policy uses attested tiers, the transfer counts against this remitter instead of the customer.",
+              "properties": {
+                "remitter_id": {
+                  "type": "string",
+                  "description": "Your ID for the sender",
+                  "example": "rem_8842"
+                },
+                "level": {
+                  "type": "string",
+                  "example": "enhanced"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Who verified the sender"
+                },
+                "provider_reference": {
+                  "type": "string"
+                },
+                "verified_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "screening": {
+                  "type": "object",
+                  "description": "Each value must be `clear`",
+                  "properties": {
+                    "sanctions": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "pep": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "adverse_media": {
+                      "type": "string",
+                      "example": "clear"
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         "confirm": {
           "type": "boolean",
@@ -3281,9 +3974,7 @@ export const TOOLS: GeneratedTool[] = [
         "source",
         "destination",
         "amount",
-        "customer_id",
-        "description",
-        "client_reference"
+        "customer_id"
       ],
       "additionalProperties": true
     },
@@ -3294,14 +3985,20 @@ export const TOOLS: GeneratedTool[] = [
       "source",
       "destination",
       "amount",
-      "additional_information",
-      "description",
       "customer_id",
-      "client_reference"
+      "description",
+      "client_reference",
+      "client_metadata",
+      "payment_rail_reference",
+      "supporting_document_ids",
+      "additional_information"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -3309,35 +4006,47 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Create a new blockchain wallet for a customer on the specified network.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
+    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the customer to create a wallet for",
+          "description": "ID of the customer to create the wallet for. Gravv does not check that the customer exists, so check the ID before you send it.",
           "example": "9e3cccad-e9ae-47a0-81ee-063af0159310"
         },
         "name": {
-          "type": "string",
-          "description": "Optional custom name for the wallet",
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 255,
+          "description": "Optional name for the wallet",
           "example": "my wallet"
         },
         "network": {
           "type": "string",
-          "description": "Blockchain network for the wallet",
+          "description": "Blockchain network, in lower case",
           "enum": [
-            "stellar",
             "polygon",
             "ethereum",
             "base",
-            "solana",
             "avalanche",
-            "sui",
-            "tron"
+            "stellar",
+            "solana"
           ],
           "example": "stellar"
+        },
+        "wallet_type": {
+          "type": "string",
+          "description": "Wallet type. A tenant can have one `master` wallet on each network.",
+          "enum": [
+            "customer",
+            "master"
+          ],
+          "default": "customer",
+          "example": "customer"
         },
         "idempotency_key": {
           "type": "string",
@@ -3359,11 +4068,15 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [
       "customer_id",
       "name",
-      "network"
+      "network",
+      "wallet_type"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -3371,13 +4084,17 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "delete",
     "path": "/v1/accounts/applications/{id}",
-    "description": "Delete account application — Delete a single application.",
+    "description": "Delete account application — Delete a single application.\n\nOnly a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "format": "uuid"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -3392,113 +4109,214 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": true,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
-    "name": "exportTransactions",
-    "toolset": "transactions",
+    "name": "deleteSavedCard",
+    "toolset": "collections",
+    "method": "delete",
+    "path": "/v1/collections/cards/{card_id}",
+    "description": "Delete saved card — Removes a saved card. Send the owner's `customer_id` and the `card_token` in the body: the card deleted is the one named by `card_token`, not by the path. A request without a body fails with `EOF`. A token that matches no active card returns `card already deleted`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "description": "The saved card `id`. It does not choose the card."
+        },
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The card owner's customer ID",
+          "example": "f827e428-c497-4b21-8855-99d978909c28"
+        },
+        "card_token": {
+          "type": "string",
+          "description": "Token of the card to delete",
+          "example": "tokn_80aebb6ea2594a74bc"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        }
+      },
+      "required": [
+        "card_id",
+        "customer_id",
+        "card_token"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "card_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "card_token"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": true,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "collections.yaml"
+  },
+  {
+    "name": "deleteSettlementInstruction",
+    "toolset": "fx",
+    "method": "delete",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Delete a settlement instruction — Retires a settlement instruction. It can no longer be read or used, and it cannot be restored. Orders that used it keep its ID. Deleting the default leaves its currency with no default.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": true,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
+  },
+  {
+    "name": "downloadCustomerKycDocument",
+    "toolset": "kyc",
     "method": "get",
-    "path": "/v1/transactions/export",
-    "description": "Export transactions — Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 newest matching rows (a known bug).\n\nReturns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
+    "path": "/v1/customers/{customer_id}/kyc/documents/{document_id}/download",
+    "description": "Download a KYC document — Returns one side of a stored document as a data URI. Get the `document_id` from the documents list. A two-sided card is two documents: read the back image of the `BACK_SIDE` document with `side=back`. Responses can be large, up to about 13 MB. A scoped API key needs the `customer:update` permission.\n\nThis server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter by customer ID"
+          "description": "UUID of the customer"
+        },
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of the KYC document, from the documents list"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "front",
+            "back"
+          ],
+          "description": "Which image to return"
+        }
+      },
+      "required": [
+        "customer_id",
+        "document_id",
+        "side"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "customer_id",
+      "document_id"
+    ],
+    "queryParams": [
+      "side"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "kyc.yaml"
+  },
+  {
+    "name": "exportTransactions",
+    "toolset": "transactions",
+    "method": "get",
+    "path": "/v1/transactions/export",
+    "description": "Export transactions — Returns the 10 newest matching transactions as a base64 file. For more rows, page through `GET /v1/transactions`. CSV columns are id, date_created, amount, currency, direction, transaction_type, status, channel, description, fee, reference, tx_hash, sending_account_id, receiving_account_id, client_reference, balance_before and balance_after.\n\nReturns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid"
         },
         "account_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter by account ID"
+          "description": "Transactions that send from or receive into this account"
         },
         "card_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter by card ID"
+          "format": "uuid"
         },
         "tx_hash": {
           "type": "string",
-          "description": "Filter by blockchain transaction hash"
+          "description": "Exact blockchain transaction hash"
+        },
+        "wallet_address": {
+          "type": "string",
+          "description": "Sending or receiving wallet address, not case-sensitive"
         },
         "channel": {
           "type": "string",
-          "enum": [
-            "avalanche",
-            "ethereum",
-            "solana",
-            "stellar",
-            "polygon",
-            "ach",
-            "wire",
-            "swift",
-            "bank_transfer",
-            "mobile_money",
-            "internal",
-            "swap",
-            "sepa",
-            "base",
-            "sui",
-            "tron",
-            "card",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "savings",
-            "savings_withdrawal",
-            "savings_interest"
-          ],
-          "description": "Filter by transaction channel"
+          "description": "One or more channels, comma-separated, such as `ach,wire`. See the `channel` values on the transaction. An unknown value returns nothing."
         },
         "direction": {
           "type": "string",
           "enum": [
             "in",
             "out"
-          ],
-          "description": "Filter by transaction direction"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": [
-            "pending",
-            "completed",
-            "failed",
-            "waiting_approval"
-          ],
-          "description": "Filter by transaction status"
+          "description": "One or more of `pending`, `completed`, `failed`, `waiting_approval` and `paused`, comma-separated"
         },
         "transaction_type": {
           "type": "string",
-          "enum": [
-            "internal_transfer",
-            "crypto_transfer",
-            "crypto_funding",
-            "global_remittance",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "account_funding",
-            "credit",
-            "debit",
-            "fee_charge",
-            "subscription_fee",
-            "invoice_payment"
-          ],
-          "description": "Filter by transaction type"
+          "description": "One or more transaction types, comma-separated. See the `transaction_type` values on the transaction. An unknown value returns nothing."
         },
         "start_date": {
           "type": "string",
-          "format": "date-time",
-          "description": "Filter transactions created on or after this timestamp"
+          "format": "date",
+          "description": "First day, as YYYY-MM-DD. Other formats are ignored."
         },
         "end_date": {
           "type": "string",
-          "format": "date-time",
-          "description": "Filter transactions created on or before this timestamp"
+          "format": "date",
+          "description": "Last day, included, as YYYY-MM-DD. Other formats are ignored."
         },
         "export_format": {
           "type": "string",
@@ -3506,8 +4324,8 @@ export const TOOLS: GeneratedTool[] = [
             "csv",
             "json"
           ],
-          "default": "csv",
-          "description": "File format for the export"
+          "default": "json",
+          "description": "Lower case only"
         }
       },
       "required": [],
@@ -3519,6 +4337,7 @@ export const TOOLS: GeneratedTool[] = [
       "account_id",
       "card_id",
       "tx_hash",
+      "wallet_address",
       "channel",
       "direction",
       "status",
@@ -3530,8 +4349,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -3539,12 +4361,13 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/{account_id}",
-    "description": "Get a single account — Retrieve details of a specific internal account by `account_id`.",
+    "description": "Get a single account — Returns one account with its deposit details, balance and assets. Poll it after you create an account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with `internal account not found`.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "account_id": {
-          "type": "string"
+          "type": "string",
+          "format": "uuid"
         }
       },
       "required": [
@@ -3559,8 +4382,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3589,8 +4415,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3619,54 +4448,26 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
-    "name": "getCard",
-    "toolset": "cards",
+    "name": "getAccountApplicationV2",
+    "toolset": "accounts",
     "method": "get",
-    "path": "/v1/cards/{card_id}",
-    "description": "Get card — Retrieve card details for a customer. To retrieve sensitive card details, such as `cvv` and `card_number` use the View card sensitive details endpoint.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "card_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "The ID of the card to retrieve."
-        }
-      },
-      "required": [
-        "card_id"
-      ],
-      "additionalProperties": false
-    },
-    "pathParams": [
-      "card_id"
-    ],
-    "queryParams": [],
-    "bodyMode": "none",
-    "bodyProps": [],
-    "alsoInBody": [],
-    "movesMoney": false,
-    "needsIdempotency": false,
-    "spec": "cards.yaml"
-  },
-  {
-    "name": "getCardApplication",
-    "toolset": "cards",
-    "method": "get",
-    "path": "/v1/cards/applications/{application_id}",
-    "description": "Get card application — Retrieve the card application associated with a customer.",
+    "path": "/v2/accounts/applications/{application_id}",
+    "description": "Get an account application — Returns one application with what it waits for. Act on `status_reason`: upload `required_documents` or send `required_fields` with the update, or send the customer to `required_action_url` for terms or verification. Use `status`, not the deprecated `provisioning` object.\n\nRead before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "application_id": {
           "type": "string",
           "format": "uuid",
-          "description": "The ID of the card application (UUID)."
+          "description": "ID of the account application. Read it from the account (`application_id`) or from the application webhooks."
         }
       },
       "required": [
@@ -3681,52 +4482,160 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
-    "spec": "cards.yaml"
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
-    "name": "getCardBalance",
-    "toolset": "cards",
+    "name": "getAccountCapabilities",
+    "toolset": "accounts",
     "method": "get",
-    "path": "/v1/cards/{card_id}/balance",
-    "description": "Get card balance — Retrieve the current balance available on a card. The balance represents the total funds available for card transactions in USD.",
+    "path": "/v1/accounts/capabilities",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account or an application. Send `customer_id`, or `country` with `customer_type`. Send `customer_type` with `customer_id` too, or options for both types come back. The answer uses the v2 account rules. A v1 create picks a bank with its own rules, so an option here does not promise that the same v1 create succeeds. Unknown query parameters are rejected.\n\nCall first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "card_id": {
+        "customer_id": {
           "type": "string",
-          "description": "The ID of the card to retrieve balance for"
+          "format": "uuid",
+          "description": "Customer to check. Their profile address gives the country when you do not send `country`."
+        },
+        "country": {
+          "type": "string",
+          "description": "Residence country as an ISO 3166-1 alpha-2 or alpha-3 code"
+        },
+        "subdivision": {
+          "type": "string",
+          "description": "Residence state, such as `US-NY` or `NY`"
+        },
+        "customer_type": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ],
+          "description": "Customer type to list options for"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code to filter by"
         }
       },
-      "required": [
-        "card_id"
-      ],
+      "required": [],
       "additionalProperties": false
     },
-    "pathParams": [
-      "card_id"
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "country",
+      "subdivision",
+      "customer_type",
+      "currency"
     ],
-    "queryParams": [],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
-    "spec": "cards.yaml"
+    "sandboxOnly": false,
+    "spec": "accounts.yaml"
   },
   {
-    "name": "getCollection",
-    "toolset": "collections",
+    "name": "getAccountRequirements",
+    "toolset": "accounts",
     "method": "get",
-    "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of a collection. It needs an API key like every other call. Pass the transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
+    "path": "/v2/accounts/requirements",
+    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that the same bank as create is chosen. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.\n\nBuild createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_type": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code"
+        },
+        "bank_code": {
+          "type": "string",
+          "description": "A `bank_code` from the capabilities"
+        },
+        "account_type": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main"
+        },
+        "country": {
+          "type": "string",
+          "description": "The customer's citizenship or incorporation country, alpha-2 or alpha-3"
+        },
+        "subdivision": {
+          "type": "string",
+          "description": "ISO 3166-2 code or a bare state code. Needs `country`."
+        },
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Customer to fill the form for"
+        }
+      },
+      "required": [
+        "customer_type",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_type",
+      "currency",
+      "bank_code",
+      "account_type",
+      "category",
+      "country",
+      "subdivision",
+      "customer_id"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "getAccountV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/{id}",
+    "description": "Get an account — Returns one account with bank details, balances and, when it is not `active`, the reason. Poll it after create until `status` is `active`. When `requires_user_action` is true, act on `status_reason` with `application_id`. `balance` and `balance_details` are major units; `ledger_balance` is minor units.\n\nPoll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Onramp transaction ID"
+          "format": "uuid",
+          "description": "ID of the account"
         }
       },
       "required": [
@@ -3741,8 +4650,155 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "getCard",
+    "toolset": "cards",
+    "method": "get",
+    "path": "/v1/cards/{card_id}",
+    "description": "Get a card — Returns one card without its full number. `daily_transaction_limit` is the card's only limit. The format of `masked_pan` and `expiry` differs from the list.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the card"
+        }
+      },
+      "required": [
+        "card_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "card_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "cards.yaml"
+  },
+  {
+    "name": "getCardApplication",
+    "toolset": "cards",
+    "method": "get",
+    "path": "/v1/cards/applications/{application_id}",
+    "description": "Get a card application — Returns one application. Its `status` is the card's status and stays empty until a card is issued, so use `GET /v1/cards/applications` to wait for approval.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "application_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "application_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "cards.yaml"
+  },
+  {
+    "name": "getCardBalance",
+    "toolset": "cards",
+    "method": "get",
+    "path": "/v1/cards/{card_id}/balance",
+    "description": "Get a card balance — Returns what the card can spend and the balance of its card group, in USD as JSON numbers. `balance` is 0 unless the card is `active`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "card_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the card"
+        }
+      },
+      "required": [
+        "card_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "card_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "cards.yaml"
+  },
+  {
+    "name": "getCollection",
+    "toolset": "collections",
+    "method": "get",
+    "path": "/v1/collections/{id}",
+    "description": "Get transaction by ID — Returns the status and details of a collection. Pass the `transaction_id` from the create call, the charge call or a webhook. The `id` in this response is a different value.\n\nonramp_status `settlement_abandoned` is not live yet; production does not send it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The collection's `transaction_id`"
+        },
+        "enrich": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "Send `true` to include the payer details in `enriched_info`"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [
+      "enrich"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -3750,7 +4806,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "get",
     "path": "/v1/customers/{customer_id}",
-    "description": "Get a single customer — Retrieve details of a specific customer by `customer_id`.",
+    "description": "Get a single customer — Returns one customer with its KYC records, and for a business its associated persons. It also returns an associated person by its own `id`. Send no query parameters.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3771,8 +4827,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -3780,7 +4839,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/documents",
-    "description": "Get KYC document data — Returns the list of documents a customer has uploaded, with metadata for each one.",
+    "description": "Get KYC document data — Lists the documents stored for a customer, with their details and which sides have an image. Use a document's `id` to download its image. The response includes each document number in plain text. Treat it as personal data. A customer with no documents gets a 404, not an empty list.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3802,8 +4861,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -3811,7 +4873,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/status",
-    "description": "Get applicant verification status — Retrieves the current KYC review status for a customer from the verification provider. Use this endpoint to check a customer's verification outcome after you initiate KYC. While a review is in progress, `reviewStatus` is `pending` and `reviewResult` is omitted. Once the review finishes, `reviewStatus` is `completed` and `reviewResult` contains the decision.",
+    "description": "Get applicant verification status — Reads the live review state for a customer's verification. It does not change the customer's KYC status, which only the webhooks update. For the final result, read `kyc` on the customer (`GET /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*` webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means verification failed. Customers verified by automatic document verification have no review and get a 404 here.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3833,21 +4895,60 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
+  },
+  {
+    "name": "getCustomerLimits",
+    "toolset": "transfers",
+    "method": "get",
+    "path": "/v1/customers/{customer_id}/limits",
+    "description": "Get a customer's limits — Returns a customer's transfer tier, the caps for each window and what is left in each. Use it before a large payout, or to explain why a transfer paused. All amounts are USD strings.\n\nUse before a large payout, or to explain a pause: remaining_usd is what is left in each window. A null cap means no cap only when caps_basis is `tier`.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer"
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "customer_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "limits.yaml"
   },
   {
     "name": "getExternalAccount",
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Get a single external account — Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is `active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with code ERROR_CODE_NOT_FOUND.",
+    "description": "Get an external account — Returns one external account. After a 202, poll every 30 to 60 seconds until `status` is `active` (ready for transfers) or `setup_failed` (read `error_message`, then correct the account with PATCH). Not-found is a 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "external_account_id": {
-          "type": "string"
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the external account"
         }
       },
       "required": [
@@ -3862,8 +4963,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -3871,13 +4975,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/{order_id}",
-    "description": "Get order — Retrieves a single order by its `order_id`.",
+    "description": "Get an order — Returns one order. `pending` covers both a debit in progress and a debit that landed and is waiting to settle. Not-found is a 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "order_id": {
           "type": "string",
-          "description": "The order reference returned when the order was created."
+          "format": "uuid",
+          "description": "The `order_id` returned when the order was created"
         }
       },
       "required": [
@@ -3892,8 +4997,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -3901,33 +5009,24 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/quote",
-    "description": "Create an FX quote — The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and `amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this server sends one.\n\nQuotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
+    "description": "Get a quote — Returns a firm price to sell an amount of one currency for another. The quote lasts 5 minutes and can be used once, only by `POST /v1/fx/orders`. It does not set the rate of a transfer. A pair that is not enabled for you returns `quote currency pair is not supported`.\n\nQuotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "from_currency": {
+        "currency_pair": {
           "type": "string",
-          "description": "Source currency code (ISO 4217).",
-          "example": "USD"
-        },
-        "to_currency": {
-          "type": "string",
-          "description": "Target currency code (ISO 4217).",
-          "example": "ZAR"
-        },
-        "amount": {
-          "type": "number",
-          "description": "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON number is rejected with `invalid request encoding`.",
-          "example": 10
+          "description": "`FROM_TO`: the currency you sell, then the currency you buy, such as `USD_XAF`. The four-part form `USD_US_XAF_CM` is also accepted; its countries do not change the price. It wins over `direction`.",
+          "example": "USD_XAF"
         },
         "direction": {
           "type": "string",
-          "description": "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair (for example USD_XAF) instead.",
-          "enum": [
-            "BUY",
-            "SELL"
-          ],
-          "example": "BUY"
+          "description": "The same `FROM_TO` form as `currency_pair`. It is not BUY or SELL.",
+          "example": "USD_XAF"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Amount you sell, in major units of the FROM currency, as a string. A JSON number is rejected.",
+          "example": "10000"
         },
         "idempotency_key": {
           "type": "string",
@@ -3938,10 +5037,7 @@ export const TOOLS: GeneratedTool[] = [
         }
       },
       "required": [
-        "from_currency",
-        "to_currency",
-        "amount",
-        "direction"
+        "amount"
       ],
       "additionalProperties": true
     },
@@ -3949,29 +5045,66 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
-      "from_currency",
-      "to_currency",
-      "amount",
-      "direction"
+      "currency_pair",
+      "direction",
+      "amount"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
+  },
+  {
+    "name": "getRemitterLimits",
+    "toolset": "transfers",
+    "method": "get",
+    "path": "/v1/limits/remitters/{remitter_id}",
+    "description": "Get a remitter's limits — Returns the same view for a remitter: the sender you name in `additional_information.remitter_verification` on a transfer. Usage counts only transfers that carry it, on a policy with attested tiers. An unknown remitter gets the policy's default tier.\n\nremitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "remitter_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Your ID for the sender, 1 to 255 characters. It is case-sensitive."
+        }
+      },
+      "required": [
+        "remitter_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "remitter_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "limits.yaml"
   },
   {
     "name": "getSavedCard",
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/cards/{card_id}",
-    "description": "Get saved card — Returns a single saved card by ID. Returns 404 if the card does not exist or is inactive, and 403 if the card belongs to a different tenant.",
+    "description": "Get saved card — Returns one active saved card by the `id` from the list. Ignore `is_active` in this response: it always reads `false`.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "card_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Saved card ID"
+          "description": "The saved card `id`, not the card token"
         }
       },
       "required": [
@@ -3986,23 +5119,60 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
+  },
+  {
+    "name": "getSettlementInstruction",
+    "toolset": "fx",
+    "method": "get",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Get a settlement instruction — Returns one active settlement instruction. A deleted one is not found.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "getTransaction",
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions/{transaction_id}",
-    "description": "Get a single transaction — Retrieve details of a specific transaction by transaction ID.",
+    "description": "Get a transaction — Returns one transaction. Poll it after a transfer until `status` is `completed` or `failed`; `paused` means the transfer needs something from you. Not-found is a 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "transaction_id": {
           "type": "string",
           "format": "uuid",
-          "description": "The ID of the transaction to retrieve"
+          "description": "The `transaction_id` from `POST /v1/transfer`"
         }
       },
       "required": [
@@ -4017,8 +5187,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -4026,90 +5199,40 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions/volume",
-    "description": "Get transactions volume — Returns the total summed volume of transactions matching the supplied filters. Useful for dashboard metrics and reporting.",
+    "description": "Get transaction volume — Returns the sum of the matching amounts. It adds up every currency, direction and status you do not filter out, so filter by an account and `status=completed`. There is no date filter.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "sending_account_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter by sending account ID"
+          "format": "uuid"
         },
         "receiving_account_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter by receiving account ID"
+          "format": "uuid"
         },
         "customer_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter by customer ID"
+          "format": "uuid"
         },
         "channel": {
           "type": "string",
-          "enum": [
-            "avalanche",
-            "ethereum",
-            "solana",
-            "stellar",
-            "polygon",
-            "ach",
-            "wire",
-            "swift",
-            "bank_transfer",
-            "mobile_money",
-            "internal",
-            "swap",
-            "sepa",
-            "base",
-            "sui",
-            "tron",
-            "card",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "savings",
-            "savings_withdrawal",
-            "savings_interest"
-          ],
-          "description": "Filter by transaction channel"
+          "description": "One or more channels, comma-separated, such as `ach,wire`. See the `channel` values on the transaction. An unknown value returns nothing."
         },
         "direction": {
           "type": "string",
           "enum": [
             "in",
             "out"
-          ],
-          "description": "Filter by transaction direction"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": [
-            "pending",
-            "completed",
-            "failed",
-            "waiting_approval"
-          ],
-          "description": "Filter by transaction status"
+          "description": "One or more of `pending`, `completed`, `failed`, `waiting_approval` and `paused`, comma-separated"
         },
         "transaction_type": {
           "type": "string",
-          "enum": [
-            "internal_transfer",
-            "crypto_transfer",
-            "crypto_funding",
-            "global_remittance",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "account_funding",
-            "credit",
-            "debit",
-            "fee_charge",
-            "subscription_fee",
-            "invoice_payment"
-          ],
-          "description": "Filter by transaction type"
+          "description": "One or more transaction types, comma-separated. See the `transaction_type` values on the transaction. An unknown value returns nothing."
         }
       },
       "required": [],
@@ -4128,8 +5251,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -4137,34 +5263,43 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/transfer/rates",
-    "description": "Get rates — Retrieve current exchange rates for transfers between different currencies.",
+    "description": "Get transfer rates — Without `source_wallet_id`, returns indicative exchange rates, which you can filter by `currency`. With `source_wallet_id`, `destination_wallet_id`, `receive_asset` and `amount`, it prices a USDT and USDC conversion between two wallets of one customer. Neither is a locked price; the transfer is priced again when you create it.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "page": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 1,
-          "description": "Page number for pagination"
-        },
-        "items_per_page": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 100,
-          "default": 10,
-          "description": "Number of transactions per page"
-        },
-        "country_iso_code": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 2,
-          "description": "Use two-letter ISO country code to filter transfer rates"
-        },
         "currency": {
           "type": "string",
-          "minLength": 3,
-          "maxLength": 3,
-          "description": "Use three-letter ISO currency code to filter transfer rates"
+          "description": "The currency received. Not case-sensitive."
+        },
+        "source_wallet_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Prices a conversion from this crypto wallet"
+        },
+        "destination_wallet_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Conversion price only. A wallet of the same customer."
+        },
+        "receive_asset": {
+          "type": "string",
+          "enum": [
+            "USDT",
+            "USDC"
+          ],
+          "description": "Conversion price only. It must differ from the asset sent."
+        },
+        "send_asset": {
+          "type": "string",
+          "enum": [
+            "USDT",
+            "USDC"
+          ],
+          "description": "Conversion price only. Defaults to the wallet's asset."
+        },
+        "amount": {
+          "type": "string",
+          "description": "Conversion price only. Positive, with at most 2 decimal places."
         }
       },
       "required": [],
@@ -4172,16 +5307,21 @@ export const TOOLS: GeneratedTool[] = [
     },
     "pathParams": [],
     "queryParams": [
-      "page",
-      "items_per_page",
-      "country_iso_code",
-      "currency"
+      "currency",
+      "source_wallet_id",
+      "destination_wallet_id",
+      "receive_asset",
+      "send_asset",
+      "amount"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -4189,14 +5329,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "get",
     "path": "/v1/wallets/{wallet_id}",
-    "description": "Get a single wallet — Retrieve details of a specific wallet by wallet ID.",
+    "description": "Get a single wallet — Returns one wallet with its balances. Balances come from a cache. When one is missing or older than 5 minutes, Gravv queues a refresh and returns without waiting for it. Balances are tracked for USDC on every listed network, USDT on polygon, ethereum, avalanche and solana, and the network's own coin.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "wallet_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Wallet ID to retrieve"
+          "description": "Wallet ID"
         }
       },
       "required": [
@@ -4211,8 +5351,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -4220,14 +5363,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/calls/{id}",
-    "description": "Get call history for a webhook event — Get the per-attempt delivery call history for a specific webhook event, including request/response details for each attempt.",
+    "description": "Get call history for a webhook event — Lists every delivery attempt for one record, newest first, with the status code, time taken and any connection error. Attempts that failed before the call was made, such as a missing or unsafe URL, are not listed; they only add to `attempts` on the detail route.\n\nTakes the `id` of a getWebhookHistory item.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "format": "uuid",
-          "description": "UUID of the webhook event"
+          "description": "The delivery record `id` from the history list. It is not the `event_id` in the delivered body."
         }
       },
       "required": [
@@ -4242,8 +5385,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4251,14 +5397,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/event/{id}",
-    "description": "Get webhook event details — Get detailed information about a specific webhook event including request/response headers, payload, and delivery attempts.",
+    "description": "Get webhook event details — Returns one delivery record with the stored payload, the delivery state and your endpoint's last response. Use it to see what was sent and why a delivery failed. Request headers are not returned.\n\nTakes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "format": "uuid",
-          "description": "UUID of the webhook event"
+          "description": "The delivery record `id` from the history list. It is not the `event_id` in the delivered body."
         }
       },
       "required": [
@@ -4273,8 +5419,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4282,20 +5431,21 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "webhooks",
     "method": "get",
     "path": "/v1/webhooks/history",
-    "description": "Get paginated webhook event history — Get a paginated list of webhook events for a specific business. Supports filtering by event type, status, and date range.",
+    "description": "Get paginated webhook event history — Lists the webhook delivery records for your business, newest first. There is one record for each event Gravv sent you. Sandbox and live keys see separate records. All filters combine.\n\nUse an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "transaction_id": {
           "type": "string",
-          "description": "Filter by the transaction identifier associated with the event"
+          "description": "Exact transaction ID stored with the event. For transfers it is the first of `associated_transactions`, not the transfer `reference`."
         },
         "event_type": {
           "type": "string",
-          "description": "Filter by event type (full string, e.g. transfer.status.completed)"
+          "description": "Event category: `transfer`, `inflow`, `account`, `applications.accounts`, `external_account`, `cards`, `collection` or `customer`. A full event type such as `transfer.status.completed` matches nothing and returns an empty list."
         },
         "status": {
           "type": "string",
+          "description": "Delivery status. Any other value returns an empty list, not an error.",
           "enum": [
             "pending",
             "processing",
@@ -4303,32 +5453,30 @@ export const TOOLS: GeneratedTool[] = [
             "failed",
             "retrying"
           ],
-          "description": "Filter by webhook status"
+          "example": "sent"
         },
         "start_date": {
           "type": "string",
-          "format": "date-time",
-          "description": "Filter events created on or after this date (inclusive). Must be in RFC3339 format. If both start_date and end_date are provided, start_date must not be after end_date."
+          "description": "Records created at or after this time. Send RFC3339 (`2026-10-01T00:00:00Z`), a date (`2026-10-01`, read as 00:00 UTC) or a datetime without a zone (read as UTC)."
         },
         "end_date": {
           "type": "string",
-          "format": "date-time",
-          "description": "Filter events created on or before this date (inclusive). Must be in RFC3339 format. If both start_date and end_date are provided, start_date must not be after end_date."
+          "description": "Records created at or before this time, in the same formats. A date alone means 00:00 of that day, so the day itself is left out. It must not be before `start_date`."
         },
         "limit": {
           "type": "integer",
           "format": "int32",
-          "minimum": 1,
+          "minimum": 0,
           "maximum": 100,
           "default": 50,
-          "description": "Maximum number of results per page (max 100, default 50)"
+          "description": "Records per page. A value over 100 is lowered to 100, and 0 means the default."
         },
         "page": {
           "type": "integer",
           "format": "int32",
           "minimum": 1,
           "default": 1,
-          "description": "Page number for pagination (1-based)"
+          "description": "Page number, starting at 1"
         }
       },
       "required": [],
@@ -4347,8 +5495,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4373,10 +5524,23 @@ export const TOOLS: GeneratedTool[] = [
           "format": "uuid"
         },
         "status": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "draft",
+            "submitted",
+            "processing",
+            "approved",
+            "manual_review",
+            "rejected"
+          ],
+          "description": "Filter by status, in lower case"
         },
         "application_type": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "individual",
+            "business"
+          ]
         }
       },
       "required": [],
@@ -4393,46 +5557,135 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "listAccountApplicationsV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts/applications",
+    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total; page until `count` is less than `limit`. A misspelt `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "description": "`processing` while the bank works, `blocked` while it waits on you or the customer, `manual_review` while Gravv holds it, then `approved` or `rejected`. `draft` and `submitted` come only from v1 flows.",
+          "enum": [
+            "draft",
+            "submitted",
+            "processing",
+            "blocked",
+            "manual_review",
+            "approved",
+            "rejected",
+            "expired",
+            "cancelled"
+          ],
+          "example": "blocked"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "status",
+      "limit",
+      "offset"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "listAccounts",
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts",
-    "description": "Get accounts — Retrieve a list of internal accounts with optional filters and pagination.",
+    "description": "Get accounts — Lists your internal accounts, newest first, with balances. Accounts opened with `/v2/accounts` are included. Filters combine with AND, and a filter that matches nothing returns an empty list.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "items_per_page": {
-          "type": "string",
-          "description": "Number of items per page (pagination limit)"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "Number of items per page, up to 100"
         },
         "page": {
-          "type": "string",
-          "description": "Page number for pagination"
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Page number, from 1"
         },
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter accounts by customer ID"
+          "description": "Filter by customer"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "pending",
+            "frozen",
+            "deleted",
+            "manual_review"
+          ],
+          "description": "Filter by status"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Filter by currency code"
+        },
+        "account_type": {
+          "type": "string",
+          "description": "Filter by account type, such as `regular` or `card`"
         },
         "blockchain_network": {
           "type": "string",
-          "enum": [
-            "polygon",
-            "stellar",
-            "ethereum",
-            "solana",
-            "avalanche"
-          ],
-          "description": "Filter accounts by blockchain network"
+          "description": "Filter by network, such as `polygon`"
         },
-        "label": {
+        "wallet_address": {
           "type": "string",
-          "description": "Filter accounts by their label"
+          "description": "Filter by exact wallet address"
+        },
+        "search": {
+          "type": "string",
+          "description": "Case-insensitive text search across label, currency, status, type and wallet address. Use it to find an account by label."
+        },
+        "excluded_customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Leave out this customer's accounts"
         }
       },
       "required": [],
@@ -4443,37 +5696,177 @@ export const TOOLS: GeneratedTool[] = [
       "items_per_page",
       "page",
       "customer_id",
+      "status",
+      "currency",
+      "account_type",
       "blockchain_network",
-      "label"
+      "wallet_address",
+      "search",
+      "excluded_customer_id"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "listAccountsV2",
+    "toolset": "accounts",
+    "method": "get",
+    "path": "/v2/accounts",
+    "description": "List accounts — Lists your accounts, v1 and v2, newest first, with bank details and balances. Status reasons are only on the single read. Unknown query parameters are rejected with a 400. A bad filter value is an error, not an empty page.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "description": "Filter by customer"
+        },
+        "excluded_customer_id": {
+          "type": "string",
+          "description": "Leave out this customer's accounts"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "active",
+            "frozen",
+            "closed",
+            "rejected",
+            "failed",
+            "deleted",
+            "manual_review"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "main",
+            "sub_account",
+            "virtual",
+            "multi_currency"
+          ],
+          "example": "main"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Three-letter ISO 4217 code"
+        },
+        "network": {
+          "type": "string",
+          "description": "Network name in lower case",
+          "enum": [
+            "stellar",
+            "polygon",
+            "ethereum",
+            "base",
+            "solana",
+            "avalanche_c_chain",
+            "sui",
+            "tron",
+            "bsc",
+            "flow_evm",
+            "canton",
+            "bitcoin",
+            "celo",
+            "gnosis",
+            "arbitrum",
+            "optimism",
+            "xdc",
+            "tempo"
+          ],
+          "example": "polygon"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "description": "Exact label. Use `search` for part of a label."
+        },
+        "type": {
+          "type": "string",
+          "description": "Account type, such as `operating`"
+        },
+        "search": {
+          "type": "string",
+          "description": "Case-insensitive search across label, currency, status, type and wallet address"
+        },
+        "created_from": {
+          "type": "string",
+          "description": "Created at or after, as RFC 3339 or YYYY-MM-DD (inclusive)"
+        },
+        "created_to": {
+          "type": "string",
+          "description": "Created before, as RFC 3339 or YYYY-MM-DD (exclusive)"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50,
+          "description": "Page size, 1 to 200. Values out of range give 50."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "excluded_customer_id",
+      "status",
+      "category",
+      "currency",
+      "network",
+      "bank_code",
+      "label",
+      "type",
+      "search",
+      "created_from",
+      "created_to",
+      "limit",
+      "offset"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "listCardApplications",
     "toolset": "cards",
     "method": "get",
     "path": "/v1/cards/applications",
-    "description": "Get card applications — Retrieve a paginated list of card applications with optional filtering.",
+    "description": "List card applications — Lists your card applications, newest first, with `application_status`. This is the only route that returns it: poll it until the status is `approved`, or wait for the `cards.application.update` webhook. There are no filters.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
           "minimum": 1,
-          "default": 1,
-          "description": "Page number for pagination"
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100,
-          "default": 10,
-          "description": "Number of applications per page"
+          "default": 10
         }
       },
       "required": [],
@@ -4487,8 +5880,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -4496,22 +5892,33 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "get",
     "path": "/v1/cards",
-    "description": "Get cards — Retrieve a paginated list of cards with optional filtering.",
+    "description": "List cards — Lists your cards, newest first. Applications with no card yet are included with an empty `status`; send `status=active,freeze,blocked,inactive` to list cards only.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
           "minimum": 1,
-          "default": 1,
-          "description": "Page number for pagination"
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100,
-          "default": 10,
-          "description": "Number of cards per page"
+          "default": 10
+        },
+        "status": {
+          "type": "string",
+          "description": "One or more card statuses, comma-separated"
+        },
+        "card_type": {
+          "type": "string",
+          "description": "`virtual`, `physical` or both, comma-separated"
+        },
+        "customer_id": {
+          "type": "string"
+        },
+        "card_id": {
+          "type": "string"
         }
       },
       "required": [],
@@ -4520,13 +5927,20 @@ export const TOOLS: GeneratedTool[] = [
     "pathParams": [],
     "queryParams": [
       "page",
-      "items_per_page"
+      "items_per_page",
+      "status",
+      "card_type",
+      "customer_id",
+      "card_id"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -4534,29 +5948,25 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "get",
     "path": "/v1/customers",
-    "description": "Get customers — Retrieve a paginated list of customers with optional filters.",
+    "description": "Get customers — Lists your individual and business customers, newest first. Associated persons are not listed; get their business to see them. Unknown or invalid filters are ignored.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
-          "description": "Page number (1-based)"
+          "minimum": 1,
+          "default": 1,
+          "description": "Page number, from 1"
         },
         "items_per_page": {
           "type": "integer",
-          "description": "Number of items per page"
-        },
-        "email": {
-          "type": "string",
-          "description": "Filter by exact email address"
-        },
-        "sort": {
-          "type": "string",
-          "description": "Sort order (e.g. `created_at ASC` or `created_at DESC`)"
+          "minimum": 1,
+          "default": 20,
+          "description": "Items per page. There is no maximum, so page through large sets."
         },
         "status": {
           "type": "string",
-          "description": "Filter by customer status (e.g. `active`)"
+          "description": "Filter by customer status. `active` is the only status set today."
         },
         "type": {
           "type": "string",
@@ -4568,19 +5978,18 @@ export const TOOLS: GeneratedTool[] = [
         },
         "keyword": {
           "type": "string",
-          "description": "Full-text search across first name, last name, email, and customer ID"
+          "description": "Search first name, last name, email and customer ID. It does not search the business name."
         },
         "kyc_status": {
           "type": "string",
-          "description": "Filter by KYC status of the customer's basic KYC record"
-        },
-        "from": {
-          "type": "integer",
-          "description": "Offset — number of records to skip before the current page"
-        },
-        "to": {
-          "type": "integer",
-          "description": "Upper record offset bound"
+          "enum": [
+            "not_started",
+            "initiating",
+            "pending",
+            "completed",
+            "failed"
+          ],
+          "description": "Filter by the status of the customer's `basic` KYC record"
         }
       },
       "required": [],
@@ -4590,20 +5999,19 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [
       "page",
       "items_per_page",
-      "email",
-      "sort",
       "status",
       "type",
       "keyword",
-      "kyc_status",
-      "from",
-      "to"
+      "kyc_status"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -4611,32 +6019,55 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts/institutions",
-    "description": "Get external account institutions — Retrieve a list of supported financial institutions for external accounts.",
+    "description": "List institutions — Lists the banks and mobile money operators an external account can name in `institution_id`. SWIFT banks appear only when you send `institution_type=swift`, `swift_code` or `search`. Filters match exactly, so send codes in upper case.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
           "minimum": 1,
-          "description": "Page number for pagination"
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100,
-          "description": "Number of institutions per page"
+          "default": 10
         },
         "country_iso_code": {
           "type": "string",
-          "description": "country ISO 2 code"
+          "description": "Alpha-2 country code"
         },
         "institution_type": {
           "type": "string",
           "enum": [
             "bank",
-            "mobile_money"
+            "mobile_money",
+            "swift",
+            "swift_intermediary"
           ],
-          "description": "Filters institutions by type."
+          "description": "Defaults to every type except `swift_intermediary`"
+        },
+        "account_number_type": {
+          "type": "string",
+          "enum": [
+            "bank_account_number",
+            "iban",
+            "phone_number",
+            "clabe"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "swift_code": {
+          "type": "string",
+          "pattern": "^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$",
+          "description": "Find a SWIFT bank by its 8 or 11 character BIC"
+        },
+        "search": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Find SWIFT banks by name or BIC, at least 3 characters"
         }
       },
       "required": [],
@@ -4647,13 +6078,20 @@ export const TOOLS: GeneratedTool[] = [
       "page",
       "items_per_page",
       "country_iso_code",
-      "institution_type"
+      "institution_type",
+      "account_number_type",
+      "currency",
+      "swift_code",
+      "search"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -4661,41 +6099,91 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "get",
     "path": "/v1/external-accounts",
-    "description": "Get multiple external accounts — Retrieve a list of external accounts with optional pagination.",
+    "description": "List external accounts — Lists your external accounts, newest first, in every status including `deleted`. There is no status filter. Filters match exactly and are case-sensitive, so send currencies in upper case. `total_items` is an estimate; stop when a page has fewer items than `items_per_page`.",
     "inputSchema": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "items_per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The full customer ID"
+        },
+        "payee_type": {
+          "type": "string",
+          "description": "How the account is paid. `bank_account` and `mobile_money` are active at once. `swift`, `sepa`, `ach_wire` and `fps` need a setup step and start as `pending`.",
+          "enum": [
+            "bank_account",
+            "mobile_money",
+            "swift",
+            "sepa",
+            "ach_wire",
+            "fps"
+          ],
+          "example": "bank_account"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string",
+          "description": "Matches part of the holder name, account number or phone number"
+        },
+        "internal_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Your account that pays the external accounts"
+        }
+      },
       "required": [],
       "additionalProperties": false
     },
     "pathParams": [],
-    "queryParams": [],
+    "queryParams": [
+      "page",
+      "items_per_page",
+      "customer_id",
+      "payee_type",
+      "currency",
+      "search",
+      "internal_account_id"
+    ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
     "name": "listFeatures",
-    "toolset": "features",
+    "toolset": "cards",
     "method": "get",
     "path": "/v1/risk/features",
-    "description": "List available features — Retrieve features based on the provided parameters. If you omit customer_id from the request, the endpoint returns all available features and their requirements. If you include customer_id, the endpoint returns the customer’s features and their activation status.",
+    "description": "List available features — Returns the feature catalogue. With `customer_id`, `activated` shows which features are active for that customer. The order is not fixed. Every error on this route is HTTP 400.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Optional customer ID. When provided, the response includes features specific to that customer along with their activation status. When omitted, or if the customer ID isn’t found, the response returns the global list of available features."
+          "description": "A customer in your tenant. An unknown customer is a 400 `CUSTOMER_NOT_FOUND` error."
         },
         "country": {
           "type": "string",
-          "minLength": 2,
-          "maxLength": 2,
-          "description": "ISO 3166-1 alpha-2 country code. When provided, the response is filtered to features available in that country. Can be combined with `customer_id` to get country-specific features for a customer."
+          "description": "Country code. It has no effect today, because every feature is available in every country."
         },
         "status": {
           "type": "string",
@@ -4705,7 +6193,7 @@ export const TOOLS: GeneratedTool[] = [
             "all"
           ],
           "default": "all",
-          "description": "Filter features by activation status"
+          "description": "Filter by activation. It needs `customer_id`; without it every feature is inactive. Other values act as `all`."
         }
       },
       "required": [],
@@ -4720,8 +6208,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -4729,28 +6220,23 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/supported-currencies",
-    "description": "List currency pairs — Retrieves all supported currency pairs from all enabled providers. By default, only fiat currency pairs are returned. Set `include_crypto=true` to include crypto pairs alongside fiat pairs. This endpoint is cached for 1 hour.",
+    "description": "List supported currency pairs — Lists every currency pair FX knows. A listed pair is not always enabled for you; `POST /v1/fx/quote` tells you. This route reads no query parameters.",
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "include_crypto": {
-          "type": "boolean",
-          "default": false,
-          "description": "When `true`, returns both fiat and crypto supported currency pairs. When omitted or `false`, only fiat pairs are returned."
-        }
-      },
+      "properties": {},
       "required": [],
       "additionalProperties": false
     },
     "pathParams": [],
-    "queryParams": [
-      "include_crypto"
-    ],
+    "queryParams": [],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4758,55 +6244,33 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders",
-    "description": "List orders — Lists your OTC orders, most recent first. Filter with `status`, `order_type`, `side`, `search`, `start_date`, and `end_date`, and page with `page` and `items_per_page`. Filter values that match no orders (including unknown `status` values) don't error; they return a `200` with an empty `items` array.",
+    "description": "List orders — Lists your orders, newest first. `status` is the only filter.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "status": {
-          "type": "string",
-          "description": "Filter by order status: `waiting_approval`, `pending`, `rejected`, `cancelled`, or `expired`."
-        },
-        "order_type": {
-          "type": "string",
-          "enum": [
-            "market",
-            "limit"
-          ],
-          "description": "Filter by order type."
-        },
-        "side": {
-          "type": "string",
-          "enum": [
-            "buy",
-            "sell"
-          ],
-          "description": "Filter by order side."
-        },
-        "search": {
-          "type": "string",
-          "description": "Free-text search filter (for example, an order reference)."
-        },
-        "start_date": {
-          "type": "string",
-          "format": "date",
-          "description": "Only return orders created on or after this date (ISO 8601)."
-        },
-        "end_date": {
-          "type": "string",
-          "format": "date",
-          "description": "Only return orders created on or before this date (ISO 8601)."
-        },
         "page": {
           "type": "integer",
-          "default": 1,
           "minimum": 1,
-          "description": "Page number to return."
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
-          "default": 20,
+          "minimum": 1,
           "maximum": 100,
-          "description": "Number of orders per page."
+          "default": 20,
+          "description": "Page size. Values above 100 give 100."
+        },
+        "status": {
+          "type": "string",
+          "description": "An order made with an API key starts as `pending` and its source is debited at once. It then becomes `completed`, or `cancelled` if the debit fails. `waiting_approval` is for orders made in the dashboard.",
+          "enum": [
+            "waiting_approval",
+            "pending",
+            "completed",
+            "rejected",
+            "cancelled"
+          ],
+          "example": "pending"
         }
       },
       "required": [],
@@ -4814,20 +6278,18 @@ export const TOOLS: GeneratedTool[] = [
     },
     "pathParams": [],
     "queryParams": [
-      "status",
-      "order_type",
-      "side",
-      "search",
-      "start_date",
-      "end_date",
       "page",
-      "items_per_page"
+      "items_per_page",
+      "status"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4835,21 +6297,21 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/pending-approvals",
-    "description": "List pending approvals — Lists the orders in `waiting_approval` that are waiting on an approve or reject decision.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+    "description": "List orders waiting for approval — Lists orders in `waiting_approval`, newest first. Only orders made in the dashboard wait for approval, so orders made with an API key never appear here. A scoped key needs `fx:order_approve`. Approving and rejecting are done in the dashboard.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
-          "default": 1,
           "minimum": 1,
-          "description": "Page number to return."
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
-          "default": 20,
+          "minimum": 1,
           "maximum": 100,
-          "description": "Number of orders per page."
+          "default": 20,
+          "description": "Page size. Values above 100 give 100."
         }
       },
       "required": [],
@@ -4863,8 +6325,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4872,26 +6337,30 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/rates",
-    "description": "List live exchange rates — Fetches exchange rates for multiple currency pairs from all enabled providers. Filters that match no supported pair (for example an unknown currency code) don't error; they return a `200` with an empty `data` array. Use [Get supported currencies](/reference/get_v1-fx-supported-currencies) to confirm a pair is supported.",
+    "description": "List exchange rates — Returns indicative rates for display, sorted by pair. You cannot trade at these rates; call `POST /v1/fx/quote` for a firm price. Filters are not case-sensitive. When rates are not loaded yet, the error is `fx cache is not ready`; retry.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "include_crypto": {
-          "type": "boolean",
-          "default": false,
-          "description": "When `true`, crypto pairs are included in the rates data alongside fiat pairs. Defaults to `false`."
+        "currency_type": {
+          "type": "string",
+          "enum": [
+            "fiat",
+            "crypto"
+          ]
         },
         "from_currency": {
-          "type": "string",
-          "description": "Filter by source currency (3-letter ISO 4217 code)"
+          "type": "string"
         },
         "to_currency": {
+          "type": "string"
+        },
+        "directions": {
           "type": "string",
-          "description": "Filter by target currency (3-letter ISO 4217 code)"
+          "description": "Comma-separated `FROM_TO` values, such as `USD_NGN,USD_EUR`"
         },
         "currency_pairs": {
           "type": "string",
-          "description": "Comma-separated list of specific currency pairs to retrieve, each in `FROM/TO` format."
+          "description": "Comma-separated four-part pair keys, such as `USD_US_EUR_FR`"
         }
       },
       "required": [],
@@ -4899,16 +6368,20 @@ export const TOOLS: GeneratedTool[] = [
     },
     "pathParams": [],
     "queryParams": [
-      "include_crypto",
+      "currency_type",
       "from_currency",
       "to_currency",
+      "directions",
       "currency_pairs"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4916,28 +6389,23 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "account-applications",
     "method": "get",
     "path": "/v1/accounts/applications/pending",
-    "description": "Get pending applications — Retrieve a list of pending applications.",
+    "description": "Get pending applications — Returns up to 10 applications in status `submitted`, oldest first. These are submitted applications that were never processed; `processing` applications are not included. The route takes no parameters; a `limit` parameter makes it fail.",
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "limit": {
-          "type": "integer",
-          "default": 10,
-          "description": "Maximum number of pending applications to return."
-        }
-      },
+      "properties": {},
       "required": [],
       "additionalProperties": false
     },
     "pathParams": [],
-    "queryParams": [
-      "limit"
-    ],
+    "queryParams": [],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -4945,14 +6413,70 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/cards",
-    "description": "Get saved cards — Returns all active saved cards for the customer.",
+    "description": "Get saved cards — Lists a customer's saved cards, default card first, then newest. The list includes cards that are not active yet; only a card with `is_active` true can be charged.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter saved cards by customer ID."
+          "description": "The customer's ID. Always send it."
+        },
+        "client_customer_id": {
+          "type": "string",
+          "description": "When set, cards are matched by this value only, and `customer_id` is not used to filter."
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [
+      "customer_id",
+      "client_customer_id"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "collections.yaml"
+  },
+  {
+    "name": "listSettlementInstructions",
+    "toolset": "fx",
+    "method": "get",
+    "path": "/v1/settlement-instructions",
+    "description": "List settlement instructions — Lists your active settlement instructions, defaults first, then newest. Filters match exactly, including case.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "items_per_page": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "currency": {
+          "type": "string"
+        },
+        "instruction_type": {
+          "type": "string",
+          "description": "Exact lower case",
+          "enum": [
+            "bank_account",
+            "crypto_wallet"
+          ],
+          "example": "bank_account"
         }
       },
       "required": [],
@@ -4960,136 +6484,79 @@ export const TOOLS: GeneratedTool[] = [
     },
     "pathParams": [],
     "queryParams": [
-      "customer_id"
+      "page",
+      "items_per_page",
+      "currency",
+      "instruction_type"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
-    "spec": "collections.yaml"
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
   },
   {
     "name": "listTransactions",
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions",
-    "description": "Get transactions — Retrieve a list of transactions with optional filtering and pagination.",
+    "description": "List transactions — Lists your transactions, newest first. Filters that take values accept a comma-separated list. There is no date filter; use the export for dates. A typo in a filter value returns an empty list, not an error. Page until a page is empty, using `total_pages`.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "page": {
           "type": "integer",
           "minimum": 1,
-          "default": 1,
-          "description": "Page number for pagination"
+          "default": 1
         },
         "items_per_page": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100,
-          "default": 10,
-          "description": "Number of transactions per page"
+          "default": 10
         },
         "customer_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter transactions by customer ID"
+          "format": "uuid"
         },
         "account_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter transactions by account ID"
+          "description": "Transactions that send from or receive into this account"
         },
         "card_id": {
           "type": "string",
-          "format": "uuid",
-          "description": "Filter transactions by card ID"
-        },
-        "payment_link_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Filter transactions by payment link ID"
+          "format": "uuid"
         },
         "tx_hash": {
           "type": "string",
-          "description": "Filter by blockchain transaction hash"
+          "description": "Exact blockchain transaction hash"
+        },
+        "wallet_address": {
+          "type": "string",
+          "description": "Sending or receiving wallet address, not case-sensitive"
         },
         "channel": {
           "type": "string",
-          "enum": [
-            "avalanche",
-            "ethereum",
-            "solana",
-            "stellar",
-            "polygon",
-            "ach",
-            "wire",
-            "swift",
-            "bank_transfer",
-            "mobile_money",
-            "internal",
-            "swap",
-            "sepa",
-            "base",
-            "sui",
-            "tron",
-            "card",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "savings",
-            "savings_withdrawal",
-            "savings_interest"
-          ],
-          "description": "Filter by transaction channel"
+          "description": "One or more channels, comma-separated, such as `ach,wire`. See the `channel` values on the transaction. An unknown value returns nothing."
         },
         "direction": {
           "type": "string",
           "enum": [
             "in",
             "out"
-          ],
-          "description": "Filter by transaction direction"
+          ]
         },
         "status": {
           "type": "string",
-          "enum": [
-            "pending",
-            "completed",
-            "failed",
-            "waiting_approval"
-          ],
-          "description": "Filter by transaction status"
+          "description": "One or more of `pending`, `completed`, `failed`, `waiting_approval` and `paused`, comma-separated"
         },
         "transaction_type": {
           "type": "string",
-          "enum": [
-            "internal_transfer",
-            "crypto_transfer",
-            "crypto_funding",
-            "global_remittance",
-            "card_funding",
-            "card_withdrawal",
-            "card_payment",
-            "account_funding",
-            "credit",
-            "debit",
-            "fee_charge",
-            "subscription_fee",
-            "invoice_payment"
-          ],
-          "description": "Filter by transaction type"
-        },
-        "start_date": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Filter transactions created on or after this timestamp"
-        },
-        "end_date": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Filter transactions created on or before this timestamp"
+          "description": "One or more transaction types, comma-separated. See the `transaction_type` values on the transaction. An unknown value returns nothing."
         }
       },
       "required": [],
@@ -5102,20 +6569,21 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id",
       "account_id",
       "card_id",
-      "payment_link_id",
       "tx_hash",
+      "wallet_address",
       "channel",
       "direction",
       "status",
-      "transaction_type",
-      "start_date",
-      "end_date"
+      "transaction_type"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -5123,13 +6591,13 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/transfer/supported-countries",
-    "description": "Get supported countries — Retrieve the list of countries supported for transfers. Each country includes its two-letter and three-letter ISO codes and its local currency code where available.",
+    "description": "List supported countries — Lists countries with their alpha-3 code and local currency. A listed country may still have no payout route open; the transfer then says so.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "iso_code": {
           "type": "string",
-          "description": "Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive)."
+          "description": "Part of an alpha-2 code, not case-sensitive. `N` matches every code that contains N."
         }
       },
       "required": [],
@@ -5142,8 +6610,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5151,17 +6622,15 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/transfer/supported-countries-for-address",
-    "description": "Get supported countries for address — Retrieve the list of countries supported for recipient addresses in international transfers. Countries with administrative divisions include a `states` array; countries without return an empty array.",
+    "description": "List countries and states for addresses — Lists countries with their states or regions, for address forms. Both filters match part of the value and are not case-sensitive.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "iso_code": {
-          "type": "string",
-          "description": "Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive)."
+          "type": "string"
         },
         "name": {
-          "type": "string",
-          "description": "Filter by country name (case-insensitive partial match)."
+          "type": "string"
         }
       },
       "required": [],
@@ -5175,8 +6644,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5184,32 +6656,23 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/transfer/supported-currencies",
-    "description": "Get supported currencies — Retrieve the list of fiat currencies supported for transfers.",
+    "description": "List supported currency pairs — Lists the currency pairs you can pay out in. It takes no filters.",
     "inputSchema": {
       "type": "object",
-      "properties": {
-        "code": {
-          "type": "string",
-          "description": "Filter by three-letter ISO 4217 currency code (case-insensitive)."
-        },
-        "name": {
-          "type": "string",
-          "description": "Filter by currency name (case-insensitive partial match)."
-        }
-      },
+      "properties": {},
       "required": [],
       "additionalProperties": false
     },
     "pathParams": [],
-    "queryParams": [
-      "code",
-      "name"
-    ],
+    "queryParams": [],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5217,41 +6680,61 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "get",
     "path": "/v1/wallets",
-    "description": "Get wallets — Retrieve a paginated list of wallets, with optional filtering by customer and blockchain network.",
+    "description": "Get wallets — Lists your wallets, newest first. Filters are exact and case-sensitive, except `wallet_name`.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Filter wallets by customer ID"
+          "description": "Filter by customer ID"
+        },
+        "network": {
+          "type": "string",
+          "description": "Filter by blockchain network",
+          "enum": [
+            "polygon",
+            "ethereum",
+            "base",
+            "avalanche",
+            "stellar",
+            "solana"
+          ],
+          "example": "stellar"
+        },
+        "wallet_name": {
+          "type": "string",
+          "description": "Matches part of the name you gave, in any case. It does not match the default label."
+        },
+        "wallet_address": {
+          "type": "string",
+          "description": "Exact address. EVM addresses must be in checksum case."
+        },
+        "wallet_type": {
+          "type": "string",
+          "enum": [
+            "customer",
+            "master"
+          ],
+          "description": "Filter by wallet type"
+        },
+        "include_balances": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, each wallet has its `assets`"
         },
         "page": {
           "type": "integer",
           "minimum": 1,
           "default": 1,
-          "description": "Page number for pagination"
+          "description": "Page number"
         },
         "items_per_page": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
           "default": 10,
-          "description": "Number of wallets per page"
-        },
-        "network": {
-          "type": "string",
-          "enum": [
-            "stellar",
-            "polygon",
-            "ethereum",
-            "base",
-            "solana",
-            "avalanche",
-            "sui",
-            "tron"
-          ],
-          "description": "Filter wallets by blockchain network"
+          "description": "Wallets per page. A larger value is lowered to 100, not rejected."
         }
       },
       "required": [],
@@ -5260,15 +6743,22 @@ export const TOOLS: GeneratedTool[] = [
     "pathParams": [],
     "queryParams": [
       "customer_id",
+      "network",
+      "wallet_name",
+      "wallet_address",
+      "wallet_type",
+      "include_balances",
       "page",
-      "items_per_page",
-      "network"
+      "items_per_page"
     ],
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -5304,23 +6794,241 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
-    "name": "retryWebhookEvent",
-    "toolset": "webhooks",
+    "name": "resumeTransfer",
+    "toolset": "transfers",
     "method": "post",
-    "path": "/v1/webhooks/event/send/{id}",
-    "description": "Manually retry a webhook event — Trigger an immediate manual delivery attempt for a specific webhook event. Requires the `webhook:create` permission.",
+    "path": "/v1/transfer/{id}/resume",
+    "description": "Resume a paused transfer — Continues a transfer that returned `transfer_status: paused`, with what its `requirements` asked for. When the transfer can go ahead, `resumed` is true and the `transfer.resumed` webhook is sent. When it still cannot, `resumed` is false and the response lists the new requirements. The fee is not charged again. Use a new Idempotency-Key for each attempt with new information, as a retry with the same key returns the first answer. A 410 means the pause expired or was cancelled; start a new transfer.\n\nOnly for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
           "format": "uuid",
-          "description": "UUID of the webhook event"
+          "description": "The transfer `reference` from `POST /v1/transfer`"
+        },
+        "transfer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Optional. It must match the path."
+        },
+        "remitter_verification": {
+          "type": "object",
+          "description": "Your record of how you verified the sender. When your limits policy uses attested tiers, the transfer counts against this remitter instead of the customer.",
+          "properties": {
+            "remitter_id": {
+              "type": "string",
+              "description": "Your ID for the sender",
+              "example": "rem_8842"
+            },
+            "level": {
+              "type": "string",
+              "example": "enhanced"
+            },
+            "provider": {
+              "type": "string",
+              "description": "Who verified the sender"
+            },
+            "provider_reference": {
+              "type": "string"
+            },
+            "verified_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "screening": {
+              "type": "object",
+              "description": "Each value must be `clear`",
+              "properties": {
+                "sanctions": {
+                  "type": "string",
+                  "example": "clear"
+                },
+                "pep": {
+                  "type": "string",
+                  "example": "clear"
+                },
+                "adverse_media": {
+                  "type": "string",
+                  "example": "clear"
+                }
+              }
+            }
+          }
+        },
+        "additional_information": {
+          "type": "object",
+          "description": "Sender details. Some payout routes need them; without them the transfer pauses with `sender_details_required`.",
+          "properties": {
+            "remitter_full_name": {
+              "type": "string",
+              "example": "John Doe"
+            },
+            "remitter_country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_document_number": {
+              "type": "string",
+              "example": "A123456789"
+            },
+            "remitter_document_issue_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2020-01-15"
+            },
+            "remitter_document_expiry_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD",
+              "example": "2030-01-15"
+            },
+            "remitter_date_of_birth": {
+              "type": "string",
+              "description": "YYYY-MM-DD, not in the future",
+              "example": "1990-06-25"
+            },
+            "remitter_nationality": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            },
+            "remitter_address": {
+              "type": "object",
+              "properties": {
+                "address_line1": {
+                  "type": "string",
+                  "example": "123 Main Street"
+                },
+                "city": {
+                  "type": "string",
+                  "example": "New York"
+                },
+                "state": {
+                  "type": "string",
+                  "example": "NY"
+                },
+                "postal_code": {
+                  "type": "string",
+                  "example": "10001"
+                },
+                "country": {
+                  "type": "string",
+                  "example": "US"
+                }
+              }
+            },
+            "remitter_verification": {
+              "type": "object",
+              "description": "Your record of how you verified the sender. When your limits policy uses attested tiers, the transfer counts against this remitter instead of the customer.",
+              "properties": {
+                "remitter_id": {
+                  "type": "string",
+                  "description": "Your ID for the sender",
+                  "example": "rem_8842"
+                },
+                "level": {
+                  "type": "string",
+                  "example": "enhanced"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "Who verified the sender"
+                },
+                "provider_reference": {
+                  "type": "string"
+                },
+                "verified_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "screening": {
+                  "type": "object",
+                  "description": "Each value must be `clear`",
+                  "properties": {
+                    "sanctions": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "pep": {
+                      "type": "string",
+                      "example": "clear"
+                    },
+                    "adverse_media": {
+                      "type": "string",
+                      "example": "clear"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "supporting_document_ids": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "transfer_id",
+      "remitter_verification",
+      "additional_information",
+      "supporting_document_ids"
+    ],
+    "alsoInBody": [],
+    "closedBody": true,
+    "movesMoney": true,
+    "needsConfirm": true,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "transfer.yaml"
+  },
+  {
+    "name": "retryWebhookEvent",
+    "toolset": "webhooks",
+    "method": "post",
+    "path": "/v1/webhooks/event/send/{id}",
+    "description": "Manually retry a webhook event — Sends one stored event to your current webhook URL now and returns your endpoint's response. The call waits up to 30 seconds for your endpoint. It needs the `webhook:create` permission. No `Idempotency-Key` is needed, and each call sends the event again. The resend is not signed: it carries no X-Signature header. The call returns HTTP 200 with your endpoint's status code, even when your endpoint answered non-2xx, and a failed resend puts the event back into signed automatic retries.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The delivery record `id` from the history list. It is not the `event_id` in the delivered body."
         }
       },
       "required": [
@@ -5335,23 +7043,95 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
-    "name": "startCustomerKyc",
-    "toolset": "kyc",
+    "name": "simulateDeposit",
+    "toolset": "sandbox",
     "method": "post",
-    "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Initiates KYC verification for a customer. For business customers, complete KYC verification for every associated person before starting the business's verification.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
+    "path": "/v2/accounts/simulate/deposit",
+    "description": "Simulate a deposit — Sandbox only; a live key gets a 403. Makes a test bank deposit land on an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled; wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "An `active` account of yours with bank details",
+          "example": "6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Positive amount in major units, as a string. It must fit the rail's smallest unit.",
+          "example": "250.00"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Defaults to the account currency",
+          "example": "USD"
+        },
+        "rail": {
+          "type": "string",
+          "description": "Rail the deposit arrives on. Defaults to the bank's usual rail.",
+          "enum": [
+            "ach",
+            "wire",
+            "rtp",
+            "swift",
+            "sepa",
+            "fps"
+          ],
+          "example": "wire"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "account_id",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "account_id",
+      "amount",
+      "currency",
+      "rail"
+    ],
+    "alsoInBody": [],
+    "closedBody": true,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": true,
+    "spec": "accounts-v2.yaml"
+  },
+  {
+    "name": "startCardholderKyc",
+    "toolset": "cards",
+    "method": "post",
+    "path": "/v1/risk/start-kyc",
+    "description": "Start KYC verification — Starts hosted verification for a cardholder, with a liveness check, and returns a link. The link expires after one hour. Do not call this for a customer whose KYC is already `completed`. It sets the customer's KYC back to `pending` until the new review ends, which can block accounts and cards. To get only a liveness check, use the link that feature activation returns. Every error on this route is HTTP 400.\n\nCard KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Customer ID to start KYC for"
+          "description": "ID of the customer to verify. Other fields are ignored."
         },
         "idempotency_key": {
           "type": "string",
@@ -5373,23 +7153,26 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
-    "spec": "kyc.yaml"
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
   },
   {
-    "name": "startCustomerKycS2S",
-    "toolset": "kyc",
+    "name": "startCardholderKycS2S",
+    "toolset": "cards",
     "method": "post",
-    "path": "/v1/customers/kyc/start-s2s",
-    "description": "Initiate server-to-server KYC verification — Initiates server-to-server (S2S) KYC verification for a customer who has already uploaded the required documents using the `/v1/customers/kyc/upload-document` endpoint. This is step 2 of the S2S verification process. Before calling this endpoint, upload all required documents. For business customers, complete KYC verification for every associated person before starting the business's verification. On success, verification is initiated and the review outcome is delivered later by webhook. Business customers must upload a registration certificate first, or the request fails with a 400.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
+    "path": "/v1/risk/start-kyc-s2s",
+    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for a cardholder for review. This is step 2 of server-to-server card KYC. Three outcomes return HTTP 200, so check `data.status` and `data.code`: `pending` (sent for review), `partial_success` (the customer finishes on `web_url`), or a `code` of `MISSING_DOCUMENTS` or `KYC_ALREADY_COMPLETED`. This flow records no liveness check, so card activation will ask for one. Other errors are HTTP 400.\n\nSTEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Customer ID to initiate KYC verification for. Documents must be uploaded for this customer before calling this endpoint.",
+          "description": "ID of the customer to verify. Upload the required documents for this customer first.",
           "example": "aabe0a33-6716-42e2-bbca-7abf1a8bd91c"
         },
         "idempotency_key": {
@@ -5412,8 +7195,94 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
+  },
+  {
+    "name": "startCustomerKyc",
+    "toolset": "kyc",
+    "method": "post",
+    "path": "/v1/customers/kyc/start",
+    "description": "Start KYC verification — Starts hosted verification and returns a link for the person or business to complete. The link expires after one hour. Call again with a new Idempotency-Key for a fresh link; the same key returns the old link. A customer who is already verified gets `review_status: completed` and no link. For a business, every associated person must complete verification first. Tenants with automatic document verification get a 400 and must use the upload route instead. The result arrives by the `customer.kyc.status.*` webhooks. Each first start charges one KYC fee.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the individual, business or UBO customer to verify. Other fields are ignored."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "kyc.yaml"
+  },
+  {
+    "name": "startCustomerKycS2S",
+    "toolset": "kyc",
+    "method": "post",
+    "path": "/v1/customers/kyc/start-s2s",
+    "description": "Initiate server-to-server KYC verification — Sends the documents you uploaded for review, with no hosted page. This is step 2 of server-to-server verification. Upload every required document first. For a business, every associated person must complete verification first, and the business needs each `COMPANY_DOC` sub-type. The result arrives by the `customer.kyc.status.*` webhooks. This flow records no liveness check. A customer verified this way must still complete a liveness step before a card can be issued.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer to verify. Upload the required documents for this customer first.",
+          "example": "aabe0a33-6716-42e2-bbca-7abf1a8bd91c"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -5449,8 +7318,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -5486,8 +7358,11 @@ export const TOOLS: GeneratedTool[] = [
     "bodyMode": "none",
     "bodyProps": [],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -5505,11 +7380,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "required": [
-            "account_type",
-            "currency",
-            "blockchain_network"
-          ],
+          "description": "The parts of an application's `data` to change. The fields and types are those of UnifiedApplicationData, and none is required: send only what changes. The update merges into the stored data, so an empty value never clears a field and `true` cannot be set back to `false`.",
           "properties": {
             "individual": {
               "type": "object",
@@ -5608,6 +7479,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -5639,14 +7511,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -5728,6 +7593,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -5796,6 +7707,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -5827,17 +7739,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -5869,17 +7775,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -5911,14 +7811,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -6017,6 +7910,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -6048,14 +7942,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -6137,6 +8024,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -6225,6 +8158,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -6256,14 +8190,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -6434,6 +8361,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },
@@ -6441,9 +8388,12 @@ export const TOOLS: GeneratedTool[] = [
               "type": "string",
               "enum": [
                 "regular",
-                "savings"
+                "savings",
+                "card",
+                "auto_sweep",
+                "collection"
               ],
-              "description": "Kind of account to open (for example, regular or savings). This is the account type, not the customer type. Use the top-level application_type field for individual vs business.",
+              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -6453,18 +8403,18 @@ export const TOOLS: GeneratedTool[] = [
             },
             "blockchain_network": {
               "type": "string",
-              "description": "Blockchain network to back the account (for example, polygon or stellar).",
+              "description": "Network of the account's wallet, in lower case. Required by every bank that issues a wallet, which is most of them. Use `polygon` for sandbox testing.",
               "example": "polygon"
             },
             "wallet_address": {
               "type": "string",
-              "description": "Blockchain wallet address to associate with the account.",
+              "description": "Address of an existing wallet of yours on `blockchain_network`. Send it together with `wallet_id`, or send neither.",
               "example": "0xf73bdd069dc31aa8f334b177b175936ba98237a2"
             },
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "UUID of an existing Gravv wallet to link to the account.",
+              "description": "ID of an existing wallet of yours. Send it together with `wallet_address`, or send neither.",
               "example": "123e4567-e89b-12d3-a456-426614174000"
             },
             "label": {
@@ -6474,12 +8424,12 @@ export const TOOLS: GeneratedTool[] = [
             },
             "agreement_id": {
               "type": "string",
-              "description": "ID of the provider agreement associated with this application.",
+              "description": "ID of the signed terms of service agreement. Set it while the application is `draft` or `rejected`, or use the terms of service route while it is `draft`.",
               "example": "agr_123"
             },
             "tos_link": {
               "type": "string",
-              "description": "URL to the terms of service the applicant must accept.",
+              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
@@ -6508,30 +8458,235 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
+  },
+  {
+    "name": "updateAccountApplicationV2",
+    "toolset": "accounts",
+    "method": "patch",
+    "path": "/v2/accounts/applications/{application_id}",
+    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call; a partial answer stays `blocked`. There is no Idempotency-Key on this route, so a retry uploads again. The response leaves out the status reason fields; get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "application_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the account application. Read it from the account (`application_id`) or from the application webhooks."
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Field values by field name, such as `{\"tax_id_number\": \"123456789\"}`. On a blocked application, send only fields the bank asked for.",
+          "additionalProperties": true
+        },
+        "customer": {
+          "type": "object",
+          "description": "Changes to the customer record. They are saved on the customer, not only on this application.",
+          "properties": {
+            "first_name": {
+              "type": "string"
+            },
+            "middle_name": {
+              "type": "string"
+            },
+            "last_name": {
+              "type": "string"
+            },
+            "email": {
+              "type": "string"
+            },
+            "phone": {
+              "type": "string"
+            },
+            "date_of_birth": {
+              "type": "string"
+            },
+            "gender": {
+              "type": "string"
+            },
+            "tax_id_number": {
+              "type": "string"
+            },
+            "business_name": {
+              "type": "string"
+            },
+            "business_description": {
+              "type": "string"
+            },
+            "business_type": {
+              "type": "string"
+            },
+            "business_industry": {
+              "type": "string"
+            },
+            "registration_number": {
+              "type": "string"
+            },
+            "external_id": {
+              "type": "string"
+            },
+            "address": {
+              "type": "object",
+              "properties": {
+                "address_line": {
+                  "type": "string"
+                },
+                "address_line2": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "postal_code": {
+                  "type": "string"
+                },
+                "country": {
+                  "type": "string"
+                }
+              }
+            },
+            "associated_persons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "parties": {
+          "type": "array",
+          "description": "Party changes, in the create shape. Only on `draft` or `blocked`.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "documents": {
+          "type": "array",
+          "description": "Documents to upload. Only on `draft`, `blocked` or `manual_review`. Upload every requested type in this one call.",
+          "items": {
+            "type": "object",
+            "required": [
+              "document_type"
+            ],
+            "properties": {
+              "document_type": {
+                "type": "string",
+                "example": "proof_of_address"
+              },
+              "document_type_side": {
+                "type": "string",
+                "enum": [
+                  "front",
+                  "back"
+                ]
+              },
+              "document_subtype": {
+                "type": "string"
+              },
+              "party_id": {
+                "type": "string",
+                "description": "Required for an identity document on a business application"
+              },
+              "party_role": {
+                "type": "string"
+              },
+              "party_name": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string",
+                "example": "bill.pdf"
+              },
+              "content": {
+                "type": "string",
+                "description": "Standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB.",
+                "example": "<base64>"
+              },
+              "issuing_country": {
+                "type": "string",
+                "description": "Alpha-2 code. Required except for `selfie_photo`.",
+                "example": "US"
+              },
+              "number": {
+                "type": "string"
+              },
+              "issued_date": {
+                "type": "string"
+              },
+              "expiration_date": {
+                "type": "string"
+              },
+              "date_of_birth": {
+                "type": "string"
+              },
+              "document_place_of_birth": {
+                "type": "string"
+              },
+              "file_path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "application_id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "application_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "metadata",
+      "customer",
+      "parties",
+      "documents"
+    ],
+    "alsoInBody": [],
+    "closedBody": true,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "updateAccountStatus",
     "toolset": "accounts",
     "method": "patch",
     "path": "/v1/accounts/{account_id}/status",
-    "description": "Update account status — Change an account's status. Set `frozen` to suspend an account, `active` to reactivate it, or `deleted` to close it. Deleting requires the account's wallet balance to be zero. A deleted account can't be changed again, and system-managed accounts can't have their status updated.",
+    "description": "Update account status — Changes an account's status. Set `frozen` to suspend an account, `active` to reactivate it, `manual_review` to hold it, or `deleted` to close it. Each change sends an account webhook. Setting the current status again changes nothing and sends no webhook. Deleting needs a zero balance and cannot be undone. `auto_sweep` and `default` accounts cannot change status. Do not use `active` to move a `pending` account forward; that skips the bank set-up. An unknown ID returns the generic error message.\n\nThis tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "account_id": {
-          "type": "string"
+          "type": "string",
+          "format": "uuid"
         },
         "status": {
           "type": "string",
           "enum": [
             "active",
             "frozen",
+            "manual_review",
             "deleted"
           ],
-          "description": "The new account status."
+          "description": "The new account status, in lower case."
         }
       },
       "required": [
@@ -6549,8 +8704,11 @@ export const TOOLS: GeneratedTool[] = [
       "status"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -6558,34 +8716,34 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "patch",
     "path": "/v1/cards/{card_id}/update",
-    "description": "Update card status — Update the status of a card. You can freeze a card temporarily or block it permanently. **Status Options:** - `active`: Card is active, and you can use it for transactions - `freeze`: Card is temporarily frozen, and you can't use it until you reactivate it by updating the status to active - `blocked`: Card is permanently blocked, and you can't reactivate it\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
+    "description": "Update a card's status and limit — Freezes, unfreezes or blocks a card, and sets its daily limit. Always send `limit` with `status`: a call without `limit` sets the limit to 0, which stops the card spending on live cards. To change only the limit, send the current status with the new limit. `blocked` is permanent. Allowed changes are `active` to `freeze` or `blocked`, `freeze` to `active` or `blocked`, and `inactive` to `active` or `blocked`. A status change sends the `cards.status.update` webhook. This route needs no Idempotency-Key.\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "card_id": {
           "type": "string",
           "format": "uuid",
-          "description": "The ID of the card to update"
+          "description": "ID of the card"
         },
         "status": {
           "type": "string",
-          "description": "New status for the card",
           "enum": [
             "active",
             "freeze",
             "blocked"
-          ],
-          "example": "freeze"
+          ]
         },
         "limit": {
           "type": "integer",
-          "description": "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
-          "example": 1000
+          "minimum": 0,
+          "description": "Daily limit in whole USD. Send it on every call.",
+          "example": 200
         }
       },
       "required": [
         "card_id",
-        "status"
+        "status",
+        "limit"
       ],
       "additionalProperties": true
     },
@@ -6599,8 +8757,11 @@ export const TOOLS: GeneratedTool[] = [
       "limit"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -6608,18 +8769,19 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "customers",
     "method": "put",
     "path": "/v1/customers/{customer_id}",
-    "description": "Update a customer — Update details of a customer. The customer is taken from the path customer_id; a customer_id in the body is overwritten by the path value. Only provided fields are updated.",
+    "description": "Update a customer — Updates the fields you send on one customer. The path `customer_id` selects the customer and replaces any `customer_id` in the body. Empty values change nothing, the customer type cannot change, and KYC status is not reset. The response does not include the customer; get it to read the result.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Customer to update. Taken from the path; any body value is overwritten."
+          "description": "The customer to update. It replaces any `customer_id` in the body."
         },
         "first_name": {
           "type": "string",
-          "example": "Jane"
+          "pattern": "^[A-Za-z\\s'-]+$",
+          "description": "Letters, spaces, apostrophes and hyphens only."
         },
         "middle_name": {
           "type": "string",
@@ -6627,16 +8789,19 @@ export const TOOLS: GeneratedTool[] = [
         },
         "last_name": {
           "type": "string",
-          "example": "Doe"
+          "pattern": "^[A-Za-z\\s'-]+$",
+          "description": "Letters, spaces, apostrophes and hyphens only."
         },
         "email": {
           "type": "string",
           "format": "email",
-          "example": "jane@example.com"
+          "description": "New email. It must be unique in your tenant and use a company domain, for every customer type.",
+          "example": "jane@acmecorp.com"
         },
         "phone": {
           "type": "string",
-          "example": "+15555550101"
+          "description": "A valid phone number in international format with a leading `+`, such as `+2348031234567`. Fictional ranges such as +1 555-01xx are rejected.",
+          "example": "+2348031234567"
         },
         "date_of_birth": {
           "type": "string",
@@ -6654,17 +8819,10 @@ export const TOOLS: GeneratedTool[] = [
         },
         "address": {
           "type": "object",
-          "required": [
-            "address_line1",
-            "city",
-            "postal_code",
-            "state",
-            "country"
-          ],
           "properties": {
             "address_line1": {
               "type": "string",
-              "example": "1800 N Pole St"
+              "example": "12 Admiralty Way"
             },
             "address_line2": {
               "type": "string",
@@ -6672,29 +8830,34 @@ export const TOOLS: GeneratedTool[] = [
             },
             "city": {
               "type": "string",
-              "example": "Orlando"
+              "example": "Lagos"
             },
             "postal_code": {
               "type": "string",
-              "example": "32801"
+              "example": "106104"
             },
             "state": {
               "type": "string",
-              "example": "US-FL"
+              "pattern": "^[A-Z]{2}-[A-Z0-9]{2,3}$",
+              "example": "NG-LA"
             },
             "country": {
               "type": "string",
-              "example": "US"
+              "pattern": "^[A-Z]{2}$",
+              "example": "NG"
             }
-          }
+          },
+          "required": [],
+          "description": "New address. The state and country check runs only when you send both."
         },
         "business_name": {
           "type": "string",
+          "pattern": "^[A-Za-z0-9\\s'&,.()-]+$",
           "example": "Acme Corporation"
         },
         "business_description": {
           "type": "string",
-          "example": "Technology and software development"
+          "example": "Payments software"
         },
         "business_type": {
           "type": "string",
@@ -6702,7 +8865,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "business_industry": {
           "type": "string",
-          "example": "Technology"
+          "example": "Information"
         },
         "registration_number": {
           "type": "string",
@@ -6714,20 +8877,21 @@ export const TOOLS: GeneratedTool[] = [
         },
         "associated_persons": {
           "type": "array",
-          "description": "List of associated persons to update or add. If `id` is provided the existing record is updated; if omitted a new person is created (all required fields must then be present).",
+          "description": "Business customers only; ignored for individuals. Send `id` to edit a person. Omit it to add a new person, who then needs `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone` and `address`.",
           "items": {
             "type": "object",
-            "description": "An associated person entry for an update request. Provide `id` to update an existing person; omit it to add a new one (in which case `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone`, and `address` are all required).",
+            "description": "Send `id` to edit an existing person. Omit it to add a new person, who then needs `first_name`, `last_name`, `email`, `gender`, `date_of_birth`, `phone` and `address`.",
             "properties": {
               "id": {
                 "type": "string",
                 "format": "uuid",
-                "description": "UUID of an existing associated person. Omit to add a new person.",
+                "description": "ID of an existing associated person. Omit it to add a new person.",
                 "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
               },
               "first_name": {
                 "type": "string",
-                "example": "Jane"
+                "pattern": "^[A-Za-z\\s'-]+$",
+                "description": "Letters, spaces, apostrophes and hyphens only."
               },
               "middle_name": {
                 "type": "string",
@@ -6735,12 +8899,13 @@ export const TOOLS: GeneratedTool[] = [
               },
               "last_name": {
                 "type": "string",
-                "example": "Doe"
+                "pattern": "^[A-Za-z\\s'-]+$",
+                "description": "Letters, spaces, apostrophes and hyphens only."
               },
               "email": {
                 "type": "string",
                 "format": "email",
-                "example": "jane.doe@example.com"
+                "example": "jane.doe@acmecorp.com"
               },
               "date_of_birth": {
                 "type": "string",
@@ -6758,7 +8923,8 @@ export const TOOLS: GeneratedTool[] = [
               },
               "phone": {
                 "type": "string",
-                "example": "+15555550102"
+                "description": "A valid phone number in international format with a leading `+`, such as `+2348031234567`. Fictional ranges such as +1 555-01xx are rejected.",
+                "example": "+2348031234567"
               },
               "address": {
                 "type": "object",
@@ -6772,7 +8938,7 @@ export const TOOLS: GeneratedTool[] = [
                 "properties": {
                   "address_line1": {
                     "type": "string",
-                    "example": "1800 N Pole St"
+                    "example": "12 Admiralty Way"
                   },
                   "address_line2": {
                     "type": "string",
@@ -6780,19 +8946,25 @@ export const TOOLS: GeneratedTool[] = [
                   },
                   "city": {
                     "type": "string",
-                    "example": "Orlando"
+                    "maxLength": 100,
+                    "example": "Lagos"
                   },
                   "postal_code": {
                     "type": "string",
-                    "example": "32801"
+                    "maxLength": 20,
+                    "example": "106104"
                   },
                   "state": {
                     "type": "string",
-                    "example": "US-FL"
+                    "pattern": "^[A-Z]{2}-[A-Z0-9]{2,3}$",
+                    "description": "ISO 3166-2 code, such as `NG-LA` or `US-FL`. It must belong to `country`.",
+                    "example": "NG-LA"
                   },
                   "country": {
                     "type": "string",
-                    "example": "US"
+                    "pattern": "^[A-Z]{2}$",
+                    "description": "ISO 3166-1 alpha-2 code in upper case, such as `NG`.",
+                    "example": "NG"
                   }
                 }
               }
@@ -6830,16 +9002,387 @@ export const TOOLS: GeneratedTool[] = [
     "alsoInBody": [
       "customer_id"
     ],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
-    "name": "uploadCustomerKycDocument",
-    "toolset": "kyc",
+    "name": "updateExternalAccount",
+    "toolset": "external-accounts",
+    "method": "patch",
+    "path": "/v1/external-accounts/{external_account_id}",
+    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202; get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its state; add a new one instead. This route needs no Idempotency-Key.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "external_account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the external account"
+        },
+        "account_name": {
+          "type": "string",
+          "description": "Cannot be cleared"
+        },
+        "account_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iban": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bic": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "routing_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "institution_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "account_owner_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "individual",
+            "business",
+            null
+          ]
+        },
+        "institution_country_iso_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payment_rail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ach",
+            "wire",
+            "rtp",
+            null
+          ]
+        },
+        "bank_account_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "checking",
+            "savings",
+            null
+          ]
+        },
+        "bank_address_line_1": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_city": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_postal_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bank_country": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_financial_institution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_routing_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_address1": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_address2": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_city": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_zip_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intermediary_bank_country": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "address_line1": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 34,
+              "example": "350 Fifth Avenue"
+            },
+            "address_line2": {
+              "type": "string",
+              "maxLength": 35
+            },
+            "house_building_number": {
+              "type": "string",
+              "maxLength": 35
+            },
+            "city": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "New York"
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 35,
+              "example": "NY"
+            },
+            "postal_code": {
+              "type": "string",
+              "description": "Checked against the country's postal code format",
+              "example": "10118"
+            },
+            "country": {
+              "type": "string",
+              "description": "Alpha-2 code",
+              "example": "US"
+            }
+          },
+          "required": [],
+          "description": "A new address needs `address_line1`, `city` and `country`. It cannot be cleared."
+        },
+        "national_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "national_id_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pix_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "external_account_id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "external_account_id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "account_name",
+      "account_number",
+      "iban",
+      "bic",
+      "routing_number",
+      "bank_name",
+      "institution_id",
+      "account_owner_type",
+      "institution_country_iso_code",
+      "payment_rail",
+      "bank_account_type",
+      "bank_address_line_1",
+      "bank_city",
+      "bank_state",
+      "bank_postal_code",
+      "bank_country",
+      "intermediary_financial_institution",
+      "intermediary_bank_routing_number",
+      "intermediary_bank_address1",
+      "intermediary_bank_address2",
+      "intermediary_bank_city",
+      "intermediary_bank_state",
+      "intermediary_bank_zip_code",
+      "intermediary_bank_country",
+      "address",
+      "national_id",
+      "national_id_type",
+      "pix_key"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "external-accounts.yaml"
+  },
+  {
+    "name": "updateSettlementInstruction",
+    "toolset": "fx",
+    "method": "patch",
+    "path": "/v1/settlement-instructions/{id}",
+    "description": "Update a settlement instruction — Changes the details of an active settlement instruction, or makes it the default for its currency. To change the currency or type, delete it and create a new one. This route needs no Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the settlement instruction"
+        },
+        "is_default": {
+          "type": "boolean"
+        },
+        "account_name": {
+          "type": "string"
+        },
+        "account_number": {
+          "type": "string"
+        },
+        "bank_name": {
+          "type": "string"
+        },
+        "bank_code": {
+          "type": "string"
+        },
+        "routing_number": {
+          "type": "string"
+        },
+        "swift_code": {
+          "type": "string"
+        },
+        "iban": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "address": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "wallet_address": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "memo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "is_default",
+      "account_name",
+      "account_number",
+      "bank_name",
+      "bank_code",
+      "routing_number",
+      "swift_code",
+      "iban",
+      "country",
+      "address",
+      "wallet_address",
+      "network",
+      "memo"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "settlement-instructions.yaml"
+  },
+  {
+    "name": "uploadCardholderKycDocument",
+    "toolset": "cards",
     "method": "post",
-    "path": "/v1/customers/kyc/upload-document",
-    "description": "Upload document — Upload a KYC document for individual and business customers. This is the first step of the server-to-server verification flow. Documents are uploaded as base64-encoded strings along with metadata about the document type, customer information, and document details. The document is validated and stored in preparation for verification. ## Supported document types Individual customers must upload a `SELFIE` and one identification document: `PASSPORT`, `ID_CARD`, or `DRIVERS`. Business customers upload a single REGISTRATION_CERTIFICATE, which may be a formation document or an ownership document. The `idDocType` value is always `REGISTRATION_CERTIFICATE`. All `idDocType` values are uppercase. Selfie documents must be an image (JPEG or PNG); PDF selfies are rejected. ## Document subtypes Identification documents use `idDocSubType` to indicate which side is uploaded (case-sensitive, uppercase): - **FRONT_SIDE:** Front side of document - **BACK_SIDE:** Back side of document (if applicable) Omit `idDocSubType` for SELFIE uploads. ## File format The `filename` extension and the decoded `content` MIME type must agree and must be one of: `image/jpeg`, `image/png`, `application/pdf`. ## Size limits The maximum decoded document size is 10 MB. ## Idempotency The `Idempotency-Key` header is required on this endpoint. If you send the same key again with an identical request body, the API returns the original response instead of uploading the document a second time. If you send the same key with a different request body, then the API rejects the request with a 422. After uploading all required documents, call the Initiate KYC S2S endpoint to start the verification process.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
+    "path": "/v1/risk/upload-document",
+    "description": "Upload document — Stores one document file for a cardholder. This is step 1 of server-to-server card KYC. Nothing is sent for review until you call `POST /v1/risk/start-kyc-s2s`. **Check `data.status`.** A validation failure returns HTTP 200 with `data.status: error` and a generic message. Common causes are a two-letter country, a file name that does not end in `.jpg`, `.jpeg`, `.png` or `.pdf`, a PDF selfie, or a date that is not YYYY-MM-DD. Every upload is stored as a front image. Send the back of a card as a second upload with `idDocSubType: BACK_SIDE`. Uploading the same type and sub-type again replaces the earlier file. Keep files under 5 MB.\n\nSTEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB; in sandbox, under 500 KB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6858,19 +9401,29 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "idDocType": {
               "type": "string",
-              "description": "Type of document being uploaded. Individual customers upload a `SELFIE` plus one identification document: `PASSPORT`, `ID_CARD`, or `DRIVERS`. Business customers upload `REGISTRATION_CERTIFICATE` only.\n",
+              "description": "Type of document, in lower case. Individual customers need a `selfie` plus one of `passport`, `id_card` or `drivers_license`. Business customers need one of `company_doc`, `registration_certificate` or `formation_document`. These names differ from the customer KYC upload; do not mix the two upload flows for one customer.",
               "enum": [
-                "PASSPORT",
-                "ID_CARD",
-                "DRIVERS",
-                "SELFIE",
-                "REGISTRATION_CERTIFICATE"
+                "passport",
+                "id_card",
+                "drivers_license",
+                "selfie",
+                "residence_permit",
+                "utility_bill",
+                "bank_card",
+                "vehicle_registration_certificate",
+                "other",
+                "registration_certificate",
+                "company_doc",
+                "formation_document",
+                "ownership_document",
+                "proof_of_address",
+                "proof_of_address_document"
               ],
-              "example": "PASSPORT"
+              "example": "passport"
             },
             "idDocSubType": {
               "type": "string",
-              "description": "Subtype indicating which side of the document. Must be uppercase;\nlowercase values are passed through to the upstream verifier and may be\nsilently rejected.\n",
+              "description": "Which side of the document this is. Send the back of a card as a second upload with `BACK_SIDE`.",
               "enum": [
                 "FRONT_SIDE",
                 "BACK_SIDE"
@@ -6881,54 +9434,54 @@ export const TOOLS: GeneratedTool[] = [
               "type": "string",
               "minLength": 3,
               "maxLength": 3,
-              "description": "Document issuing country (ISO 3166-1 alpha-3 code, uppercase)",
+              "description": "Issuing country as an ISO 3166-1 alpha-3 code. Required for every type, including `selfie`.",
               "example": "NGA"
             },
             "firstName": {
               "type": "string",
-              "description": "First name as shown on document",
+              "description": "First name as shown on the document",
               "example": "John",
               "maxLength": 100
             },
             "middleName": {
               "type": "string",
-              "description": "Middle name as shown on document (optional)",
+              "description": "Middle name as shown on the document",
               "example": "Michael",
               "maxLength": 100
             },
             "lastName": {
               "type": "string",
-              "description": "Last name as shown on document",
+              "description": "Last name as shown on the document",
               "example": "Doe",
               "maxLength": 100
             },
             "issuedDate": {
               "type": "string",
               "format": "date",
-              "description": "Document issue date (YYYY-MM-DD)",
+              "description": "Issue date as YYYY-MM-DD",
               "example": "2020-01-15"
             },
             "validUntil": {
               "type": "string",
               "format": "date",
-              "description": "Document expiration date (YYYY-MM-DD)",
+              "description": "Expiry date as YYYY-MM-DD",
               "example": "2030-01-15"
             },
             "number": {
               "type": "string",
-              "description": "Document identification number",
+              "description": "Document number",
               "example": "A12345678",
               "maxLength": 50
             },
             "dob": {
               "type": "string",
               "format": "date",
-              "description": "Date of birth (YYYY-MM-DD)",
+              "description": "Date of birth as YYYY-MM-DD",
               "example": "1990-05-20"
             },
             "placeOfBirth": {
               "type": "string",
-              "description": "Place of birth as shown on document",
+              "description": "Place of birth as shown on the document",
               "example": "New York, NY",
               "maxLength": 100
             }
@@ -6937,15 +9490,20 @@ export const TOOLS: GeneratedTool[] = [
         "content": {
           "type": "string",
           "format": "byte",
-          "description": "Base64-encoded document content. The decoded bytes must be a JPEG, PNG,\nor PDF; the service sniffs the leading bytes and rejects other MIME\ntypes. Maximum decoded size is 10 MB.\n",
+          "description": "The file as plain standard base64. The decoded file must be a JPEG, PNG or PDF. Keep files under 5 MB; larger files fail with a 400.",
           "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         },
         "filename": {
           "type": "string",
-          "description": "Original filename of the document. Extension must be one of\n`.jpg`, `.jpeg`, `.png`, `.pdf` (case-insensitive); the file extension\nis validated before the content MIME sniff.\n",
+          "description": "Name of the file. It must end in `.jpg`, `.jpeg`, `.png` or `.pdf`, in any case.",
           "example": "passport_front.jpg",
           "maxLength": 255,
-          "pattern": "(?i)\\.(jpe?g|png|pdf)$"
+          "pattern": "\\.([Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Pp][Dd][Ff])$"
+        },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 5 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
         },
         "idempotency_key": {
           "type": "string",
@@ -6957,9 +9515,7 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
-        "metadata",
-        "content",
-        "filename"
+        "metadata"
       ],
       "additionalProperties": true
     },
@@ -6973,16 +9529,262 @@ export const TOOLS: GeneratedTool[] = [
       "filename"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "risk.yaml"
+  },
+  {
+    "name": "uploadCustomerKycDocument",
+    "toolset": "kyc",
+    "method": "post",
+    "path": "/v1/customers/kyc/upload-document",
+    "description": "Upload document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and sub-type again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; in sandbox, under 500 KB) in place of base64 content.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ID of the customer this document belongs to",
+          "example": "b84d9a52-2978-43e5-9b86-eac9839e1146"
+        },
+        "metadata": {
+          "type": "object",
+          "required": [
+            "idDocType"
+          ],
+          "properties": {
+            "idDocType": {
+              "type": "string",
+              "description": "Type of document. Individual and UBO customers may upload `PASSPORT`, `ID_CARD`, `DRIVERS`, `SELFIE`, `PROOF_OF_ADDRESS` or `TAX_DECLARATION`. To start verification they need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with a front image, plus a `SELFIE`. Business customers upload only `COMPANY_DOC`, once for each `idDocSubType`.",
+              "enum": [
+                "PASSPORT",
+                "ID_CARD",
+                "DRIVERS",
+                "SELFIE",
+                "PROOF_OF_ADDRESS",
+                "TAX_DECLARATION",
+                "COMPANY_DOC"
+              ],
+              "example": "PASSPORT"
+            },
+            "idDocSubType": {
+              "type": "string",
+              "description": "Which part of the document this is. Values are case-sensitive. Identity documents need `FRONT_SIDE`, and `BACK_SIDE` as a separate upload for two-sided cards. `COMPANY_DOC` needs one of `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS`, `TAX_DOCUMENT` or `OTHER`. A business needs each of the first three, plus `TAX_DOCUMENT` or `OTHER`. Omit it for `SELFIE`, `PROOF_OF_ADDRESS` and `TAX_DECLARATION`.",
+              "enum": [
+                "FRONT_SIDE",
+                "BACK_SIDE",
+                "INCORPORATION_CERT",
+                "SHAREHOLDER_REGISTRY",
+                "PROOF_OF_ADDRESS",
+                "TAX_DOCUMENT",
+                "OTHER"
+              ],
+              "example": "FRONT_SIDE"
+            },
+            "country": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 3,
+              "description": "Issuing country as an ISO 3166-1 alpha-2 or alpha-3 code. Required for every type except `SELFIE`. The response gives it as alpha-3.",
+              "example": "NGA"
+            },
+            "number": {
+              "type": "string",
+              "description": "Document number. Required for `PASSPORT`, `ID_CARD` and `DRIVERS`.",
+              "example": "A12345678",
+              "maxLength": 50
+            },
+            "validUntil": {
+              "type": "string",
+              "description": "Expiry date as YYYY-MM-DD. Required for `PASSPORT`, `ID_CARD` and `DRIVERS`. The format is not checked here, but the verification review may reject a bad date.",
+              "example": "2030-01-15"
+            },
+            "issuedDate": {
+              "type": "string",
+              "description": "Issue date as YYYY-MM-DD.",
+              "example": "2020-01-15"
+            },
+            "firstName": {
+              "type": "string",
+              "description": "First name as shown on the document",
+              "example": "John",
+              "maxLength": 100
+            },
+            "middleName": {
+              "type": "string",
+              "description": "Middle name as shown on the document",
+              "example": "Michael",
+              "maxLength": 100
+            },
+            "lastName": {
+              "type": "string",
+              "description": "Last name as shown on the document",
+              "example": "Doe",
+              "maxLength": 100
+            },
+            "dob": {
+              "type": "string",
+              "description": "Date of birth as YYYY-MM-DD.",
+              "example": "1990-05-20"
+            },
+            "placeOfBirth": {
+              "type": "string",
+              "description": "Place of birth as shown on the document",
+              "example": "New York, NY",
+              "maxLength": 100
+            }
+          }
+        },
+        "content": {
+          "type": "string",
+          "format": "byte",
+          "description": "The file as plain standard base64, with no `data:` prefix. The decoded file must be a JPEG, PNG or PDF. The service checks the file bytes, not the name. The maximum decoded size is 10 MB. In sandbox, keep files under about 500 KB.",
+          "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        },
+        "filename": {
+          "type": "string",
+          "description": "Name of the file. The extension is not checked; the content decides the file type.",
+          "example": "passport_front.jpg",
+          "maxLength": 255
+        },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 10 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "metadata"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "metadata",
+      "content",
+      "filename"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
+  },
+  {
+    "name": "uploadTransferDocument",
+    "toolset": "transfers",
+    "method": "post",
+    "path": "/v1/transfer/documents",
+    "description": "Upload a supporting document — Uploads a document, such as an invoice, for a payout that needs one. Pass the returned `id` in `supporting_document_ids` on `POST /v1/transfer` or on resume. A document can be used by one transfer only, and an unused one is deleted after 7 days. The file must be PDF, PNG or JPEG, at most 700 KB.\n\nUpload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB; in sandbox, under 500 KB): the server reads it and fills content, file_name and content_type.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "example": "bb6c6022-f1d8-492f-80f0-7547134bb42f"
+        },
+        "document_type": {
+          "type": "string",
+          "enum": [
+            "invoice",
+            "proforma_invoice",
+            "purchase_order",
+            "contract",
+            "receipt",
+            "bill_of_lading",
+            "customs_declaration",
+            "bank_statement",
+            "proof_of_income",
+            "tax_document",
+            "other"
+          ],
+          "example": "invoice"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Required when `document_type` is `other`"
+        },
+        "file_name": {
+          "type": "string",
+          "example": "inv-2026-114.pdf"
+        },
+        "content_type": {
+          "type": "string",
+          "description": "Must match the file itself",
+          "enum": [
+            "application/pdf",
+            "image/png",
+            "image/jpeg"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "description": "The file as standard base64, at most 700 KB decoded",
+          "example": "<base64>"
+        },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 700 KB, and sends it as content, filling file_name and content_type when you leave them out. Send file_path or content, not both; with content, send file_name and content_type yourself."
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "customer_id",
+        "document_type"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "customer_id",
+      "document_type",
+      "description",
+      "file_name",
+      "content_type",
+      "content"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "transfer.yaml"
   },
   {
     "name": "validateAccountApplication",
     "toolset": "account-applications",
     "method": "post",
     "path": "/v1/accounts/applications/validate",
-    "description": "Validate application data — Validates an application payload against provider specific rules without saving.",
+    "description": "Validate application data — Checks application data against the bank it would be sent to, and returns that bank's requirements, without saving anything. It checks only the data you send: there is no fill from the customer record and no KYC or duplicate check. Fix every `validation_errors` entry before you create or submit.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6997,10 +9799,10 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
+          "description": "Application data to validate. Not persisted.",
           "required": [
             "account_type",
-            "currency",
-            "blockchain_network"
+            "currency"
           ],
           "properties": {
             "individual": {
@@ -7100,6 +9902,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7131,14 +9934,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -7220,6 +10016,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -7288,6 +10130,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7319,17 +10162,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7361,17 +10198,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7403,14 +10234,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -7509,6 +10333,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -7540,14 +10365,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -7629,6 +10447,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -7717,6 +10581,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -7748,14 +10613,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -7926,6 +10784,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },
@@ -7933,9 +10811,12 @@ export const TOOLS: GeneratedTool[] = [
               "type": "string",
               "enum": [
                 "regular",
-                "savings"
+                "savings",
+                "card",
+                "auto_sweep",
+                "collection"
               ],
-              "description": "Kind of account to open (for example, regular or savings). This is the account type, not the customer type. Use the top-level application_type field for individual vs business.",
+              "description": "Kind of account to open. This is the account type, not the customer type; use `application_type` for individual or business. A customer can have one `card` account.",
               "example": "regular"
             },
             "currency": {
@@ -7945,18 +10826,18 @@ export const TOOLS: GeneratedTool[] = [
             },
             "blockchain_network": {
               "type": "string",
-              "description": "Blockchain network to back the account (for example, polygon or stellar).",
+              "description": "Network of the account's wallet, in lower case. Required by every bank that issues a wallet, which is most of them. Use `polygon` for sandbox testing.",
               "example": "polygon"
             },
             "wallet_address": {
               "type": "string",
-              "description": "Blockchain wallet address to associate with the account.",
+              "description": "Address of an existing wallet of yours on `blockchain_network`. Send it together with `wallet_id`, or send neither.",
               "example": "0xf73bdd069dc31aa8f334b177b175936ba98237a2"
             },
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "UUID of an existing Gravv wallet to link to the account.",
+              "description": "ID of an existing wallet of yours. Send it together with `wallet_address`, or send neither.",
               "example": "123e4567-e89b-12d3-a456-426614174000"
             },
             "label": {
@@ -7966,12 +10847,12 @@ export const TOOLS: GeneratedTool[] = [
             },
             "agreement_id": {
               "type": "string",
-              "description": "ID of the provider agreement associated with this application.",
+              "description": "ID of the signed terms of service agreement. Set it while the application is `draft` or `rejected`, or use the terms of service route while it is `draft`.",
               "example": "agr_123"
             },
             "tos_link": {
               "type": "string",
-              "description": "URL to the terms of service the applicant must accept.",
+              "description": "Set by Gravv on create when the end customer must accept the bank's terms of service. Show it to them before you submit.",
               "example": "https://example.com/tos"
             },
             "metadata": {
@@ -7982,8 +10863,7 @@ export const TOOLS: GeneratedTool[] = [
                 "source": "web"
               }
             }
-          },
-          "description": "Application data to validate. Not persisted."
+          }
         },
         "idempotency_key": {
           "type": "string",
@@ -8007,8 +10887,11 @@ export const TOOLS: GeneratedTool[] = [
       "data"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -8016,60 +10899,35 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts/verify",
-    "description": "Verify an external account — Resolves and verifies a recipient's account with the destination institution before you add them as an external account. Use it to confirm the account holder's name and that the account is reachable, so you can show the resolved name and avoid failed transfers. Pass at least one identifier: `account_number`, `iban`, `phone`, or `clabe`. The service detects the account type, validates its format, then resolves the name with the institution. - **`is_verified: true`** — the account resolved. `account_name` holds the confirmed holder name. - **`is_verified: false`** — the account could not be resolved. Any institutions that matched the identifier are returned in `institutions` so the user can pick one and retry. Verification is supported for bank accounts and mobile money today. Other types (IBAN, SWIFT) return `is_verified: false`.",
+    "description": "Verify an external account — Checks account details before you add the external account, and returns the holder's name when the bank can look it up. Send `account_number` with `institution_id`; only that pair reaches the bank. `verified: true` with `verification_source: local` means only the format was checked. Trust the name only when `verification_source` is `provider`. An IBAN, phone or CLABE alone is checked locally. This route needs no Idempotency-Key.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "account_number": {
           "type": "string",
-          "nullable": true,
-          "description": "Bank account number.",
-          "example": "1776218486"
+          "description": "The only identifier that the bank looks up",
+          "example": "0123456789"
         },
         "institution_id": {
           "type": "string",
           "format": "uuid",
-          "nullable": true,
-          "description": "Institution UUID from GET /v1/external-accounts/institutions. Speeds up and disambiguates resolution.",
-          "example": "c0cb83fa-8116-4744-8bc8-0c1cba405400"
-        },
-        "phone": {
-          "type": "string",
-          "nullable": true,
-          "description": "Mobile money number in international format.",
-          "example": "+233241234567"
+          "description": "The bank to ask. Without it the lookup is not scoped to a bank.",
+          "example": "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f"
         },
         "iban": {
           "type": "string",
-          "nullable": true
+          "description": "Checked with mod 97 only"
         },
         "bic": {
+          "type": "string"
+        },
+        "phone": {
           "type": "string",
-          "nullable": true
+          "description": "Accepted, but not verified"
         },
         "clabe": {
           "type": "string",
-          "nullable": true,
-          "description": "Mexican CLABE account number."
-        },
-        "routing_number": {
-          "type": "string",
-          "nullable": true
-        },
-        "country_code": {
-          "type": "string",
-          "nullable": true,
-          "description": "ISO 3166-1 alpha-2 country code.",
-          "example": "NG"
-        },
-        "account_owner_type": {
-          "type": "string",
-          "nullable": true,
-          "enum": [
-            "individual",
-            "business"
-          ],
-          "description": "Beneficiary owner type. Lets the institution pick the right flow for business versus individual recipients."
+          "description": "Accepted, but not verified"
         }
       },
       "required": [],
@@ -8081,17 +10939,17 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [
       "account_number",
       "institution_id",
-      "phone",
       "iban",
       "bic",
-      "clabe",
-      "routing_number",
-      "country_code",
-      "account_owner_type"
+      "phone",
+      "clabe"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -8099,20 +10957,20 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from card — Withdraw funds from a customer's card balance.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+    "description": "Withdraw from a card — Moves money from an `active` card back to its card account. Some cards, including every new sandbox card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card account. The result is also sent as the `cards.transaction.withdraw` webhook.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "card_id": {
           "type": "string",
           "format": "uuid",
-          "description": "ID of the card to withdraw from",
-          "example": "9e3cccad-e9ae-47a0-81ee-063af0159310"
+          "example": "dce0192a-9b3d-440b-9500-33dc9ac8dc20"
         },
         "amount": {
           "type": "number",
-          "description": "Amount to withdraw from the card",
-          "example": 1
+          "exclusiveMinimum": 0,
+          "description": "USD, as a JSON number with at most 2 decimal places, not more than the card's `balance`",
+          "example": 20
         },
         "confirm": {
           "type": "boolean",
@@ -8140,8 +10998,11 @@ export const TOOLS: GeneratedTool[] = [
       "amount"
     ],
     "alsoInBody": [],
+    "closedBody": false,
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   }
 ];

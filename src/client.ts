@@ -8,7 +8,9 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
-import { OUTCOME_LOOKUPS } from "./curation.ts";
+import { OUTCOME_LOOKUPS, SANDBOX_UPLOAD_BYTES, UPLOADS, UPPER_CASE_ARGS, sizeText } from "./curation.ts";
+import { TRANSFER_LIMIT_CODES, errorFixFor, uploadTooLargeHint } from "./fix-hints.ts";
+import { VERSION } from "./version.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
 
@@ -158,7 +160,8 @@ export class GravvClient {
    * Split a flat argument object into path substitutions, query string, and body,
    * according to how the generator classified each argument.
    */
-  buildRequest(tool: GeneratedTool, args: Record<string, unknown>) {
+  buildRequest(tool: GeneratedTool, rawArgs: Record<string, unknown>) {
+    const args = normaliseArgs(tool, rawArgs);
     let path = tool.path;
     for (const p of tool.pathParams) {
       const v = args[p];
@@ -172,7 +175,9 @@ export class GravvClient {
     for (const q of tool.queryParams) {
       const v = args[q];
       if (v === undefined || v === null || v === "") continue;
-      if (Array.isArray(v)) for (const item of v) query.append(q, String(item));
+      // The API reads a list filter as one comma-separated value (status=active,frozen);
+      // repeated keys would keep only the first.
+      if (Array.isArray(v)) query.append(q, v.map(String).join(","));
       else query.append(q, String(v));
     }
 
@@ -191,7 +196,8 @@ export class GravvClient {
         "confirm",
         "idempotency_key",
       ]);
-      for (const [k, v] of Object.entries(args)) if (!known.has(k) && v !== undefined) b[k] = v;
+      // Not for a closed body: that route rejects any field it does not declare.
+      if (!tool.closedBody) for (const [k, v] of Object.entries(args)) if (!known.has(k) && v !== undefined) b[k] = v;
       // Identifiers the API wants in both the path and the body.
       for (const k of tool.alsoInBody) if (args[k] !== undefined) b[k] = args[k];
       body = b;
@@ -210,7 +216,7 @@ export class GravvClient {
 
     const headers: Record<string, string> = {
       Accept: "application/json",
-      "User-Agent": "gravv-mcp",
+      "User-Agent": `gravv-mcp/${VERSION}`,
     };
 
     if (this.opts.apiKey) headers["Api-Key"] = this.opts.apiKey;
@@ -517,6 +523,55 @@ function isGatewayRateLimit(message: string): boolean {
 }
 
 /**
+ * A warning for a base URL that is not the Gravv API over https, or null. There is one
+ * host for sandbox and live (the key decides), so another host is a proxy, a test stub
+ * or a mistake, and plain http sends the API key in the clear.
+ */
+export function baseUrlWarning(raw: string | undefined): string | null {
+  if (raw === undefined || raw === "") return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return `--base-url ${raw} is not a URL.`;
+  }
+  if (url.protocol !== "https:") {
+    return `--base-url ${url.origin} is not https: the API key would be sent unencrypted.`;
+  }
+  if (url.hostname !== new URL(DEFAULT_BASE_URL).hostname) {
+    return `--base-url ${url.origin} is not ${DEFAULT_BASE_URL}; the API key is sent there. Sandbox and live both use ${DEFAULT_BASE_URL}.`;
+  }
+  return null;
+}
+
+/**
+ * Arguments the request will not carry: on a GET or a body-less route, any argument
+ * that is not a path or query parameter; on a closed or wrapped body, any that the body
+ * does not declare. Reported back so the model learns a filter or field was not sent,
+ * instead of reading an unfiltered answer as a filtered one.
+ */
+export function ignoredArguments(tool: GeneratedTool, args: Record<string, unknown>): string[] {
+  const used = new Set([...tool.pathParams, ...tool.queryParams, ...tool.alsoInBody, "confirm", "idempotency_key"]);
+  if (tool.bodyMode === "wrapped") used.add("body");
+  if (tool.bodyMode === "inline") {
+    if (!tool.closedBody) return [];
+    for (const k of tool.bodyProps) used.add(k);
+  }
+  return Object.keys(args)
+    .filter((k) => args[k] !== undefined && !used.has(k))
+    .sort();
+}
+
+/** Apply the curation's argument rules (upper-cased fields), without changing the caller's object. */
+export function normaliseArgs(tool: GeneratedTool, args: Record<string, unknown>): Record<string, unknown> {
+  const upper = UPPER_CASE_ARGS[tool.name];
+  if (!upper) return args;
+  const out = { ...args };
+  for (const k of upper) if (typeof out[k] === "string") out[k] = (out[k] as string).toUpperCase();
+  return out;
+}
+
+/**
  * Where to look to learn whether a call took effect, for hints that say "look it up
  * first". The per-tool text lives in curation.ts.
  */
@@ -565,7 +620,13 @@ function refusedBeforeRunning(status: number, message: string, body: unknown): b
 export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = "", body: unknown = null): boolean {
   if (safeToRepeat(tool)) return false;
   if (status === 0 || status === 408) return true;
-  if (status === 400) return isServerFault400(message);
+  if (status === 400) {
+    // Some known refusals start "failed to" or mention an internal error, and look like a
+    // server fault; their fix hint says whether the call can have run.
+    const fix = errorFixFor(tool.name, status, message, body);
+    if (fix) return fix.outcomeKnown === false;
+    return isServerFault400(message);
+  }
   return status >= 500 && status !== 501 && !refusedBeforeRunning(status, message, body);
 }
 
@@ -582,6 +643,19 @@ export interface HintContext {
 const REPLAYED_STORED =
   "This is the stored answer to an earlier call with the same idempotency key (kept 24 hours); the request did not run again.";
 const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again without idempotency_key.`;
+
+/**
+ * A 413 the upload fixes (fix-hints.ts) did not match: the gateway's `request_body_too_large`
+ * with a `limit`, or "the uploaded file is too large — the maximum is 10MB", sent for any
+ * size refusal further on. Neither states the size the route takes, so the hint does.
+ */
+function hint413(tool: GeneratedTool): string {
+  if (Object.hasOwn(UPLOADS, tool.name)) return uploadTooLargeHint(tool.name);
+  return (
+    "The request is too large, whatever size the message states. Send smaller files; in sandbox, keep the files " +
+    `of one call under ${sizeText(SANDBOX_UPLOAD_BYTES)} together. Then call again without idempotency_key.`
+  );
+}
 
 /** After a timeout or a network error. */
 function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
@@ -703,13 +777,7 @@ function hint5xxByCause(tool: GeneratedTool, status: number, message: string, bo
 }
 
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
-const LIMIT_CODES = new Set([
-  "ERROR_CODE_LIMIT_EXCEEDED",
-  "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
-  "ERROR_CODE_PER_TRANSFER_LIMIT_EXCEEDED",
-  "ERROR_CODE_MONTHLY_LIMIT_EXCEEDED",
-  "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED",
-]);
+const LIMIT_CODES = new Set(TRANSFER_LIMIT_CODES);
 
 /** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
 function hint422(code: string | undefined): string {
@@ -772,6 +840,10 @@ function statusHint(
       message,
     );
 
+  // An answer the scenarios name has its own next step, ahead of what its status means.
+  const fix = errorFixFor(tool.name, status, message, body);
+  if (fix) return fix.hint;
+
   switch (status) {
     case 0:
     case 408:
@@ -803,9 +875,7 @@ function statusHint(
     case 410:
       return hint410(errorCode(body));
     case 413:
-      // Both shapes: request_body_too_large with a limit, and "the uploaded file is too
-      // large". Neither states the size that is refused in practice.
-      return "The upload is too large. Today files from about 600 KB are refused, whatever size the message states. Keep each file under 500 KB.";
+      return hint413(tool);
     case 422:
       return hint422(errorCode(body));
     case 429:

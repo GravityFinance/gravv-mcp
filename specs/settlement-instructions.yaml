@@ -1,0 +1,458 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        1 to 255 printable ASCII characters. A retry with the same key within 24
+        hours returns the first response, including a 400. After you correct a
+        request, send a new key.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: usd-settlement-account-1
+    InstructionIdPath:
+      name: id
+      in: path
+      required: true
+      description: ID of the settlement instruction
+      schema:
+        type: string
+        format: uuid
+      example: b7e1c2d3-4f5a-4b6c-9d8e-7f6a5b4c3d2e
+  schemas:
+    InstructionType:
+      type: string
+      description: Exact lower case
+      enum:
+        - bank_account
+        - crypto_wallet
+      example: bank_account
+    CreateSettlementInstructionRequest:
+      type: object
+      description: >-
+        A bank account needs `account_number` and `bank_name`. A crypto wallet
+        needs `wallet_address` and `network`, and `memo` on `stellar`. Unknown
+        fields are ignored.
+      required:
+        - instruction_type
+        - account_name
+        - currency
+      properties:
+        instruction_type:
+          $ref: '#/components/schemas/InstructionType'
+        account_name:
+          type: string
+          description: Name on the account or wallet
+          example: Acme Treasury LLC
+        currency:
+          type: string
+          description: >-
+            Currency this destination receives, such as `USD` or `USDC`. It is
+            stored as sent and filters match it exactly, so always send upper
+            case.
+          example: USD
+        is_default:
+          type: boolean
+          default: false
+          description: Make this the default for its currency. The old default is unset.
+        account_number:
+          type: string
+          description: Required for `bank_account`
+          example: '000987654321'
+        bank_name:
+          type: string
+          description: Required for `bank_account`
+          example: Example Bank
+        bank_code:
+          type: string
+        routing_number:
+          type: string
+          example: '026009593'
+        swift_code:
+          type: string
+        iban:
+          type: string
+        country:
+          type: string
+          example: US
+        address:
+          type: object
+          description: The bank's address, stored as sent
+          additionalProperties: true
+        wallet_address:
+          type: string
+          description: Required for `crypto_wallet`. Its format is not checked, so check it yourself.
+        network:
+          type: string
+          description: Required for `crypto_wallet`, such as `polygon` or `stellar`. Send lower case.
+          example: polygon
+        memo:
+          type: string
+          description: Required when `network` is `stellar`
+    UpdateSettlementInstructionRequest:
+      type: object
+      description: >-
+        Send only what changes. Empty strings keep the current value, and no
+        field can be cleared. `instruction_type` and `currency` cannot change.
+        Values are not checked again on update.
+      properties:
+        is_default:
+          type: boolean
+        account_name:
+          type: string
+        account_number:
+          type: string
+        bank_name:
+          type: string
+        bank_code:
+          type: string
+        routing_number:
+          type: string
+        swift_code:
+          type: string
+        iban:
+          type: string
+        country:
+          type: string
+        address:
+          type: object
+          additionalProperties: true
+        wallet_address:
+          type: string
+        network:
+          type: string
+        memo:
+          type: string
+    SettlementInstruction:
+      type: object
+      description: A settlement instruction. Empty fields are left out.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Use it as an FX order `destination.id`
+          example: b7e1c2d3-4f5a-4b6c-9d8e-7f6a5b4c3d2e
+        tenant_id:
+          type: string
+          format: uuid
+        type:
+          description: The same value as `instruction_type`
+          allOf:
+            - $ref: '#/components/schemas/InstructionType'
+        instruction_type:
+          $ref: '#/components/schemas/InstructionType'
+        account_name:
+          type: string
+          example: Acme Treasury LLC
+        currency:
+          type: string
+          example: USD
+        is_default:
+          type: boolean
+        status:
+          type: string
+          description: Always `active`; deleted instructions are not returned
+          enum:
+            - active
+        account_number:
+          type: string
+        bank_name:
+          type: string
+        bank_code:
+          type: string
+        routing_number:
+          type: string
+        swift_code:
+          type: string
+        iban:
+          type: string
+        country:
+          type: string
+        address:
+          type: object
+          additionalProperties: true
+        wallet_address:
+          type: string
+        network:
+          type: string
+        memo:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        date_created:
+          type: string
+          format: date-time
+        date_updated:
+          type: string
+          format: date-time
+    SettlementInstructionEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SettlementInstruction'
+        error:
+          type: 'null'
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+        error:
+          type: string
+        code:
+          type: string
+  responses:
+    BadRequest:
+      description: >-
+        Invalid request, an unknown or deleted ID, or a failure. Not-found is a
+        400 here, not a 404.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: 'settlement instruction b7e1c2d3-4f5a-4b6c-9d8e-7f6a5b4c3d2e: resource not found'
+            code: ERROR_CODE_NOT_FOUND
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Settlement instructions
+    description: >-
+      Your own bank accounts and crypto wallets that receive the proceeds of FX
+      orders
+paths:
+  /v1/settlement-instructions:
+    get:
+      tags:
+        - Settlement instructions
+      summary: List settlement instructions
+      operationId: listSettlementInstructions
+      description: >-
+        Lists your active settlement instructions, defaults first, then newest.
+        Filters match exactly, including case.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            default: 10
+        - in: query
+          name: currency
+          schema:
+            type: string
+          example: USD
+        - in: query
+          name: instruction_type
+          schema:
+            $ref: '#/components/schemas/InstructionType'
+      responses:
+        '200':
+          description: A page of settlement instructions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/SettlementInstruction'
+                      total_items:
+                        type: integer
+                  error:
+                    type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags:
+        - Settlement instructions
+      summary: Create a settlement instruction
+      operationId: createSettlementInstruction
+      description: >-
+        Saves one of your own bank accounts or crypto wallets to receive FX
+        order proceeds. Pass its `id` as the order destination with type
+        `external_account`. Its currency must match the currency the order
+        buys. The details are not checked with a bank, and there is no
+        duplicate check.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSettlementInstructionRequest'
+            examples:
+              BankAccount:
+                summary: Bank account
+                value:
+                  instruction_type: bank_account
+                  account_name: Acme Treasury LLC
+                  currency: USD
+                  is_default: true
+                  account_number: '000987654321'
+                  bank_name: Example Bank
+                  routing_number: '026009593'
+                  country: US
+              CryptoWallet:
+                summary: Crypto wallet
+                value:
+                  instruction_type: crypto_wallet
+                  account_name: Acme Treasury
+                  currency: USDC
+                  wallet_address: '0x445906a6766927c5da8b2fca0e0db5d7b5565ef8'
+                  network: polygon
+      responses:
+        '200':
+          description: The saved settlement instruction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementInstructionEnvelope'
+              example:
+                data:
+                  id: b7e1c2d3-4f5a-4b6c-9d8e-7f6a5b4c3d2e
+                  tenant_id: 0d9c8b7a-6f5e-4d3c-2b1a-0f9e8d7c6b5a
+                  type: bank_account
+                  instruction_type: bank_account
+                  account_name: Acme Treasury LLC
+                  currency: USD
+                  is_default: true
+                  status: active
+                  account_number: '000987654321'
+                  bank_name: Example Bank
+                  routing_number: '026009593'
+                  country: US
+                  created_at: '2026-10-12T09:20:00Z'
+                  updated_at: '2026-10-12T09:20:00Z'
+                  date_created: '2026-10-12T09:20:00Z'
+                  date_updated: '2026-10-12T09:20:00Z'
+                error: null
+        '400':
+          description: A missing or invalid field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: 'memo is required for the stellar network: invalid input'
+  /v1/settlement-instructions/{id}:
+    get:
+      tags:
+        - Settlement instructions
+      summary: Get a settlement instruction
+      operationId: getSettlementInstruction
+      description: Returns one active settlement instruction. A deleted one is not found.
+      parameters:
+        - $ref: '#/components/parameters/InstructionIdPath'
+      responses:
+        '200':
+          description: The settlement instruction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementInstructionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - Settlement instructions
+      summary: Update a settlement instruction
+      operationId: updateSettlementInstruction
+      description: >-
+        Changes the details of an active settlement instruction, or makes it
+        the default for its currency. To change the currency or type, delete it
+        and create a new one. This route needs no Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/InstructionIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSettlementInstructionRequest'
+            example:
+              account_name: Acme Treasury Operating
+              is_default: true
+      responses:
+        '200':
+          description: The updated settlement instruction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SettlementInstructionEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      tags:
+        - Settlement instructions
+      summary: Delete a settlement instruction
+      operationId: deleteSettlementInstruction
+      description: >-
+        Retires a settlement instruction. It can no longer be read or used, and
+        it cannot be restored. Orders that used it keep its ID. Deleting the
+        default leaves its currency with no default.
+      parameters:
+        - $ref: '#/components/parameters/InstructionIdPath'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - deleted
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  status: deleted
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'

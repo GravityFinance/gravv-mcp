@@ -8,9 +8,11 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
-import { PUBLISHABLE_KEY_MESSAGE, isPublishableKey } from "../client.ts";
+import { PUBLISHABLE_KEY_MESSAGE, baseUrlWarning, isPublishableKey } from "../client.ts";
 import { DEFAULT_DOCS_ORIGIN, InvalidDocsOriginError, parseDocsOrigin } from "../docs.ts";
 import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
+import { defaultDownloadDir } from "../files.ts";
+import { PROMPTS } from "../prompts.ts";
 
 const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
 
@@ -27,6 +29,8 @@ OPTIONS
   --base-url=<url>    Override the API base URL. Default: https://api.gravv.xyz
   --docs-origin=<url> Where the documentation tools read the docs.
                       Default: ${DEFAULT_DOCS_ORIGIN}
+  --download-dir=<dir> Where downloaded files (KYC document images) are saved.
+                      Default: ${defaultDownloadDir()}
   --help
 
 ENVIRONMENT
@@ -36,11 +40,13 @@ ENVIRONMENT
                              allows 600/min, burst 50, per tenant.
   GRAVV_BASE_URL             Same as --base-url.
   GRAVV_DOCS_ORIGIN          Same as --docs-origin.
+  GRAVV_DOWNLOAD_DIR         Same as --download-dir.
 
 NOTES
   Sandbox and live share one base URL — the key decides which. Money-moving tools
   always require an explicit confirm: true, and on a live key additionally require
-  GRAVV_ALLOW_LIVE_WRITES=true.
+  GRAVV_ALLOW_LIVE_WRITES=true. Deletes and feature activation require confirm: true.
+  Upload tools take a local file_path; the server reads the file, never the model.
 `;
 }
 
@@ -87,14 +93,19 @@ async function main() {
 
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");
 
+  const baseUrl = arg("base-url") ?? (process.env.GRAVV_BASE_URL || undefined);
+  const urlWarning = baseUrlWarning(baseUrl);
+  if (urlWarning) process.stderr.write(`warning: ${urlWarning}\n`);
+
   const { server, environment, tools } = createServer({
     apiKey,
-    baseUrl: arg("base-url") ?? process.env.GRAVV_BASE_URL,
+    baseUrl,
     toolsets,
     readOnly: process.argv.includes("--read-only"),
     allowLiveWrites: process.env.GRAVV_ALLOW_LIVE_WRITES === "true",
     ratePerMinute: Number.isFinite(rate) && rate > 0 ? rate : undefined,
     docsOrigin,
+    downloadDir: arg("download-dir") ?? (process.env.GRAVV_DOWNLOAD_DIR || undefined),
   });
 
   // Startup banner on stderr so the operator can see which environment they attached to
@@ -102,13 +113,13 @@ async function main() {
   const docsNote = docsOrigin === DEFAULT_DOCS_ORIGIN ? "" : ` | docs=${docsOrigin}`;
   process.stderr.write(
     apiKey
-      ? `gravv-mcp: ${tools.length} API tools + 2 docs tools | environment=${environment}` +
+      ? `gravv-mcp: ${tools.length} API tools + 2 docs tools + ${PROMPTS.length} prompts | environment=${environment}` +
           (environment !== "sandbox" && process.env.GRAVV_ALLOW_LIVE_WRITES === "true"
             ? " | LIVE WRITES ENABLED"
             : "") +
           docsNote +
           "\n"
-      : `gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available${docsNote}\n`,
+      : `gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs, getGravvDocPage and ${PROMPTS.length} prompts available${docsNote}\n`,
   );
 
   if (apiKey && isPublishableKey(apiKey)) process.stderr.write(`warning: ${PUBLISHABLE_KEY_MESSAGE}\n`);

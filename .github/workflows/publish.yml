@@ -18,6 +18,11 @@ name: Publish to npm
 # The npm CLI detects an OIDC environment and uses it before falling back to the token,
 # so having both configured is safe.
 #
+# Every publish carries a provenance statement (--provenance), on either path: npm signs
+# where and how the tarball was built, using this job's OIDC token, so consumers can verify
+# it came from this repository and this workflow. npm accepts provenance only from a public
+# repository; this one is public.
+#
 # After the first successful publish:
 #   npmjs.com -> the package -> Settings -> Trusted Publisher -> GitHub Actions
 #     Organization or user: GravityFinance
@@ -44,11 +49,13 @@ on:
 
 permissions:
   contents: read
-  id-token: write # required for OIDC trusted publishing
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC: Trusted Publishing and the provenance statement both need it
 
     steps:
       - uses: actions/checkout@v4
@@ -60,11 +67,13 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - name: Ensure npm supports trusted publishing
-        # OIDC support landed in npm 11.5.1. The npm bundled with a given Node release
-        # is often older, so pin it forward explicitly rather than hoping.
+      - name: Install a pinned npm
+        # Trusted Publishing over OIDC needs npm 11.5.1 or later, and the npm bundled with
+        # Node 22 is older. Pinned rather than npm@latest, so a new npm release cannot change
+        # how a release is published, or break it, without a commit here. 11.20.0 supports
+        # OIDC and --provenance and runs on Node 22 (npm 12 needs Node 22.22.2 or later).
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11.20.0
           npm --version
 
       - run: npm ci
@@ -103,11 +112,11 @@ jobs:
           cat > /tmp/check-tarball.cjs <<'EOF'
           const { readFileSync } = require("node:fs");
 
-          // `npm pack --json` has shipped three shapes across npm versions, and the
-          // workflow installs npm@latest so the shape is not pinned:
+          // `npm pack --json` has shipped three shapes across npm versions. npm is pinned
+          // above, but the check accepts each shape so bumping the pin cannot break it:
           //   [ { name, files } ]              array of entries
           //   { name, files }                  bare entry
-          //   { "@scope/pkg": { name, files } } keyed by package name  <- npm@latest
+          //   { "@scope/pkg": { name, files } } keyed by package name
           // Find the first value that actually looks like a packed entry.
           const raw = JSON.parse(readFileSync("/tmp/pack.json", "utf8"));
           const looksLikeEntry = (x) => x && typeof x === "object" && Array.isArray(x.files);
@@ -157,9 +166,10 @@ jobs:
         # OIDC instead when this repository is a configured trusted publisher, so this
         # is a fallback rather than the primary path.
         #
-        # Provenance is attached automatically when publishing a public package from a
-        # public repository, letting consumers verify the artifact was built here.
-        run: npm publish
+        # --provenance is explicit: npm attaches provenance by itself only on the Trusted
+        # Publishing path, and 0.3.1 on npm carries none. With the flag, a token publish
+        # signs a provenance statement too, using the job's OIDC token.
+        run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

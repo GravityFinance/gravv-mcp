@@ -46,6 +46,25 @@ describe("checkSchema", () => {
     assert.deepEqual(checkSchema(payee, { ...ok, customer_id: "abc" }), ["customer_id: not a valid uuid"]);
     assert.deepEqual(checkSchema({ type: "string", format: "date" }, "2026-13-40"), ["(arguments): not a valid date"]);
     assert.deepEqual(checkSchema({ type: "string", format: "date-time" }, "2026-10-13T09:15:22.481Z"), []);
+    assert.deepEqual(checkSchema({ type: "string", format: "uri" }, "https://example.com/done"), []);
+    assert.deepEqual(checkSchema({ type: "string", format: "uri" }, "example.com"), ["(arguments): not a valid uri"]);
+  });
+
+  test("type lists, exclusive bounds and item counts", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        name: { type: ["string", "null"], maxLength: 3 },
+        amount: { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 10 },
+        methods: { type: "array", minItems: 1, maxItems: 2, items: { type: "string" } },
+      },
+    };
+    assert.deepEqual(checkSchema(schema, { name: null, amount: 0.01, methods: ["a"] }), []);
+    assert.deepEqual(checkSchema(schema, { name: 1 }), ["name: expected string or null, got integer"]);
+    assert.deepEqual(checkSchema(schema, { amount: 0 }), ["amount: not above 0"]);
+    assert.deepEqual(checkSchema(schema, { amount: 10 }), ["amount: not below 10"]);
+    assert.deepEqual(checkSchema(schema, { methods: [] }), ["methods: fewer than 1 items"]);
+    assert.deepEqual(checkSchema(schema, { methods: ["a", "b", "c"] }), ["methods: more than 2 items"]);
   });
 
   test("an undeclared property is reported only in strict mode, and only where properties are declared", () => {
@@ -70,6 +89,21 @@ describe("checkSchema", () => {
     assert.deepEqual(checkSchema({ oneOf: [{ type: "string" }, { type: "string" }] }, "x"), [
       "(arguments): fits more than one of the allowed shapes",
     ]);
+  });
+
+  test("anyOf takes a value that fits one or more of its shapes", () => {
+    // createAccount currency: a listed code, or any label for a wallet-only account.
+    const currency = {
+      anyOf: [{ type: "string", enum: ["USD", "NGN"] }, { type: "string", minLength: 1 }],
+    };
+    assert.deepEqual(checkSchema(currency, "USD"), []);
+    assert.deepEqual(checkSchema(currency, "USDC"), []);
+    assert.deepEqual(checkSchema(currency, ""), [
+      '(arguments): fits none of the 2 accepted shapes (shape 1: (arguments): "" is not one of USD, NGN; ' +
+        "shape 2: (arguments): shorter than 1)",
+    ]);
+    assert.deepEqual(unsupportedKeywords({ anyOf: [{ type: "string", const: "x" }] }), ["(arguments)|0: const"]);
+    assert.deepEqual(invalidPatterns({ anyOf: [{ type: "string", pattern: "(?i)x" }] }), ["(arguments)|0: (?i)x"]);
   });
 
   test("a placeholder value is not checked, but still counts as sent", () => {
@@ -102,13 +136,28 @@ describe("tool schemas", () => {
     }
   });
 
-  test("only the known pattern is outside ECMAScript", () => {
-    // JSON Schema patterns are ECMAScript regular expressions. The KYC upload spec writes
-    // an inline (?i) flag, which a validating client cannot compile. It is pinned here so
-    // a fix in the spec, or a new pattern like it, shows up as a failing test.
+  test("no enum sits on an object type", () => {
+    // The generator once merged allOf into `type: object` whatever the branches said, so a
+    // string enum reached through allOf (a $ref with a sibling description) asked for an
+    // object. A value the API reads as a string would then fail any validating client.
+    const walk = (node: unknown, at: string): string[] => {
+      if (node === null || typeof node !== "object") return [];
+      if (Array.isArray(node)) return node.flatMap((n, i) => walk(n, `${at}[${i}]`));
+      const n = node as Record<string, unknown>;
+      const own = n.type === "object" && Array.isArray(n.enum) ? [at] : [];
+      return [...own, ...Object.entries(n).flatMap(([k, v]) => walk(v, `${at}.${k}`))];
+    };
+    const found = [...TOOLS, ...MANUAL_TOOLS].flatMap((tool) => walk(tool.inputSchema, tool.name));
+    assert.deepEqual(found, []);
+  });
+
+  test("every pattern is an ECMAScript regular expression", () => {
+    // JSON Schema patterns are ECMAScript regular expressions; a validating client cannot
+    // compile one written for another dialect, such as an inline (?i) flag. The KYC upload
+    // spec carried one until docs Phase 3 dropped the pattern (the content decides the type).
     const found = [...TOOLS, ...MANUAL_TOOLS].flatMap((tool) =>
       invalidPatterns(tool.inputSchema).map((p) => `${tool.name} ${p}`),
     );
-    assert.deepEqual(found, ["uploadCustomerKycDocument filename: (?i)\\.(jpe?g|png|pdf)$"]);
+    assert.deepEqual(found, []);
   });
 });

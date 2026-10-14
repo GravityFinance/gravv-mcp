@@ -2,8 +2,10 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   BLOCKED_TOOL_NAMES,
+  CONFIRM_OPS,
   DEFAULT_TOOLSETS,
   MONEY_OPS,
+  MOVED_TOOLSETS,
   OUTCOME_LOOKUPS,
   RETIRED_TOOLSETS,
   TOOLSETS,
@@ -15,6 +17,7 @@ import { TOOLS, TOOLS_BY_NAME } from "../src/generated/tools.ts";
 import { MANUAL_TOOLS } from "../src/manual-tools.ts";
 import { instructions } from "../src/server.ts";
 import { SafetyGate } from "../src/safety.ts";
+import { FALSE_TEXT } from "./false-text.ts";
 
 const advertised = new Set([...TOOLS_BY_NAME.keys(), ...MANUAL_TOOLS.map((t) => t.name)]);
 
@@ -38,7 +41,6 @@ const REMOVED = [
   "deletePaymentLink",
   "updatePaymentLinkStatus",
   "getPublicPaymentLink",
-  "deleteSavedCard",
 ];
 
 describe("removed tools", () => {
@@ -88,6 +90,36 @@ describe("toolsets", () => {
     assert.match(warnings[0]!, /payment-links/);
   });
 
+  test("a moved name loads the toolset it moved to, with a warning", () => {
+    const warnings: string[] = [];
+    assert.deepEqual(parseToolsets("features,customers", (m) => warnings.push(m)), ["cards", "customers"]);
+    assert.match(warnings[0]!, /"features" was merged into "cards"/);
+    assert.deepEqual(parseToolsets("cards,features"), ["cards"], "named once even when both are given");
+    for (const [from, to] of Object.entries(MOVED_TOOLSETS)) {
+      assert.equal((TOOLSETS as readonly string[]).includes(from), false, `${from} is not a toolset any more`);
+      assert.ok((TOOLSETS as readonly string[]).includes(to), `${to} must be a toolset`);
+    }
+  });
+
+  test("card KYC and the feature tools are in cards", () => {
+    for (const name of [
+      "startCardholderKyc",
+      "startCardholderKycS2S",
+      "uploadCardholderKycDocument",
+      "listFeatures",
+      "checkFeatureEligibility",
+      "activateFeature",
+    ]) {
+      assert.equal(TOOLS_BY_NAME.get(name)?.toolset, "cards", name);
+    }
+  });
+
+  test("the old card KYC names point at the new ones", () => {
+    assert.match(BLOCKED_TOOL_NAMES.startRiskKyc!, /startCardholderKyc\b/);
+    assert.match(BLOCKED_TOOL_NAMES.startRiskKycS2S!, /startCardholderKycS2S/);
+    assert.match(BLOCKED_TOOL_NAMES.uploadRiskDocument!, /uploadCardholderKycDocument/);
+  });
+
   test("only retired names leave no API toolsets, rather than widening to the defaults", () => {
     const warnings: string[] = [];
     assert.deepEqual(parseToolsets("approvals", (m) => warnings.push(m)), []);
@@ -115,6 +147,18 @@ const GATED: Record<string, { route: string; why: string }> = {
     why: "charges at once with card_token",
   },
   chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
+  resumeTransfer: { route: "POST /v1/transfer/{id}/resume", why: "releases a held payout" },
+};
+
+/**
+ * Tools that cannot be undone but move no money: confirm only, no live-writes switch.
+ * Pinned both ways like GATED.
+ */
+const CONFIRMED: Record<string, { route: string; why: string }> = {
+  deleteAccountApplication: { route: "DELETE /v1/accounts/applications/{id}", why: "cannot be restored" },
+  activateFeature: { route: "POST /v1/risk/features/activate", why: "can issue a card; no deactivate route" },
+  deleteSettlementInstruction: { route: "DELETE /v1/settlement-instructions/{id}", why: "cannot be restored" },
+  deleteSavedCard: { route: "DELETE /v1/collections/cards/{card_id}", why: "cannot be restored" },
 };
 
 describe("idempotency_key argument", () => {
@@ -124,7 +168,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 25);
+    assert.equal(keyed.length, 33);
   });
 
   test("the exempt POSTs do not offer it", () => {
@@ -156,6 +200,8 @@ describe("outcome lookups", () => {
   test("each lookup starts with a tool that exists", () => {
     for (const [name, entry] of Object.entries(OUTCOME_LOOKUPS)) {
       if (!("lookup" in entry)) continue;
+      // A route nothing can look up says so, and says what to do instead.
+      if (entry.lookup.startsWith("no tool ")) continue;
       const first = entry.lookup.match(/^[A-Za-z0-9]+/)?.[0] ?? "";
       assert.ok(advertised.has(first), `${name}: "${first}" is not a tool`);
     }
@@ -184,25 +230,37 @@ describe("money and irreversible tools are gated", () => {
     const routes = new Set(TOOLS.map((t) => opKey(t.method, t.path)));
     for (const key of MONEY_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
   });
-});
 
-/**
- * Texts that were false and were corrected. A spec sync or a hint edit that brings one
- * back fails here rather than reaching a model.
- */
-const FALSE_TEXT: Array<[RegExp, string]> = [
-  [/second user approves/i, "API-key FX orders run at once; there is no second approver"],
-  [/lock in the quoted rate|lock the rate|locked a rate/i, "a quote does not lock a rate"],
-  [/50,000/, "exports return at most the 10 newest rows"],
-  [/no API key is required/i, "every route needs an API key"],
-  [/cosmetic/i, "the path customer_id wins"],
-  [/RETURNS 202/, "bank_account and mobile_money payees return 200"],
-  [/(Poll|Check) getCustomerKycStatus/, "KYC completion is getCustomer's basic kyc status"],
-  [/until the status changes to/i, "polling must also stop on setup_failed"],
-  [/token you got from the webhook/i, "card tokens come from listSavedCards"],
-  [/Optional spending limit/i, "leaving limit out zeroes the daily limit"],
-  [/filtered by client_reference/i, "listTransactions has no client_reference filter"],
-];
+  for (const [name, { route, why }] of Object.entries(CONFIRMED)) {
+    test(`${name} needs confirm but not the live-writes switch: ${why}`, () => {
+      const tool = TOOLS_BY_NAME.get(name);
+      assert.ok(tool, `${name} must exist`);
+      assert.equal(opKey(tool.method, tool.path), route);
+      assert.equal(tool.needsConfirm, true);
+      assert.equal(tool.movesMoney, false);
+      assert.ok((tool.inputSchema as any).properties.confirm, `${name} must offer confirm`);
+    });
+  }
+
+  test("every confirm-gated tool is listed, and every money tool is confirm-gated", () => {
+    assert.deepEqual(
+      TOOLS.filter((t) => t.needsConfirm).map((t) => t.name).sort(),
+      [...Object.keys(GATED), ...Object.keys(CONFIRMED)].sort(),
+    );
+    const routes = new Set(TOOLS.map((t) => opKey(t.method, t.path)));
+    for (const key of CONFIRM_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
+  });
+
+  test("every DELETE tool asks for confirmation", () => {
+    for (const t of TOOLS.filter((t) => t.method === "delete")) assert.equal(t.needsConfirm, true, t.name);
+  });
+
+  test("only gated tools offer confirm", () => {
+    for (const t of TOOLS) {
+      assert.equal("confirm" in ((t.inputSchema as any).properties ?? {}), t.needsConfirm, t.name);
+    }
+  });
+});
 
 describe("corrected texts stay corrected", () => {
   for (const [pattern, why] of FALSE_TEXT) {

@@ -4,7 +4,7 @@
  * The scenario and drift checks need to ask "would this request fit the tool schema the
  * model sees?". The tool schemas use a small set of keywords (listed in KEYWORDS), so this
  * covers exactly those. Any other keyword is reported as a problem rather than ignored: a
- * spec sync that brings in `allOf` or `anyOf` must fail the check loudly, not pass it
+ * spec sync that brings in `allOf` or `not` must fail the check loudly, not pass it
  * because the check could not read the schema.
  *
  * `strict` also reports a property the schema does not declare, even when
@@ -28,8 +28,13 @@ export const KEYWORDS = new Set([
   "pattern",
   "minimum",
   "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "minItems",
+  "maxItems",
   "nullable",
   "oneOf",
+  "anyOf",
   "format",
 ]);
 
@@ -54,6 +59,15 @@ const FORMATS: Record<string, (v: unknown) => boolean> = {
   ipv4: (v) =>
     typeof v === "string" && /^(\d{1,3})(\.\d{1,3}){3}$/.test(v) && v.split(".").every((p) => Number(p) <= 255),
   int32: (v) => typeof v === "number" && Number.isInteger(v) && v >= -(2 ** 31) && v < 2 ** 31,
+  int64: (v) => typeof v === "number" && Number.isInteger(v),
+  uri: (v) => {
+    if (typeof v !== "string") return false;
+    try {
+      return new URL(v).protocol.length > 1;
+    } catch {
+      return false;
+    }
+  },
   byte: (v) => typeof v === "string" && v.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(v),
 };
 
@@ -92,7 +106,7 @@ export function unsupportedKeywords(schema: unknown, path = ""): string[] {
       for (const [name, sub] of Object.entries(v)) found.push(...unsupportedKeywords(sub, child(path, name)));
     } else if (k === "items" || (k === "additionalProperties" && isObject(v))) {
       found.push(...unsupportedKeywords(v, `${label(path)}[]`));
-    } else if (k === "oneOf" && Array.isArray(v)) {
+    } else if ((k === "oneOf" || k === "anyOf") && Array.isArray(v)) {
       v.forEach((branch, i) => found.push(...unsupportedKeywords(branch, `${label(path)}|${i}`)));
     }
   }
@@ -124,8 +138,10 @@ export function invalidPatterns(schema: unknown, path = ""): string[] {
   }
   if (schema.items !== undefined) found.push(...invalidPatterns(schema.items, `${label(path)}[]`));
   if (isObject(schema.additionalProperties)) found.push(...invalidPatterns(schema.additionalProperties, `${label(path)}[]`));
-  if (Array.isArray(schema.oneOf)) {
-    schema.oneOf.forEach((branch, i) => found.push(...invalidPatterns(branch, `${label(path)}|${i}`)));
+  for (const branches of [schema.oneOf, schema.anyOf]) {
+    if (Array.isArray(branches)) {
+      branches.forEach((branch, i) => found.push(...invalidPatterns(branch, `${label(path)}|${i}`)));
+    }
   }
   return found;
 }
@@ -138,9 +154,19 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
 
   if (options.isPlaceholder?.(value)) return [];
 
+  // OpenAPI 3.1 writes a nullable field as a type list, `type: [string, "null"]`.
+  const types = typeof schema.type === "string" ? [schema.type] : Array.isArray(schema.type) ? schema.type : undefined;
+
   if (value === null) {
-    if (schema.nullable === true || schema.type === "null") return [];
-    if (schema.type === undefined && schema.oneOf === undefined && schema.enum === undefined) return [];
+    if (schema.nullable === true || types?.includes("null")) return [];
+    if (
+      schema.type === undefined &&
+      schema.oneOf === undefined &&
+      schema.anyOf === undefined &&
+      schema.enum === undefined
+    ) {
+      return [];
+    }
     return [`${label(path)}: is null`];
   }
 
@@ -160,10 +186,18 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
     if (fits > 1) return [`${label(path)}: fits more than one of the allowed shapes`];
   }
 
+  // anyOf: at least one branch fits; unlike oneOf, fitting several is fine.
+  if (Array.isArray(schema.anyOf)) {
+    const results = schema.anyOf.map((branch) => checkSchema(branch, value, options, path));
+    if (!results.some((r) => r.length === 0)) {
+      const why = results.map((r, i) => `shape ${i + 1}: ${r[0]}`).join("; ");
+      return [`${label(path)}: fits none of the ${results.length} accepted shapes (${why})`];
+    }
+  }
+
   const problems: string[] = [];
-  const type = schema.type;
-  if (typeof type === "string" && !matchesType(type, value)) {
-    return [`${label(path)}: expected ${type}, got ${typeOf(value)}`];
+  if (types && !types.some((t) => typeof t === "string" && matchesType(t, value))) {
+    return [`${label(path)}: expected ${types.join(" or ")}, got ${typeOf(value)}`];
   }
 
   if (Array.isArray(schema.enum) && !schema.enum.some((e) => e === value)) {
@@ -191,6 +225,22 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
     }
     if (typeof schema.maximum === "number" && value > schema.maximum) {
       problems.push(`${label(path)}: above ${schema.maximum}`);
+    }
+    // OpenAPI 3.1 (JSON Schema 2020-12) gives the exclusive bounds as numbers.
+    if (typeof schema.exclusiveMinimum === "number" && value <= schema.exclusiveMinimum) {
+      problems.push(`${label(path)}: not above ${schema.exclusiveMinimum}`);
+    }
+    if (typeof schema.exclusiveMaximum === "number" && value >= schema.exclusiveMaximum) {
+      problems.push(`${label(path)}: not below ${schema.exclusiveMaximum}`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+      problems.push(`${label(path)}: fewer than ${schema.minItems} items`);
+    }
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+      problems.push(`${label(path)}: more than ${schema.maxItems} items`);
     }
   }
 

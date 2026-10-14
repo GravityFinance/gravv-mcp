@@ -60,8 +60,11 @@ describe("route matching", () => {
     bodyMode: "none",
     bodyProps: [],
     alsoInBody: [],
+    closedBody: false,
     movesMoney: false,
+    needsConfirm: false,
     needsIdempotency: false,
+    sandboxOnly: false,
     spec: "test.yaml",
   });
   const tools = [

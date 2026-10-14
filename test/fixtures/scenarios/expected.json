@@ -4,16 +4,20 @@
     "tool": "getCustomer"
   },
   "S-ACC2-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-01.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-01.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-01.6": {
     "outcome": "ok",
@@ -24,16 +28,20 @@
     "tool": "getCustomer"
   },
   "S-ACC2-02.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-02.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
   },
   "S-ACC2-02.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-02.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-02.6": {
     "outcome": "ok",
@@ -44,82 +52,143 @@
     "tool": "getCustomer"
   },
   "S-ACC2-03.2": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].phone_daytime: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].residential_address: is not declared"
+    ]
   },
   "S-ACC2-03.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-04.1": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].tax_id_type: is not declared",
+      "data.parties[0].tax_id_number: is not declared",
+      "data.parties[0].permanent_address: is not declared",
+      "data.parties[0].mailing_address: is not declared"
+    ]
   },
   "S-ACC2-04.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-05.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-05.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-06.1": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].is_director: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared"
+    ]
   },
   "S-ACC2-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-07.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-07.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-08.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-08.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-09.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-09.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountApplicationV2"
   },
   "S-ACC2-09.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountApplicationsV2"
   },
   "S-ACC2-09.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
   },
   "S-ACC2-09.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
   },
   "S-ACC2-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-10.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC2-10.3": {
-    "outcome": "no-tool"
+    "outcome": "mismatch",
+    "tool": "getAccountRequirements",
+    "problems": [
+      "customer_type: is required",
+      "currency: is required",
+      "...: is not allowed"
+    ]
   },
   "S-ACC2-10.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-10.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createAccountV2"
   },
   "S-ACC2-11.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-11.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-ACC2-12.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-ACC2-12.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-CRD-01.1": {
     "outcome": "ok",
@@ -138,21 +207,16 @@
     "tool": "createCustomer"
   },
   "S-CRD-01.5": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by startCustomerKyc (POST /v1/customers/kyc/start)."
-    ]
+    "outcome": "ok",
+    "tool": "startCardholderKyc"
   },
   "S-CRD-01.6": {
     "outcome": "ok",
     "tool": "activateFeature"
   },
   "S-CRD-01.7": {
-    "outcome": "mismatch",
-    "tool": "listCards",
-    "problems": [
-      "customer_id: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listCards"
   },
   "S-CRD-01.8": {
     "outcome": "ok",
@@ -179,16 +243,12 @@
     "tool": "getCard"
   },
   "S-CRD-02.1": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document)."
-    ]
+    "outcome": "ok",
+    "tool": "uploadCardholderKycDocument"
   },
   "S-CRD-02.2": {
-    "outcome": "blocked",
-    "problems": [
-      "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s)."
-    ]
+    "outcome": "ok",
+    "tool": "startCardholderKycS2S"
   },
   "S-CRD-03.1": {
     "outcome": "ok",
@@ -203,11 +263,8 @@
     "tool": "activateFeature"
   },
   "S-CRD-03.4": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-CRD-03.5": {
     "outcome": "ok",
@@ -218,12 +275,8 @@
     "tool": "getCustomer"
   },
   "S-CRD-04.2": {
-    "outcome": "mismatch",
-    "tool": "createCardApplication",
-    "problems": [
-      "type: is not declared",
-      "business_customer_id: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createCardApplication"
   },
   "S-CRD-04.3": {
     "outcome": "ok",
@@ -234,19 +287,12 @@
     "tool": "createCard"
   },
   "S-CRD-05.1": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-CRD-05.2": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "description: is required",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-CRD-05.3": {
     "outcome": "ok",
@@ -257,7 +303,8 @@
     "tool": "getCardBalance"
   },
   "S-CRD-05.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-CRD-06.1": {
     "outcome": "ok",
@@ -330,42 +377,24 @@
     "tool": "updateCardStatus"
   },
   "S-CRD-10.4": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "description: is required",
-      "source.source_type: \"card\" is not one of internal_account, internal_crypto_wallet",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-CRD-10.5": {
-    "outcome": "mismatch",
-    "tool": "listCards",
-    "problems": [
-      "card_id: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listCards"
   },
   "S-CRD-11.1": {
-    "outcome": "mismatch",
-    "tool": "listCards",
-    "problems": [
-      "customer_id: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listCards"
   },
   "S-CRD-11.2": {
-    "outcome": "mismatch",
-    "tool": "listCards",
-    "problems": [
-      "customer_id: is not allowed",
-      "status: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listCards"
   },
   "S-CRD-11.3": {
-    "outcome": "mismatch",
-    "tool": "createCard",
-    "problems": [
-      "funding: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createCard"
   },
   "S-CRD-11.4": {
     "outcome": "ok",
@@ -408,20 +437,12 @@
     "tool": "getCustomerKycDocuments"
   },
   "S-CUS-02.3": {
-    "outcome": "mismatch",
-    "tool": "uploadCustomerKycDocument",
-    "problems": [
-      "filename: pattern (?i)\\.(jpe?g|png|pdf)$ is not an ECMAScript regular expression",
-      "metadata.country: shorter than 3"
-    ]
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
   },
   "S-CUS-02.4": {
-    "outcome": "mismatch",
-    "tool": "uploadCustomerKycDocument",
-    "problems": [
-      "filename: pattern (?i)\\.(jpe?g|png|pdf)$ is not an ECMAScript regular expression",
-      "metadata.country: is required"
-    ]
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
   },
   "S-CUS-02.5": {
     "outcome": "ok",
@@ -440,14 +461,8 @@
     "tool": "getCustomer"
   },
   "S-CUS-03.3": {
-    "outcome": "mismatch",
-    "tool": "uploadCustomerKycDocument",
-    "problems": [
-      "filename: pattern (?i)\\.(jpe?g|png|pdf)$ is not an ECMAScript regular expression",
-      "metadata.idDocType: \"COMPANY_DOC\" is not one of PASSPORT, ID_CARD, DRIVERS, SELFIE, REGISTRATION_CERTIFICATE",
-      "metadata.idDocSubType: \"INCORPORATION_CERT\" is not one of FRONT_SIDE, BACK_SIDE",
-      "metadata.country: shorter than 3"
-    ]
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
   },
   "S-CUS-03.4": {
     "outcome": "ok",
@@ -466,12 +481,8 @@
     "tool": "startCustomerKyc"
   },
   "S-CUS-04.4": {
-    "outcome": "mismatch",
-    "tool": "uploadCustomerKycDocument",
-    "problems": [
-      "filename: pattern (?i)\\.(jpe?g|png|pdf)$ is not an ECMAScript regular expression",
-      "metadata.country: is required"
-    ]
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
   },
   "S-CUS-05.1": {
     "outcome": "ok",
@@ -482,47 +493,47 @@
     "tool": "getCustomerKycDocuments"
   },
   "S-CUS-05.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "downloadCustomerKycDocument"
   },
   "S-CUS-06.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-CUS-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-CUS-06.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-CUS-06.4": {
     "outcome": "no-tool"
   },
   "S-CUS-07.1": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "description: is required",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-CUS-07.2": {
     "outcome": "ok",
     "tool": "updateCustomer"
   },
   "S-CUS-07.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-ACC1-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC1-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-ACC1-01.3": {
-    "outcome": "mismatch",
-    "tool": "listAccounts",
-    "problems": [
-      "status: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listAccounts"
   },
   "S-ACC1-02.1": {
     "outcome": "ok",
@@ -553,48 +564,27 @@
     "tool": "getAccount"
   },
   "S-ACC1-05.1": {
-    "outcome": "mismatch",
-    "tool": "createAccount",
-    "problems": [
-      "type: \"non_custodial\" is not one of regular, savings",
-      "currency: \"USDC\" is not one of USD, EUR, MXN, NGN",
-      "blockchain_network: \"base\" is not one of polygon, stellar, ethereum, solana, avalanche"
-    ]
+    "outcome": "ok",
+    "tool": "createAccount"
   },
   "S-ACC1-05.2": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-ACC1-06.1": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "validateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.business.email: is not declared",
-      "data.business.phone: is not declared",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.2": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "createAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.business.email: is not declared",
-      "data.business.phone: is not declared",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.3": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required",
-      "data.blockchain_network: is required",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.4": {
     "outcome": "ok",
@@ -611,26 +601,14 @@
     "tool": "getAccount"
   },
   "S-ACC1-07.1": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "createAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: \"card\" is not one of regular, savings"
-    ]
+    "optIn": true
   },
   "S-ACC1-07.2": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required",
-      "data.blockchain_network: is required",
-      "data.individual.tax_id_type: is not declared",
-      "data.individual.nationalities: is not declared",
-      "data.individual.place_of_birth: is not declared",
-      "data.individual.account_purpose: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-07.3": {
     "outcome": "ok",
@@ -662,14 +640,9 @@
     "optIn": true
   },
   "S-ACC1-08.6": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required",
-      "data.blockchain_network: is required"
-    ]
+    "optIn": true
   },
   "S-ACC1-08.7": {
     "outcome": "ok",
@@ -689,29 +662,24 @@
     "tool": "getAccount"
   },
   "S-ACC1-09.4": {
-    "outcome": "mismatch",
-    "tool": "listAccounts",
-    "problems": [
-      "status: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listAccounts"
   },
   "S-FX-01.1": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-FX-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-FX-01.3": {
     "outcome": "ok",
     "tool": "getWallet"
   },
   "S-FX-01.4": {
-    "outcome": "mismatch",
-    "tool": "listFxRates",
-    "problems": [
-      "directions: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listFxRates"
   },
   "S-FX-01.5": {
     "outcome": "ok",
@@ -726,30 +694,12 @@
     "tool": "getWallet"
   },
   "S-FX-01.8": {
-    "outcome": "mismatch",
-    "tool": "getFxQuote",
-    "problems": [
-      "from_currency: is required",
-      "to_currency: is required",
-      "direction: is required",
-      "currency_pair: is not declared",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "getFxQuote"
   },
   "S-FX-01.9": {
-    "outcome": "mismatch",
-    "tool": "createFxOrder",
-    "problems": [
-      "customer_id: is required",
-      "order_type: is required",
-      "pair: is required",
-      "amount: is required",
-      "quote_id: is not declared",
-      "source: is not declared",
-      "destination: is not declared",
-      "client_reference: is not declared",
-      "metadata: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createFxOrder"
   },
   "S-FX-01.10": {
     "outcome": "ok",
@@ -764,54 +714,32 @@
     "tool": "getWallet"
   },
   "S-FX-02.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listSettlementInstructions"
   },
   "S-FX-02.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createSettlementInstruction"
   },
   "S-FX-02.4": {
     "outcome": "ok",
     "tool": "getWallet"
   },
   "S-FX-02.5": {
-    "outcome": "mismatch",
-    "tool": "getFxQuote",
-    "problems": [
-      "from_currency: is required",
-      "to_currency: is required",
-      "direction: is required",
-      "currency_pair: is not declared",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "getFxQuote"
   },
   "S-FX-02.6": {
-    "outcome": "mismatch",
-    "tool": "createFxOrder",
-    "problems": [
-      "customer_id: is required",
-      "order_type: is required",
-      "pair: is required",
-      "amount: is required",
-      "quote_id: is not declared",
-      "source: is not declared",
-      "destination: is not declared",
-      "client_reference: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createFxOrder"
   },
   "S-FX-02.7": {
     "outcome": "ok",
     "tool": "getFxOrder"
   },
   "S-FX-03.1": {
-    "outcome": "mismatch",
-    "tool": "getFxQuote",
-    "problems": [
-      "from_currency: is required",
-      "to_currency: is required",
-      "direction: is required",
-      "currency_pair: is not declared",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "getFxQuote"
   },
   "S-FX-03.2": {
     "outcome": "ok",
@@ -822,52 +750,36 @@
     "tool": "listFxCurrencyPairs"
   },
   "S-FX-04.2": {
-    "outcome": "mismatch",
-    "tool": "listFxRates",
-    "problems": [
-      "directions: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listFxRates"
   },
   "S-FX-04.3": {
-    "outcome": "mismatch",
-    "tool": "getFxQuote",
-    "problems": [
-      "from_currency: is required",
-      "to_currency: is required",
-      "direction: is required",
-      "currency_pair: is not declared",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "getFxQuote"
   },
   "S-FX-04.4": {
-    "outcome": "mismatch",
-    "tool": "createFxOrder",
-    "problems": [
-      "customer_id: is required",
-      "order_type: is required",
-      "pair: is required",
-      "amount: is required",
-      "quote_id: is not declared",
-      "source: is not declared",
-      "destination: is not declared",
-      "client_reference: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createFxOrder"
   },
   "S-FX-04.5": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-FX-05.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "createSettlementInstruction"
   },
   "S-FX-05.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateSettlementInstruction"
   },
   "S-FX-05.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listSettlementInstructions"
   },
   "S-FX-05.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getSettlementInstruction"
   },
   "S-FX-06.1": {
     "outcome": "ok",
@@ -890,7 +802,8 @@
     "tool": "listAccounts"
   },
   "S-TXN-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "listAccountsV2"
   },
   "S-TXN-01.3": {
     "outcome": "ok",
@@ -901,24 +814,16 @@
     "tool": "getTransaction"
   },
   "S-TXN-01.5": {
-    "outcome": "mismatch",
-    "tool": "exportTransactions",
-    "problems": [
-      "start_date: not a valid date-time",
-      "end_date: not a valid date-time"
-    ]
+    "outcome": "ok",
+    "tool": "exportTransactions"
   },
   "S-TXN-01.6": {
     "outcome": "ok",
     "tool": "getTransactionsVolume"
   },
   "S-TXN-01.7": {
-    "outcome": "mismatch",
-    "tool": "getWebhookHistory",
-    "problems": [
-      "start_date: not a valid date-time",
-      "end_date: not a valid date-time"
-    ]
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
   },
   "S-TXN-02.1": {
     "outcome": "ok",
@@ -945,11 +850,8 @@
     "tool": "getTransaction"
   },
   "S-TXN-02.7": {
-    "outcome": "mismatch",
-    "tool": "listTransactions",
-    "problems": [
-      "transaction_type: \"transfer_refund\" is not one of internal_transfer, crypto_transfer, crypto_funding, global_remittance, card_funding, card_withdrawal, card_payment, account_funding, credit, debit, fee_charge, subscription_fee, invoice_payment"
-    ]
+    "outcome": "ok",
+    "tool": "listTransactions"
   },
   "S-TXN-03.1": {
     "outcome": "ok",
@@ -960,25 +862,20 @@
     "tool": "listTransactions"
   },
   "S-TXN-03.3": {
-    "outcome": "mismatch",
-    "tool": "listTransactions",
-    "problems": [
-      "transaction_type: \"account_funding,crypto_funding\" is not one of internal_transfer, crypto_transfer, crypto_funding, global_remittance, card_funding, card_withdrawal, card_payment, account_funding, credit, debit, fee_charge, subscription_fee, invoice_payment"
-    ]
+    "outcome": "ok",
+    "tool": "listTransactions"
   },
   "S-TXN-03.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-TXN-04.1": {
     "outcome": "ok",
     "tool": "listTransactions"
   },
   "S-TXN-04.2": {
-    "outcome": "mismatch",
-    "tool": "listTransactions",
-    "problems": [
-      "transaction_type: \"global_remittance,bank_account\" is not one of internal_transfer, crypto_transfer, crypto_funding, global_remittance, card_funding, card_withdrawal, card_payment, account_funding, credit, debit, fee_charge, subscription_fee, invoice_payment"
-    ]
+    "outcome": "ok",
+    "tool": "listTransactions"
   },
   "S-TXN-05.1": {
     "outcome": "ok",
@@ -993,56 +890,52 @@
     "tool": "getWebhookEventDetail"
   },
   "S-TXN-05.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-TXN-05.5": {
-    "outcome": "mismatch",
-    "tool": "listTransactions",
-    "problems": [
-      "transaction_type: \"transfer_refund\" is not one of internal_transfer, crypto_transfer, crypto_funding, global_remittance, card_funding, card_withdrawal, card_payment, account_funding, credit, debit, fee_charge, subscription_fee, invoice_payment"
-    ]
+    "outcome": "ok",
+    "tool": "listTransactions"
   },
   "S-TXN-06.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-TXN-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-01.1": {
     "outcome": "ok",
     "tool": "getCustomer"
   },
   "S-PAY-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-01.3": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-PAY-01.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
   },
   "S-PAY-01.5": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_type: is required; Sepa Recipient: body.iban: is required; Swift Recipient: body.bic: is required; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-01.6": {
     "outcome": "ok",
     "tool": "getExternalAccount"
   },
   "S-PAY-01.7": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-01.8": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string",
-      "payment_rail_reference: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-01.9": {
     "outcome": "ok",
@@ -1053,67 +946,48 @@
     "tool": "getExternalAccount"
   },
   "S-PAY-01.11": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-PAY-02.1": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_type: is required; Sepa Recipient: body.iban: is required; Swift Recipient: body.bic: is required; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-02.2": {
     "outcome": "ok",
     "tool": "getExternalAccount"
   },
   "S-PAY-02.3": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string",
-      "payment_rail_reference: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-02.4": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-PAY-03.1": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_type: is required; Sepa Recipient: body.iban: is required; Swift Recipient: body.bic: is required; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-03.2": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "destination: fits none of the 4 allowed shapes (External Account Destination: destination.rail: \"rtp\" is not one of ach, wire, sepa, swift, fps, globalbank; Internal Account Destination: destination.destination_type: \"external_account\" is not one of internal_account; Crypto Wallet Destination: destination.blockchain_network: is required; Card Destination: destination.destination_type: \"external_account\" is not one of card)",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-03.3": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-PAY-04.1": {
-    "outcome": "mismatch",
-    "tool": "listExternalAccounts",
-    "problems": [
-      "customer_id: is not allowed",
-      "search: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listExternalAccounts"
   },
   "S-PAY-05.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-05.2": {
-    "outcome": "mismatch",
-    "tool": "listExternalAccountInstitutions",
-    "problems": [
-      "swift_code: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
   },
   "S-PAY-05.3": {
     "outcome": "ok",
@@ -1124,40 +998,32 @@
     "tool": "listTransferSupportedCountries"
   },
   "S-PAY-05.5": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.routing_number: is required; Sepa Recipient: body.iban: is required; Swift Recipient: body.customer_id: is not declared; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-05.6": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "uploadTransferDocument"
   },
   "S-PAY-05.7": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string",
-      "supporting_document_ids: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-05.8": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-PAY-06.1": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-06.2": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-PAY-06.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-07.1": {
     "outcome": "ok",
@@ -1172,36 +1038,24 @@
     "tool": "verifyExternalAccount"
   },
   "S-PAY-07.4": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_number: is required; Sepa Recipient: body.bic: is not declared; Swift Recipient: body.customer_id: is not declared; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-07.5": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-08.1": {
     "outcome": "ok",
     "tool": "getTransferRates"
   },
   "S-PAY-08.2": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_type: is required; Sepa Recipient: body.iban: is required; Swift Recipient: body.bic: is required; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-PAY-08.3": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-09.1": {
     "outcome": "ok",
@@ -1212,61 +1066,56 @@
     "tool": "getExternalAccount"
   },
   "S-PAY-09.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
   },
   "S-PAY-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-PAY-10.2": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-PAY-10.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-PAY-11.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-11.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-PAY-11.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-PAY-11.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-11.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-PAY-12.1": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-PAY-12.2": {
-    "outcome": "mismatch",
-    "tool": "listTransactions",
-    "problems": [
-      "channel: \"ach,wire,rtp\" is not one of avalanche, ethereum, solana, stellar, polygon, ach, wire, swift, bank_transfer, mobile_money, internal, swap, sepa, base, sui, tron, card, card_funding, card_withdrawal, card_payment, savings, savings_withdrawal, savings_interest"
-    ]
+    "outcome": "ok",
+    "tool": "listTransactions"
   },
   "S-PAY-12.3": {
-    "outcome": "mismatch",
-    "tool": "getTransactionsVolume",
-    "problems": [
-      "transaction_type: \"bank_account\" is not one of internal_transfer, crypto_transfer, crypto_funding, global_remittance, card_funding, card_withdrawal, card_payment, account_funding, credit, debit, fee_charge, subscription_fee, invoice_payment"
-    ]
+    "outcome": "ok",
+    "tool": "getTransactionsVolume"
   },
   "S-PAY-12.4": {
-    "outcome": "mismatch",
-    "tool": "exportTransactions",
-    "problems": [
-      "start_date: not a valid date-time",
-      "end_date: not a valid date-time"
-    ]
+    "outcome": "ok",
+    "tool": "exportTransactions"
   },
   "S-PAY-12.5": {
     "outcome": "ok",
@@ -1285,7 +1134,8 @@
     "tool": "getCustomer"
   },
   "S-REM-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-01.3": {
     "outcome": "ok",
@@ -1308,43 +1158,36 @@
     "tool": "verifyExternalAccount"
   },
   "S-REM-01.8": {
-    "outcome": "mismatch",
-    "tool": "listExternalAccounts",
-    "problems": [
-      "customer_id: is not allowed",
-      "search: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listExternalAccounts"
   },
   "S-REM-01.9": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.routing_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body.account_owner_type: is required; Global Bank Recipient: body.customer_id: is not declared; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-01.10": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-01.11": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-REM-01.12": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-REM-01.13": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-REM-02.1": {
     "outcome": "ok",
     "tool": "getCustomer"
   },
   "S-REM-02.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-02.3": {
     "outcome": "ok",
@@ -1363,21 +1206,16 @@
     "tool": "listTransferSupportedCountriesForAddress"
   },
   "S-REM-02.7": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body: fits none of the 2 allowed shapes (With account number: body.account_number: is required; With IBAN: body.iban: is required); Global Bank Recipient: body.customer_id: is not declared; Global Mobile Money Recipient: body.customer_id: is not declared)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-02.8": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-02.9": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-REM-02.10": {
     "outcome": "ok",
@@ -1388,7 +1226,8 @@
     "tool": "getCustomer"
   },
   "S-REM-03.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-REM-03.3": {
     "outcome": "ok",
@@ -1399,18 +1238,12 @@
     "tool": "getTransferRates"
   },
   "S-REM-03.5": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body: fits none of the 2 allowed shapes (With account number: body.account_number: is required; With IBAN: body.iban: is required); Global Bank Recipient: body.customer_id: is not declared; Global Mobile Money Recipient: body.customer_id: is not declared)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-03.6": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-03.7": {
     "outcome": "ok",
@@ -1433,18 +1266,12 @@
     "tool": "listExternalAccountInstitutions"
   },
   "S-REM-04.4": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body: fits none of the 2 allowed shapes (With account number: body.account_number: is required; With IBAN: body.iban: is required); Global Bank Recipient: body.customer_id: is not declared; Global Mobile Money Recipient: body.customer_id: is not declared)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-04.5": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-04.6": {
     "outcome": "ok",
@@ -1463,40 +1290,28 @@
     "tool": "getTransferRates"
   },
   "S-REM-05.4": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.account_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body: fits none of the 2 allowed shapes (With account number: body.account_number: is required; With IBAN: body.iban: is required); Global Bank Recipient: body.customer_id: is not declared; Global Mobile Money Recipient: body.customer_id: is not declared)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-05.5": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-06.1": {
-    "outcome": "mismatch",
-    "tool": "createExternalAccount",
-    "problems": [
-      "body: fits none of the 5 allowed shapes (US Bank Account Recipient: body.routing_number: is required; Sepa Recipient: body.account_owner_type: is required; Swift Recipient: body.account_owner_type: is required; Global Bank Recipient: body.institution_id: is required; Global Mobile Money Recipient: body.phone_number: is required)"
-    ]
+    "outcome": "ok",
+    "tool": "createExternalAccount"
   },
   "S-REM-06.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
   },
   "S-REM-06.3": {
     "outcome": "ok",
     "tool": "getExternalAccount"
   },
   "S-REM-06.4": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "description: is required",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-06.5": {
     "outcome": "ok",
@@ -1507,30 +1322,20 @@
     "tool": "getWallet"
   },
   "S-REM-07.2": {
-    "outcome": "mismatch",
-    "tool": "listWallets",
-    "problems": [
-      "include_balances: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listWallets"
   },
   "S-REM-07.3": {
     "outcome": "ok",
     "tool": "createWallet"
   },
   "S-REM-07.4": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-07.5": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "description: is required",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-07.6": {
     "outcome": "ok",
@@ -1545,11 +1350,8 @@
     "tool": "getWallet"
   },
   "S-REM-08.2": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-08.3": {
     "outcome": "ok",
@@ -1564,26 +1366,24 @@
     "tool": "getTransferRates"
   },
   "S-REM-09.3": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "client_reference: is required",
-      "destination: fits none of the 4 allowed shapes (External Account Destination: destination.destination_type: \"internal_crypto_wallet\" is not one of external_account; Internal Account Destination: destination.destination_type: \"internal_crypto_wallet\" is not one of internal_account; Crypto Wallet Destination: destination.blockchain_network: is required; Card Destination: destination.destination_type: \"internal_crypto_wallet\" is not one of card)",
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-REM-09.4": {
     "outcome": "ok",
     "tool": "getTransaction"
   },
   "S-REM-10.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
   },
   "S-REM-10.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
   },
   "S-REM-10.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "resumeTransfer"
   },
   "S-REM-10.4": {
     "outcome": "ok",
@@ -1602,13 +1402,16 @@
     "tool": "getWebhookCallHistory"
   },
   "S-SBX-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-SBX-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-02.1": {
     "outcome": "ok",
@@ -1639,21 +1442,28 @@
     "tool": "getCollection"
   },
   "S-SBX-03.2": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-SBX-03.3": {
     "outcome": "ok",
     "tool": "getCollection"
   },
   "S-SBX-03.4": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-SBX-03.5": {
     "outcome": "ok",
     "tool": "getCollection"
   },
   "S-SBX-04.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-SBX-04.2": {
     "outcome": "ok",
@@ -1668,11 +1478,8 @@
     "tool": "getTransferRates"
   },
   "S-SBX-04.5": {
-    "outcome": "mismatch",
-    "tool": "createTransfer",
-    "problems": [
-      "amount: expected number, got string"
-    ]
+    "outcome": "ok",
+    "tool": "createTransfer"
   },
   "S-SBX-04.6": {
     "outcome": "ok",
@@ -1707,11 +1514,8 @@
     "tool": "createWallet"
   },
   "S-WAL-01.3": {
-    "outcome": "mismatch",
-    "tool": "listWallets",
-    "problems": [
-      "wallet_address: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listWallets"
   },
   "S-WAL-01.4": {
     "outcome": "ok",
@@ -1734,22 +1538,16 @@
     "tool": "getWallet"
   },
   "S-WAL-03.1": {
-    "outcome": "mismatch",
-    "tool": "listWallets",
-    "problems": [
-      "include_balances: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listWallets"
   },
   "S-WAL-04.1": {
     "outcome": "ok",
     "tool": "listTransactions"
   },
   "S-WAL-04.2": {
-    "outcome": "mismatch",
-    "tool": "getWebhookHistory",
-    "problems": [
-      "start_date: not a valid date-time"
-    ]
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
   },
   "S-WAL-04.3": {
     "outcome": "ok",
@@ -1760,13 +1558,16 @@
     "tool": "getWallet"
   },
   "S-COL-01.1": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-COL-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "getAccountV2"
   },
   "S-COL-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-COL-02.1": {
     "outcome": "ok",
@@ -1777,12 +1578,8 @@
     "tool": "updateCustomer"
   },
   "S-COL-02.3": {
-    "outcome": "mismatch",
-    "tool": "createCollection",
-    "problems": [
-      "country: is required",
-      "asset: is not declared"
-    ]
+    "outcome": "ok",
+    "tool": "createCollection"
   },
   "S-COL-02.4": {
     "outcome": "ok",
@@ -1801,7 +1598,10 @@
     "tool": "getCollection"
   },
   "S-COL-02.8": {
-    "outcome": "no-tool"
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
   },
   "S-COL-03.1": {
     "outcome": "ok",
@@ -1811,9 +1611,7 @@
     "outcome": "mismatch",
     "tool": "createCardPaymentIntent",
     "problems": [
-      "source.id: is required",
-      "save_card: is not declared",
-      "redirect_url: is not declared"
+      "metadata.lesson_id: is not declared"
     ]
   },
   "S-COL-03.3": {
@@ -1821,29 +1619,32 @@
     "tool": "getCollection"
   },
   "S-COL-03.4": {
-    "outcome": "mismatch",
-    "tool": "listSavedCards",
-    "problems": [
-      "client_customer_id: is not allowed"
-    ]
+    "outcome": "ok",
+    "tool": "listSavedCards"
   },
   "S-COL-03.5": {
-    "outcome": "ok",
-    "tool": "listSavedCards"
-  },
-  "S-COL-03.6": {
-    "outcome": "no-tool"
-  },
-  "S-COL-04.1": {
-    "outcome": "ok",
-    "tool": "listSavedCards"
-  },
-  "S-COL-04.2": {
     "outcome": "mismatch",
     "tool": "listSavedCards",
     "problems": [
-      "client_customer_id: is not allowed"
+      "customer_id: is required"
     ]
+  },
+  "S-COL-03.6": {
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
+  },
+  "S-COL-04.1": {
+    "outcome": "mismatch",
+    "tool": "listSavedCards",
+    "problems": [
+      "customer_id: is required"
+    ]
+  },
+  "S-COL-04.2": {
+    "outcome": "ok",
+    "tool": "listSavedCards"
   },
   "S-COL-04.3": {
     "outcome": "ok",
@@ -1854,18 +1655,19 @@
     "tool": "chargeSavedCard"
   },
   "S-COL-05.1": {
-    "outcome": "ok",
-    "tool": "listSavedCards"
+    "outcome": "mismatch",
+    "tool": "listSavedCards",
+    "problems": [
+      "customer_id: is required"
+    ]
   },
   "S-COL-05.2": {
     "outcome": "ok",
     "tool": "listSavedCards"
   },
   "S-COL-05.3": {
-    "outcome": "blocked",
-    "problems": [
-      "The API needs customer_id and card_token in a JSON body, and the vendored spec declares none, so every call would fail with EOF."
-    ]
+    "outcome": "ok",
+    "tool": "deleteSavedCard"
   },
   "S-COL-06.1": {
     "outcome": "ok",
