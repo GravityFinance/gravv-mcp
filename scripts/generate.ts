@@ -22,8 +22,11 @@ import {
   PREREQUISITES,
   ENUM_RESTRICTIONS,
   DESCRIPTION_OVERRIDES,
+  MONEY_OPS,
+  CONFIRM_OPS,
   opKey,
   isMoneyOp,
+  needsConfirmation,
   needsIdempotencyKey,
   type Toolset,
 } from "../src/curation.ts";
@@ -205,6 +208,7 @@ interface Generated {
    */
   alsoInBody: string[];
   movesMoney: boolean;
+  needsConfirm: boolean;
   needsIdempotency: boolean;
   spec: string;
 }
@@ -354,10 +358,11 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         description += `\n\nNOT FOR CARD PAYMENTS. ${restriction.because}`;
       }
 
-      // Money-moving tools carry an explicit confirmation argument. Declared here so it
-      // appears in the schema the model sees; enforced in safety.ts.
+      // Money-moving and irreversible tools carry an explicit confirmation argument.
+      // Declared here so it appears in the schema the model sees; enforced in safety.ts.
       const movesMoney = isMoneyOp(method, path);
-      if (movesMoney) {
+      const needsConfirm = needsConfirmation(method, path);
+      if (needsConfirm) {
         properties.confirm = {
           type: "boolean",
           description:
@@ -409,6 +414,7 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         bodyProps,
         alsoInBody,
         movesMoney,
+        needsConfirm,
         needsIdempotency,
         spec: file,
       });
@@ -428,6 +434,12 @@ const generatedKeys = new Set(tools.map((t) => opKey(t.method, t.path)));
 for (const k of curatedKeys) {
   if (!generatedKeys.has(k) && !BLOCKED[k]) {
     problems.push(`curation.ts names "${k}" but no such operation exists in the specs`);
+  }
+}
+
+for (const [set, label] of [[MONEY_OPS, "MONEY_OPS"], [CONFIRM_OPS, "CONFIRM_OPS"]] as const) {
+  for (const k of set) {
+    if (!generatedKeys.has(k)) problems.push(`${label} gates "${k}", but no tool calls it`);
   }
 }
 
@@ -489,8 +501,10 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
-  /** Requires confirm: true, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
+  /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
+  /** Requires confirm: true (every money-moving tool, and the irreversible ones). */
+  needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
   /** Source spec filename, for traceability. */

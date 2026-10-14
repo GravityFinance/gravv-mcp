@@ -148,6 +148,38 @@ describe("previews for the newly gated tools", () => {
   });
 });
 
+describe("confirm-only gating", () => {
+  const del = TOOLS_BY_NAME.get("deleteAccountApplication")!;
+  const activate = TOOLS_BY_NAME.get("activateFeature")!;
+  const delPreview = { method: "DELETE", path: "/v1/accounts/applications/app_1", body: undefined };
+
+  test("a delete returns a preview first, naming what goes", () => {
+    const result = gate().check(del, { id: "app_1" }, delPreview);
+    assert.equal(result?.status, "confirmation_required");
+    assert.match(result!.willDo, /Delete account application app_1\. It cannot be restored/);
+    assert.equal(gate().check(del, { id: "app_1", confirm: true }, delPreview), null);
+  });
+
+  test("a live key needs no live-writes switch for it, but the preview warns", () => {
+    const live = gate({ environment: "live" });
+    const pending = live.check(del, { id: "app_1" }, delPreview);
+    assert.match(pending!.warning!, /LIVE KEY.*cannot be undone/);
+    assert.doesNotMatch(pending!.warning!, /real money/);
+    assert.equal(live.check(del, { id: "app_1", confirm: true }, delPreview), null);
+    assert.equal(gate({ environment: "unknown" }).check(del, { id: "app_1", confirm: true }, delPreview), null);
+  });
+
+  test("feature activation names the feature and the customer", () => {
+    const body = { customer_id: "cus_1", feature_id: "virtual_cards" };
+    const result = gate().check(activate, body, { method: "POST", path: "/v1/risk/features/activate", body });
+    assert.match(result!.willDo, /Activate virtual_cards for customer cus_1/);
+  });
+
+  test("read-only mode still refuses it", () => {
+    assert.throws(() => gate({ readOnly: true }).check(del, { id: "app_1", confirm: true }, delPreview), SafetyError);
+  });
+});
+
 describe("read-only mode", () => {
   test("hides non-GET tools from the advertised list", () => {
     const g = gate({ readOnly: true });

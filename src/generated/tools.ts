@@ -28,8 +28,10 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
-  /** Requires confirm: true, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
+  /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
+  /** Requires confirm: true (every money-moving tool, and the irreversible ones). */
+  needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
   /** Source spec filename, for traceability. */
@@ -117,6 +119,10 @@ export const TOOLS: GeneratedTool[] = [
           },
           "additionalProperties": true
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
+        },
         "idempotency_key": {
           "type": "string",
           "minLength": 1,
@@ -142,6 +148,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "features.yaml"
   },
@@ -184,6 +191,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "fx.yaml"
   },
@@ -288,6 +296,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },
@@ -342,6 +351,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "features.yaml"
   },
@@ -388,6 +398,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -516,6 +527,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -1560,6 +1572,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -1710,6 +1723,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "cards.yaml"
   },
@@ -1825,6 +1839,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "cards.yaml"
   },
@@ -2056,6 +2071,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },
@@ -2274,6 +2290,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "collections.yaml"
   },
@@ -2630,6 +2647,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "customers.yaml"
   },
@@ -2907,6 +2925,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "external-accounts.yaml"
   },
@@ -3015,6 +3034,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "fx.yaml"
   },
@@ -3402,6 +3422,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "transfer.yaml"
   },
@@ -3477,6 +3498,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "wallets.yaml"
   },
@@ -3492,6 +3514,10 @@ export const TOOLS: GeneratedTool[] = [
         "id": {
           "type": "string",
           "format": "uuid"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to execute. Call once without it to receive a preview of exactly what will happen, show that to the user, and only then call again with confirm: true."
         }
       },
       "required": [
@@ -3507,6 +3533,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": true,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -3601,6 +3628,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transactions.yaml"
   },
@@ -3631,6 +3659,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -3661,6 +3690,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -3691,6 +3721,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -3722,6 +3753,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -3752,6 +3784,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -3783,6 +3816,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -3823,6 +3857,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "collections.yaml"
   },
@@ -3853,6 +3888,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "customers.yaml"
   },
@@ -3884,6 +3920,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "kyc.yaml"
   },
@@ -3915,6 +3952,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "kyc.yaml"
   },
@@ -3946,6 +3984,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "external-accounts.yaml"
   },
@@ -3977,6 +4016,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
   },
@@ -4027,6 +4067,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "fx.yaml"
   },
@@ -4058,6 +4099,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "collections.yaml"
   },
@@ -4089,6 +4131,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transactions.yaml"
   },
@@ -4150,6 +4193,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transactions.yaml"
   },
@@ -4213,6 +4257,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transfer.yaml"
   },
@@ -4244,6 +4289,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "wallets.yaml"
   },
@@ -4275,6 +4321,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "webhooks.yaml"
   },
@@ -4306,6 +4353,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "webhooks.yaml"
   },
@@ -4379,6 +4427,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "webhooks.yaml"
   },
@@ -4438,6 +4487,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -4525,6 +4575,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -4560,6 +4611,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -4613,6 +4665,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -4681,6 +4734,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "customers.yaml"
   },
@@ -4758,6 +4812,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "external-accounts.yaml"
   },
@@ -4828,6 +4883,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "external-accounts.yaml"
   },
@@ -4873,6 +4929,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "features.yaml"
   },
@@ -4894,6 +4951,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
   },
@@ -4944,6 +5002,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
   },
@@ -4981,6 +5040,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
   },
@@ -5030,6 +5090,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "fx.yaml"
   },
@@ -5051,6 +5112,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -5087,6 +5149,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "collections.yaml"
   },
@@ -5171,6 +5234,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transactions.yaml"
   },
@@ -5199,6 +5263,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transfer.yaml"
   },
@@ -5230,6 +5295,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transfer.yaml"
   },
@@ -5251,6 +5317,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "transfer.yaml"
   },
@@ -5334,6 +5401,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "wallets.yaml"
   },
@@ -5371,6 +5439,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -5402,6 +5471,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "webhooks.yaml"
   },
@@ -5440,6 +5510,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "kyc.yaml"
   },
@@ -5479,6 +5550,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "kyc.yaml"
   },
@@ -5516,6 +5588,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -5553,6 +5626,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -6578,6 +6652,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -6621,6 +6696,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "accounts.yaml"
   },
@@ -6671,6 +6747,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "cards.yaml"
   },
@@ -6913,6 +6990,7 @@ export const TOOLS: GeneratedTool[] = [
       "customer_id"
     ],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "customers.yaml"
   },
@@ -7058,6 +7136,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "kyc.yaml"
   },
@@ -8094,6 +8173,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": true,
     "spec": "accounts.yaml"
   },
@@ -8149,6 +8229,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": false,
+    "needsConfirm": false,
     "needsIdempotency": false,
     "spec": "external-accounts.yaml"
   },
@@ -8199,6 +8280,7 @@ export const TOOLS: GeneratedTool[] = [
     ],
     "alsoInBody": [],
     "movesMoney": true,
+    "needsConfirm": true,
     "needsIdempotency": true,
     "spec": "cards.yaml"
   }

@@ -154,7 +154,7 @@ export function instructions(
       "",
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
-      "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
+      "- Operations that move money, and those that cannot be undone (deletes, feature activation), return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
       "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
       "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
       "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",

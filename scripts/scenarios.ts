@@ -168,7 +168,7 @@ export function buildArguments(
   }
   // The path wins over a copy of the same id in the body, as it does in the client.
   Object.assign(args, params);
-  if (tool.movesMoney) args.confirm = true;
+  if (tool.needsConfirm) args.confirm = true;
   return { args };
 }
 

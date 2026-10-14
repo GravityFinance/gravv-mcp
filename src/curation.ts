@@ -427,6 +427,20 @@ export const MONEY_OPS = new Set<string>([
 ]);
 
 /**
+ * Operations that cannot be undone but move no money. These require a second call with
+ * `confirm: true`, like MONEY_OPS, but not GRAVV_ALLOW_LIVE_WRITES: the second signal
+ * guards real value, and a delete moves none. Every DELETE tool is here, so a test fails
+ * when a new one arrives without its gate.
+ */
+export const CONFIRM_OPS = new Set<string>([
+  // A deleted application cannot be restored over the API.
+  "DELETE /v1/accounts/applications/{id}",
+  // Activating virtual_cards creates a card application and can issue a card at once;
+  // there is no route to deactivate a feature.
+  "POST /v1/risk/features/activate",
+]);
+
+/**
  * The API requires an Idempotency-Key on every POST and returns 400 without one. These
  * paths are the documented exceptions — sending a key to them is harmless but pointless.
  */
@@ -551,9 +565,14 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   checkFeatureEligibility: { readOnly: true },
 };
 
-/** Tool names that must carry a `confirm` argument, derived from MONEY_OPS. */
+/** Routes that move money: confirm, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
 export function isMoneyOp(method: string, path: string): boolean {
   return MONEY_OPS.has(opKey(method, path));
+}
+
+/** Routes whose tool must carry a `confirm` argument: MONEY_OPS and CONFIRM_OPS. */
+export function needsConfirmation(method: string, path: string): boolean {
+  return isMoneyOp(method, path) || CONFIRM_OPS.has(opKey(method, path));
 }
 
 export function needsIdempotencyKey(method: string, path: string): boolean {

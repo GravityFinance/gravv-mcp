@@ -2,6 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   BLOCKED_TOOL_NAMES,
+  CONFIRM_OPS,
   DEFAULT_TOOLSETS,
   MONEY_OPS,
   OUTCOME_LOOKUPS,
@@ -117,6 +118,15 @@ const GATED: Record<string, { route: string; why: string }> = {
   chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
 };
 
+/**
+ * Tools that cannot be undone but move no money: confirm only, no live-writes switch.
+ * Pinned both ways like GATED.
+ */
+const CONFIRMED: Record<string, { route: string; why: string }> = {
+  deleteAccountApplication: { route: "DELETE /v1/accounts/applications/{id}", why: "cannot be restored" },
+  activateFeature: { route: "POST /v1/risk/features/activate", why: "can issue a card; no deactivate route" },
+};
+
 describe("idempotency_key argument", () => {
   const hasKeyArg = (t: (typeof TOOLS)[number]) => "idempotency_key" in ((t.inputSchema as any).properties ?? {});
 
@@ -183,6 +193,36 @@ describe("money and irreversible tools are gated", () => {
   test("MONEY_OPS names no route without a tool", () => {
     const routes = new Set(TOOLS.map((t) => opKey(t.method, t.path)));
     for (const key of MONEY_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
+  });
+
+  for (const [name, { route, why }] of Object.entries(CONFIRMED)) {
+    test(`${name} needs confirm but not the live-writes switch: ${why}`, () => {
+      const tool = TOOLS_BY_NAME.get(name);
+      assert.ok(tool, `${name} must exist`);
+      assert.equal(opKey(tool.method, tool.path), route);
+      assert.equal(tool.needsConfirm, true);
+      assert.equal(tool.movesMoney, false);
+      assert.ok((tool.inputSchema as any).properties.confirm, `${name} must offer confirm`);
+    });
+  }
+
+  test("every confirm-gated tool is listed, and every money tool is confirm-gated", () => {
+    assert.deepEqual(
+      TOOLS.filter((t) => t.needsConfirm).map((t) => t.name).sort(),
+      [...Object.keys(GATED), ...Object.keys(CONFIRMED)].sort(),
+    );
+    const routes = new Set(TOOLS.map((t) => opKey(t.method, t.path)));
+    for (const key of CONFIRM_OPS) assert.ok(routes.has(key), `${key} is gated but no tool calls it`);
+  });
+
+  test("every DELETE tool asks for confirmation", () => {
+    for (const t of TOOLS.filter((t) => t.method === "delete")) assert.equal(t.needsConfirm, true, t.name);
+  });
+
+  test("only gated tools offer confirm", () => {
+    for (const t of TOOLS) {
+      assert.equal("confirm" in ((t.inputSchema as any).properties ?? {}), t.needsConfirm, t.name);
+    }
   });
 });
 

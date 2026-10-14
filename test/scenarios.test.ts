@@ -61,6 +61,7 @@ describe("route matching", () => {
     bodyProps: [],
     alsoInBody: [],
     movesMoney: false,
+    needsConfirm: false,
     needsIdempotency: false,
     spec: "test.yaml",
   });
