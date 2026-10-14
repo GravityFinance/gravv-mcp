@@ -28,6 +28,10 @@ export const KEYWORDS = new Set([
   "pattern",
   "minimum",
   "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "minItems",
+  "maxItems",
   "nullable",
   "oneOf",
   "format",
@@ -138,8 +142,11 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
 
   if (options.isPlaceholder?.(value)) return [];
 
+  // OpenAPI 3.1 writes a nullable field as a type list, `type: [string, "null"]`.
+  const types = typeof schema.type === "string" ? [schema.type] : Array.isArray(schema.type) ? schema.type : undefined;
+
   if (value === null) {
-    if (schema.nullable === true || schema.type === "null") return [];
+    if (schema.nullable === true || types?.includes("null")) return [];
     if (schema.type === undefined && schema.oneOf === undefined && schema.enum === undefined) return [];
     return [`${label(path)}: is null`];
   }
@@ -161,9 +168,8 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
   }
 
   const problems: string[] = [];
-  const type = schema.type;
-  if (typeof type === "string" && !matchesType(type, value)) {
-    return [`${label(path)}: expected ${type}, got ${typeOf(value)}`];
+  if (types && !types.some((t) => typeof t === "string" && matchesType(t, value))) {
+    return [`${label(path)}: expected ${types.join(" or ")}, got ${typeOf(value)}`];
   }
 
   if (Array.isArray(schema.enum) && !schema.enum.some((e) => e === value)) {
@@ -191,6 +197,22 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
     }
     if (typeof schema.maximum === "number" && value > schema.maximum) {
       problems.push(`${label(path)}: above ${schema.maximum}`);
+    }
+    // OpenAPI 3.1 (JSON Schema 2020-12) gives the exclusive bounds as numbers.
+    if (typeof schema.exclusiveMinimum === "number" && value <= schema.exclusiveMinimum) {
+      problems.push(`${label(path)}: not above ${schema.exclusiveMinimum}`);
+    }
+    if (typeof schema.exclusiveMaximum === "number" && value >= schema.exclusiveMaximum) {
+      problems.push(`${label(path)}: not below ${schema.exclusiveMaximum}`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+      problems.push(`${label(path)}: fewer than ${schema.minItems} items`);
+    }
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+      problems.push(`${label(path)}: more than ${schema.maxItems} items`);
     }
   }
 

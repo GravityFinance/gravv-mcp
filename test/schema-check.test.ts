@@ -48,6 +48,23 @@ describe("checkSchema", () => {
     assert.deepEqual(checkSchema({ type: "string", format: "date-time" }, "2026-10-13T09:15:22.481Z"), []);
   });
 
+  test("type lists, exclusive bounds and item counts", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        name: { type: ["string", "null"], maxLength: 3 },
+        amount: { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 10 },
+        methods: { type: "array", minItems: 1, maxItems: 2, items: { type: "string" } },
+      },
+    };
+    assert.deepEqual(checkSchema(schema, { name: null, amount: 0.01, methods: ["a"] }), []);
+    assert.deepEqual(checkSchema(schema, { name: 1 }), ["name: expected string or null, got integer"]);
+    assert.deepEqual(checkSchema(schema, { amount: 0 }), ["amount: not above 0"]);
+    assert.deepEqual(checkSchema(schema, { amount: 10 }), ["amount: not below 10"]);
+    assert.deepEqual(checkSchema(schema, { methods: [] }), ["methods: fewer than 1 items"]);
+    assert.deepEqual(checkSchema(schema, { methods: ["a", "b", "c"] }), ["methods: more than 2 items"]);
+  });
+
   test("an undeclared property is reported only in strict mode, and only where properties are declared", () => {
     const body = { ...ok, rail: "ach", address: { city: "Lagos", zip: "1" }, metadata: { any: 1 } };
     assert.deepEqual(checkSchema(payee, body), []);
