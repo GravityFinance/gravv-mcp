@@ -99,6 +99,37 @@ export function unsupportedKeywords(schema: unknown, path = ""): string[] {
   return found;
 }
 
+/**
+ * A schema pattern as a regular expression, or undefined when it is not one. JSON Schema
+ * patterns are ECMAScript regular expressions; a pattern written for another dialect, such
+ * as an inline `(?i)` flag, makes a validating client refuse the whole schema.
+ */
+function compilePattern(pattern: string): RegExp | undefined {
+  try {
+    return new RegExp(pattern, "u");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Every `pattern` in a schema, nested ones included, that is not an ECMAScript regular expression. */
+export function invalidPatterns(schema: unknown, path = ""): string[] {
+  if (!isObject(schema)) return [];
+  const found: string[] = [];
+  if (typeof schema.pattern === "string" && !compilePattern(schema.pattern)) {
+    found.push(`${label(path)}: ${schema.pattern}`);
+  }
+  if (isObject(schema.properties)) {
+    for (const [name, sub] of Object.entries(schema.properties)) found.push(...invalidPatterns(sub, child(path, name)));
+  }
+  if (schema.items !== undefined) found.push(...invalidPatterns(schema.items, `${label(path)}[]`));
+  if (isObject(schema.additionalProperties)) found.push(...invalidPatterns(schema.additionalProperties, `${label(path)}[]`));
+  if (Array.isArray(schema.oneOf)) {
+    schema.oneOf.forEach((branch, i) => found.push(...invalidPatterns(branch, `${label(path)}|${i}`)));
+  }
+  return found;
+}
+
 /** Problems with `value` against `schema`, as "path: message" lines. Empty means it fits. */
 export function checkSchema(schema: unknown, value: unknown, options: CheckOptions = {}, path = ""): string[] {
   if (!isObject(schema)) return [`${label(path)}: the schema is not an object`];
@@ -147,8 +178,10 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
     if (typeof schema.maxLength === "number" && length > schema.maxLength) {
       problems.push(`${label(path)}: longer than ${schema.maxLength}`);
     }
-    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern, "u").test(value)) {
-      problems.push(`${label(path)}: does not match ${schema.pattern}`);
+    if (typeof schema.pattern === "string") {
+      const re = compilePattern(schema.pattern);
+      if (!re) problems.push(`${label(path)}: pattern ${schema.pattern} is not an ECMAScript regular expression`);
+      else if (!re.test(value)) problems.push(`${label(path)}: does not match ${schema.pattern}`);
     }
   }
 

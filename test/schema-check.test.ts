@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { checkSchema, unsupportedKeywords } from "../scripts/schema-check.ts";
+import { checkSchema, invalidPatterns, unsupportedKeywords } from "../scripts/schema-check.ts";
 import { TOOLS } from "../src/generated/tools.ts";
 import { MANUAL_TOOLS } from "../src/manual-tools.ts";
 
@@ -84,6 +84,15 @@ describe("checkSchema", () => {
     assert.deepEqual(checkSchema({ allOf: [{ type: "string" }] }, 1), ["(arguments): unsupported schema keyword allOf"]);
     assert.deepEqual(checkSchema({ type: "string", format: "hostname" }, "x"), ["(arguments): unsupported format hostname"]);
   });
+
+  test("a pattern that is not an ECMAScript regular expression is a problem, not a crash", () => {
+    const schema = { type: "object", properties: { filename: { type: "string", pattern: "(?i)\\.pdf$" } } };
+    assert.deepEqual(checkSchema(schema, { filename: "a.pdf" }), [
+      "filename: pattern (?i)\\.pdf$ is not an ECMAScript regular expression",
+    ]);
+    assert.deepEqual(invalidPatterns(schema), ["filename: (?i)\\.pdf$"]);
+    assert.deepEqual(invalidPatterns({ type: "string", pattern: "^[A-Z]{3}$" }), []);
+  });
 });
 
 describe("tool schemas", () => {
@@ -91,5 +100,15 @@ describe("tool schemas", () => {
     for (const tool of [...TOOLS, ...MANUAL_TOOLS]) {
       assert.deepEqual(unsupportedKeywords(tool.inputSchema), [], `${tool.name} uses a keyword the check cannot read`);
     }
+  });
+
+  test("only the known pattern is outside ECMAScript", () => {
+    // JSON Schema patterns are ECMAScript regular expressions. The KYC upload spec writes
+    // an inline (?i) flag, which a validating client cannot compile. It is pinned here so
+    // a fix in the spec, or a new pattern like it, shows up as a failing test.
+    const found = [...TOOLS, ...MANUAL_TOOLS].flatMap((tool) =>
+      invalidPatterns(tool.inputSchema).map((p) => `${tool.name} ${p}`),
+    );
+    assert.deepEqual(found, ["uploadCustomerKycDocument filename: (?i)\\.(jpe?g|png|pdf)$"]);
   });
 });
