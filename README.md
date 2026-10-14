@@ -144,9 +144,9 @@ then paste a JSON-RPC frame on stdin:
 
 ## What you get
 
-**Documentation tools** — `searchGravvDocs` and `getGravvDocPage` search all 177 pages of
-the Gravv documentation. They need **no API key**, so you can explore Gravv before you
-have credentials.
+**Documentation tools** — `searchGravvDocs` and `getGravvDocPage` search every page of the
+Gravv documentation, read from the docs site as it is published. They need **no API key**,
+so you can explore Gravv before you have credentials.
 
 **API tools** — 72 tools (60 load by default) covering customers, KYC, accounts,
 transfers, cards, wallets, FX, collections, and webhooks.
@@ -469,6 +469,12 @@ rather than an unusual synonym — or drop the section filter.
 | `GRAVV_RATE_PER_MINUTE` | `60` | Client-side request throttle |
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
+| `GRAVV_DOCS_ORIGIN` | `https://gravv-docs.syntext.dev` | Where the documentation tools read the docs. Same as `--docs-origin` |
+
+The documentation tools read the docs site's `/llms.txt` and `/llms-full.txt`. If the docs
+move, point `GRAVV_DOCS_ORIGIN` at the new address; the docs links the server returns
+follow it. If the site cannot be reached, the tools keep answering from the last copy
+they loaded, and say so.
 
 The client throttles requests locally (60 a minute, burst 15) and backs off on `429`. The
 gateway allows 600 a minute, burst 50, per Gravv account. See

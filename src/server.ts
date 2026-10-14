@@ -17,7 +17,7 @@ import {
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
 import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
-import { DocsIndex } from "./docs.ts";
+import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -58,7 +58,7 @@ const DOC_TOOLS = [
   {
     name: "searchGravvDocs",
     description:
-      "Search the Gravv documentation — integration guides, recipes, and API reference (177 pages). " +
+      "Search the Gravv documentation — integration guides, recipes, and API reference, every page the docs site lists. " +
       "Use this BEFORE implementing any Gravv integration, and whenever a call fails in a way the error " +
       "does not fully explain. The guides carry the ordering, prerequisites, and corridor rules that the " +
       "API tool schemas do not. Returns ranked pages with excerpts; follow up with getGravvDocPage for full text.",
@@ -74,8 +74,7 @@ const DOC_TOOLS = [
         section: {
           type: "string",
           description:
-            "Optional filter. 'Get Started' and 'Recipes' hold end-to-end flows; 'Developer Platform' holds per-feature guides; 'API Reference' holds per-endpoint detail.",
-          enum: ["Get Started", "Developer Platform", "Recipes", "API Reference", "Home"],
+            "Optional filter: one docs section, as the section field of a result names it. The names come from the docs site's index, so there is no fixed list; an unknown name returns the sections there are.",
         },
       },
       required: ["query"],
@@ -93,7 +92,7 @@ const DOC_TOOLS = [
         slug: {
           type: "string",
           description:
-            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'.",
+            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'. The page's full docs URL also works.",
         },
       },
       required: ["slug"],
@@ -112,6 +111,8 @@ export interface ServerConfig {
   ratePerMinute?: number;
   docsOrigin?: string;
   fetchImpl?: typeof fetch;
+  /** Clock for the docs cache; tests replace it, as they replace fetch. */
+  now?: () => number;
 }
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
@@ -189,7 +190,7 @@ export function createServer(config: ServerConfig) {
       })
     : null;
 
-  const docs = new DocsIndex({ origin: config.docsOrigin, fetchImpl: config.fetchImpl });
+  const docs = new DocsIndex({ origin: config.docsOrigin, fetchImpl: config.fetchImpl, now: config.now });
 
   // Docs tools are unconditional; API tools require credentials.
   const active = hasApiKey ? selectTools(config.toolsets, gate) : [];
@@ -217,17 +218,31 @@ export function createServer(config: ServerConfig) {
     // ---- documentation tools -------------------------------------------------
     if (name === "searchGravvDocs") {
       try {
+        // Section names are the site's, and change as the docs are regrouped, so the
+        // argument has no enum. Check it against the index instead, and name the real ones.
+        if (typeof args.section === "string" && args.section.trim() !== "") {
+          const sections = await docs.listSections();
+          const wanted = args.section.trim().toLowerCase();
+          if (!sections.some((s) => s.toLowerCase() === wanted)) {
+            return errorResult(
+              `No docs section is called "${args.section}". The sections are: ${sections.join(", ")}. ` +
+                "Use one of them, or leave section out to search every page.",
+            );
+          }
+        }
         const hits = await docs.search(
           String(args.query ?? ""),
           typeof args.limit === "number" ? args.limit : 6,
           typeof args.section === "string" ? args.section : undefined,
         );
+        const note = staleDocsNote(docs);
         if (hits.length === 0) {
           return okResult(
             JSON.stringify(
               {
                 results: [],
                 hint: `No documentation matched "${args.query}". Try fewer or more general terms, or drop the section filter.`,
+                ...(note ? { note } : {}),
               },
               null,
               2,
@@ -239,6 +254,7 @@ export function createServer(config: ServerConfig) {
             {
               results: hits,
               next: "Call getGravvDocPage with a slug from these results for the full page.",
+              ...(note ? { note } : {}),
             },
             null,
             2,
@@ -257,8 +273,9 @@ export function createServer(config: ServerConfig) {
             `No documentation page with slug "${args.slug}". Use searchGravvDocs to find the correct slug.`,
           );
         }
+        const note = staleDocsNote(docs);
         return okResult(
-          `# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
+          `${note ? `Note: ${note}\n\n` : ""}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
         );
       } catch (err) {
         return errorResult(`Could not fetch documentation page: ${(err as Error).message}`);
@@ -278,7 +295,8 @@ export function createServer(config: ServerConfig) {
       // Three distinct reasons a name can miss, and the model should stop retrying for
       // different reasons in each case.
       const blocked = BLOCKED_TOOL_NAMES[name];
-      if (blocked) return errorResult(`${name}: ${blocked}`);
+      // Docs links follow GRAVV_DOCS_ORIGIN, as the doc search does.
+      if (blocked) return errorResult(`${name}: ${blocked.replaceAll(DEFAULT_DOCS_ORIGIN, docs.origin)}`);
 
       const known = TOOLS_BY_NAME.get(name);
       if (known) {
@@ -362,6 +380,17 @@ export function createServer(config: ServerConfig) {
   });
 
   return { server, environment, tools: active, gate };
+}
+
+/** Said with doc results while a refresh has failed and the last good index is served. */
+function staleDocsNote(docs: DocsIndex): string | null {
+  const f = docs.freshness();
+  if (!f.stale) return null;
+  const reason = /[.!?]$/.test(f.error ?? "") ? f.error : `${f.error}.`;
+  return (
+    `The documentation index could not be refreshed: ${reason} This comes from the copy loaded at ` +
+    `${f.loadedAt}, which may miss recent changes.`
+  );
 }
 
 function okResult(text: string) {

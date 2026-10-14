@@ -9,6 +9,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "../server.ts";
 import { PUBLISHABLE_KEY_MESSAGE, isPublishableKey } from "../client.ts";
+import { DEFAULT_DOCS_ORIGIN, InvalidDocsOriginError, parseDocsOrigin } from "../docs.ts";
 import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 
 const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
@@ -24,6 +25,8 @@ OPTIONS
                       Available: ${VALID_TOOLSETS.join(", ")}
   --read-only         Disable every non-GET tool.
   --base-url=<url>    Override the API base URL. Default: https://api.gravv.xyz
+  --docs-origin=<url> Where the documentation tools read the docs.
+                      Default: ${DEFAULT_DOCS_ORIGIN}
   --help
 
 ENVIRONMENT
@@ -32,6 +35,7 @@ ENVIRONMENT
   GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 60 (burst 15). The gateway
                              allows 600/min, burst 50, per tenant.
   GRAVV_BASE_URL             Same as --base-url.
+  GRAVV_DOCS_ORIGIN          Same as --docs-origin.
 
 NOTES
   Sandbox and live share one base URL — the key decides which. Money-moving tools
@@ -66,6 +70,21 @@ async function main() {
     process.exit(1);
   }
 
+  // The docs site serves /llms.txt and /llms-full.txt. Its address is configurable so a
+  // move of the docs needs no release; a value that is not a URL stops the server here
+  // rather than leaving the documentation tools to fail on every call.
+  let docsOrigin = DEFAULT_DOCS_ORIGIN;
+  const rawDocsOrigin = arg("docs-origin") ?? (process.env.GRAVV_DOCS_ORIGIN || undefined);
+  if (rawDocsOrigin !== undefined) {
+    try {
+      docsOrigin = parseDocsOrigin(rawDocsOrigin);
+    } catch (err) {
+      if (!(err instanceof InvalidDocsOriginError)) throw err;
+      process.stderr.write(`error: ${err.message}\n`);
+      process.exit(1);
+    }
+  }
+
   const rate = Number(process.env.GRAVV_RATE_PER_MINUTE ?? "");
 
   const { server, environment, tools } = createServer({
@@ -75,18 +94,21 @@ async function main() {
     readOnly: process.argv.includes("--read-only"),
     allowLiveWrites: process.env.GRAVV_ALLOW_LIVE_WRITES === "true",
     ratePerMinute: Number.isFinite(rate) && rate > 0 ? rate : undefined,
+    docsOrigin,
   });
 
   // Startup banner on stderr so the operator can see which environment they attached to
   // without corrupting the protocol stream.
+  const docsNote = docsOrigin === DEFAULT_DOCS_ORIGIN ? "" : ` | docs=${docsOrigin}`;
   process.stderr.write(
     apiKey
       ? `gravv-mcp: ${tools.length} API tools + 2 docs tools | environment=${environment}` +
           (environment !== "sandbox" && process.env.GRAVV_ALLOW_LIVE_WRITES === "true"
             ? " | LIVE WRITES ENABLED"
             : "") +
+          docsNote +
           "\n"
-      : "gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available\n",
+      : `gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available${docsNote}\n`,
   );
 
   if (apiKey && isPublishableKey(apiKey)) process.stderr.write(`warning: ${PUBLISHABLE_KEY_MESSAGE}\n`);
