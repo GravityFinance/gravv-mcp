@@ -26,6 +26,13 @@ const REMOVED = [
   "approveFxOrder",
   "rejectFxOrder",
   "searchWebhookIngestion",
+  "createPaymentLink",
+  "listPaymentLinks",
+  "getPaymentLink",
+  "updatePaymentLink",
+  "deletePaymentLink",
+  "updatePaymentLinkStatus",
+  "getPublicPaymentLink",
 ];
 
 describe("removed tools", () => {
@@ -67,6 +74,12 @@ describe("toolsets", () => {
     assert.deepEqual(parseToolsets("approvals,customers", (m) => warnings.push(m)), ["customers"]);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0]!, /approvals/);
+  });
+
+  test("a retired payment-links name is dropped too", () => {
+    const warnings: string[] = [];
+    assert.deepEqual(parseToolsets("customers,payment-links", (m) => warnings.push(m)), ["customers"]);
+    assert.match(warnings[0]!, /payment-links/);
   });
 
   test("only retired names leave no API toolsets, rather than widening to the defaults", () => {

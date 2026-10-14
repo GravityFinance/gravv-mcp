@@ -35,7 +35,6 @@ export const TOOLSETS = [
   "wallets",
   "fx",
   "collections",
-  "payment-links",
   "kyc",
   "features",
   "webhooks",
@@ -50,6 +49,7 @@ export type Toolset = (typeof TOOLSETS)[number];
  */
 export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
   approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
+  "payment-links": "payment links are retired from the Gravv API",
 };
 
 /** Toolsets that load only when named, or with --toolsets=all. */
@@ -221,15 +221,6 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/collections/cards/{card_id}": { name: "getSavedCard", toolset: "collections" },
   "DELETE /v1/collections/cards/{card_id}": { name: "deleteSavedCard", toolset: "collections" },
 
-  // ---- payment links -------------------------------------------------------
-  "POST /v1/payment-links": { name: "createPaymentLink", toolset: "payment-links" },
-  "GET /v1/payment-links": { name: "listPaymentLinks", toolset: "payment-links" },
-  "GET /v1/payment-links/{id}": { name: "getPaymentLink", toolset: "payment-links" },
-  "PUT /v1/payment-links/{id}": { name: "updatePaymentLink", toolset: "payment-links" },
-  "DELETE /v1/payment-links/{id}": { name: "deletePaymentLink", toolset: "payment-links" },
-  "PATCH /v1/payment-links/{id}/status": { name: "updatePaymentLinkStatus", toolset: "payment-links" },
-  "GET /v1/payment-links/public/{id}": { name: "getPublicPaymentLink", toolset: "payment-links" },
-
   // ---- features ------------------------------------------------------------
   "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
   "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "features" },
@@ -254,6 +245,10 @@ export const NAMES: Record<string, Op> = {
  *    gives the model two plausible paths for the same job and it will sometimes pick
  *    the deprecated one.
  *
+ *  - Retired. Payment links are no longer part of the Gravv API. Their specification is
+ *    still vendored until the next spec sync removes it, so the routes must be listed
+ *    here or the generator reports them as unmapped.
+ *
  *  - Dashboard-only. These routes refuse API keys, so a tool for them fails on every
  *    call. They are in no specification, so the generator never meets them; the
  *    entries are the written record of why they are absent.
@@ -269,6 +264,13 @@ export const BLOCKED: Record<string, string> = {
   "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
   "POST /v1/risk/upload-document":
     "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
+  "POST /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "PUT /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "DELETE /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
+  "PATCH /v1/payment-links/{id}/status": "Retired: payment links are not part of the Gravv API any more.",
+  "GET /v1/payment-links/public/{id}": "Retired: payment links are not part of the Gravv API any more.",
   "POST /v1/transfer/{id}/approve":
     "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
   "POST /v1/transfer/{id}/reject":
@@ -325,6 +327,20 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
   startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
   uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
+  createPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  listPaymentLinks:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  getPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  updatePaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  deletePaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  updatePaymentLinkStatus:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
+  getPublicPaymentLink:
+    "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
   approveTransfer:
     "Not available over MCP: approving a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
   rejectTransfer:
