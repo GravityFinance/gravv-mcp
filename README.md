@@ -148,8 +148,9 @@ then paste a JSON-RPC frame on stdin:
 Gravv documentation, read from the docs site as it is published. They need **no API key**,
 so you can explore Gravv before you have credentials.
 
-**API tools** — 72 tools (60 load by default) covering customers, KYC, accounts,
-transfers, cards, wallets, FX, collections, and webhooks.
+**API tools** — 96 tools (84 load by default) covering customers, KYC, accounts,
+transfers, limits, cards, wallets, FX and settlement instructions, collections, webhooks,
+and a sandbox deposit simulator.
 
 Both matter. The API tools execute calls, but they can't tell you what has to happen
 first — that an account needs a KYC-verified customer, or that a new recipient must reach
@@ -169,10 +170,12 @@ npx @gravv-infra/mcp     # without it: docs tools only, still useful
 Gravv moves real money, and **sandbox and live share one base URL** — only your key
 differs. Nothing in a request visually signals danger, so the server signals it.
 
-**Money-moving tools take two calls.** `createTransfer`, `withdrawFromCard`,
-`createFxOrder`, `cancelFxOrder`, `createCollection`, `createCardPaymentIntent`, and
-`chargeSavedCard` return a preview on the first call and execute only when called again
-with `confirm: true`. The unconfirmed call never reaches the API.
+**Money-moving tools take two calls.** `createTransfer`, `resumeTransfer`,
+`withdrawFromCard`, `createFxOrder`, `cancelFxOrder`, `createCollection`,
+`createCardPaymentIntent`, and `chargeSavedCard` return a preview on the first call and
+execute only when called again with `confirm: true`. The unconfirmed call never reaches
+the API. `resumeTransfer` is included because resuming a paused transfer releases the
+payout.
 
 `cancelFxOrder` is included because a cancel cannot be undone: funds already debited are
 not returned. `createCardPaymentIntent` is included because, given a saved `card_token`,
@@ -191,6 +194,23 @@ it charges the card at once; it asks for confirmation even when it only makes a 
   createTransfer({ amount: 50, ..., confirm: true })
   -> { data: { transfer_id: "trf_1", status: "pending" } }
 ```
+
+**Tools that cannot be undone take two calls too.** `deleteSavedCard`,
+`deleteSettlementInstruction`, `deleteAccountApplication` and `activateFeature` (which can
+issue a card) return a preview first and run only with `confirm: true`. They move no
+money, so they do not need `GRAVV_ALLOW_LIVE_WRITES`. `updateAccountStatus` has no confirm
+step: its description tells the assistant to ask you before freezing or deleting.
+
+**Sandbox-only tools stay in sandbox.** `simulateDeposit` is listed and runs only with a
+`grvSec_sandbox_` key. On any other key it is hidden, and a call by name is refused
+before any request.
+
+**Files stay out of the conversation.** Upload tools take a local `file_path`: the
+server reads the file, checks its type from its first bytes and its size, and sends it,
+so the assistant never handles the base64. `downloadCustomerKycDocument` saves the image
+to a local file (mode 0600, in a 0700 folder) and returns only its path, type and size.
+Set the folder with `GRAVV_DOWNLOAD_DIR` or `--download-dir`; by default it is
+`gravv-mcp-downloads` in the system temp folder.
 
 **A live key needs a second independent signal.** Money movement on a `grvSec_live_` key
 is refused unless `GRAVV_ALLOW_LIVE_WRITES=true` is also set. Confirmation alone is not
@@ -233,27 +253,29 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | Toolset | Default | Covers |
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
-| `accounts` | ✓ | accounts and status |
-| `transfers` | ✓ | transfers, rates, supported countries and currencies |
+| `accounts` | ✓ | accounts and status, capabilities, v2 accounts and their applications |
+| `transfers` | ✓ | transfers, supporting documents, resume, limits, rates, supported countries and currencies |
 | `transactions` | ✓ | history, volume, export |
 | `external-accounts` | ✓ | recipients, verification, institutions |
-| `kyc` | ✓ | KYC start, server-to-server, document upload, status |
-| `cards` | ✓ | issue, balance, status, withdraw, applications |
+| `kyc` | ✓ | KYC start, server-to-server, document upload and download, status |
+| `cards` | ✓ | issue, balance, status, withdraw, applications, card KYC, feature activation |
 | `wallets` | ✓ | blockchain wallet creation and lookup |
-| `fx` | ✓ | quotes, rates, OTC orders |
+| `fx` | ✓ | quotes, rates, OTC orders, settlement instructions |
 | `collections` | ✓ | card payment intents, saved cards, and bank transfer collections |
-| `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
+| `sandbox` | ✓ | the deposit simulator (sandbox keys only) |
 | `account-applications` | | account onboarding |
 
 The `approvals` and `payment-links` toolsets were removed in 0.3.2. A configuration that
-still names them starts with a warning, and those names are ignored.
+still names them starts with a warning, and those names are ignored. The `features`
+toolset merged into `cards` in 0.4.0: `--toolsets=features` loads `cards`, with a warning.
 
 ---
 
 ## Tool reference
 
-`*` marks a tool that moves money and therefore requires `confirm: true`.
+`*` marks a tool that moves money and therefore requires `confirm: true`. `†` marks a tool
+that cannot be undone and also requires `confirm: true`.
 
 **Documentation** — always available, no API key needed
 `searchGravvDocs` · `getGravvDocPage`
@@ -263,17 +285,21 @@ still names them starts with a warning, and those names are ignored.
 
 **kyc**
 `startCustomerKyc` · `startCustomerKycS2S` · `uploadCustomerKycDocument` ·
-`getCustomerKycDocuments` · `getCustomerKycStatus`
+`getCustomerKycDocuments` · `downloadCustomerKycDocument` · `getCustomerKycStatus`
 
 **accounts**
-`createAccount` · `getAccount` · `listAccounts` · `updateAccountStatus`
+`getAccountCapabilities` · `createAccount` · `getAccount` · `listAccounts` ·
+`updateAccountStatus` · `getAccountRequirements` · `createAccountV2` · `getAccountV2` ·
+`listAccountsV2` · `getAccountApplicationV2` · `listAccountApplicationsV2` ·
+`updateAccountApplicationV2`
 
 **external-accounts** — recipients you pay out to
 `createExternalAccount` · `getExternalAccount` · `listExternalAccounts` ·
-`verifyExternalAccount` · `listExternalAccountInstitutions`
+`updateExternalAccount` · `verifyExternalAccount` · `listExternalAccountInstitutions`
 
 **transfers**
-`createTransfer*` · `getTransferRates` · `listTransferSupportedCurrencies` ·
+`createTransfer*` · `uploadTransferDocument` · `resumeTransfer*` · `getCustomerLimits` ·
+`getRemitterLimits` · `getTransferRates` · `listTransferSupportedCurrencies` ·
 `listTransferSupportedCountries` · `listTransferSupportedCountriesForAddress`
 
 **transactions**
@@ -281,14 +307,22 @@ still names them starts with a warning, and those names are ignored.
 
 **cards**
 `createCard` · `getCard` · `listCards` · `getCardBalance` · `updateCardStatus` ·
-`withdrawFromCard*` · `createCardApplication` · `getCardApplication` · `listCardApplications`
+`withdrawFromCard*` · `createCardApplication` · `getCardApplication` · `listCardApplications` ·
+`startCardholderKyc` · `startCardholderKycS2S` · `uploadCardholderKycDocument` ·
+`listFeatures` · `checkFeatureEligibility` · `activateFeature†`
+
+Card KYC (`startCardholderKyc` and the server-to-server pair) verifies a cardholder for
+card issuance, with a liveness check. It is separate from a customer's own KYC in `kyc`.
+In live, a card is issued with `activateFeature` and `feature_id: virtual_cards`.
 
 **wallets**
 `createWallet` · `getWallet` · `listWallets`
 
 **fx**
 `getFxQuote` · `listFxRates` · `listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` ·
-`listFxOrders` · `cancelFxOrder*` · `listFxPendingApprovals`
+`listFxOrders` · `cancelFxOrder*` · `listFxPendingApprovals` · `listSettlementInstructions` ·
+`createSettlementInstruction` · `getSettlementInstruction` · `updateSettlementInstruction` ·
+`deleteSettlementInstruction†`
 
 **collections** — taking money in
 
@@ -298,20 +332,17 @@ merchant-initiated charges need. `createCollection` covers bank transfer, in 16
 countries.
 
 `createCardPaymentIntent*` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
-`createCollection*` · `getCollection`
-
-`deleteSavedCard` is not available in this release: the API needs a request body that the
-current specification does not describe, so every call would fail.
-
-**features**
-`listFeatures` · `checkFeatureEligibility` · `activateFeature`
+`deleteSavedCard†` · `createCollection*` · `getCollection`
 
 **webhooks**
 `getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
 
-**account-applications** — opt-in via `--toolsets=account-applications`
+**sandbox** — sandbox keys only
+`simulateDeposit`
+
+**account-applications** — the v1 application flow, opt-in via `--toolsets=account-applications`
 `createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
-`listAccountApplications` · `listPendingAccountApplications` · `deleteAccountApplication` ·
+`listAccountApplications` · `listPendingAccountApplications` · `deleteAccountApplication†` ·
 `submitAccountApplication` · `processAccountApplication` ·
 `submitAndProcessAccountApplication` · `getAccountApplicationHistory` ·
 `validateAccountApplication` · `completeAccountApplicationTos`
@@ -413,10 +444,21 @@ Intentional and not configurable. Use the
 **A transfer returned `confirmation_required` instead of running**
 Working as designed. Call again with `confirm: true` after reviewing the preview.
 
-**"Not available over MCP" for an approve or reject tool, a payment-link tool, or `deleteSavedCard`**
-These were removed in 0.3.2: approving and rejecting is done in the Gravv Dashboard,
-payment links are retired, and `deleteSavedCard` returns in a later release. The message
-says what to do instead.
+**"Not available over MCP" for an approve or reject tool, a payment-link tool, or a simulator**
+Approving and rejecting is done in the Gravv Dashboard, and payment links are retired
+(both since 0.3.2). The card and collection sandbox simulators are not offered yet. The
+message says what to do instead. `deleteSavedCard` is back in 0.4.0.
+
+**"Renamed" for `startRiskKyc`, `startRiskKycS2S` or `uploadRiskDocument`**
+Card KYC returned in 0.4.0 as `startCardholderKyc`, `startCardholderKycS2S` and
+`uploadCardholderKycDocument`, in the `cards` toolset.
+
+**`simulateDeposit` "is a sandbox-only test tool"**
+It runs only with a `grvSec_sandbox_` key. On a live key nothing is sent.
+
+**`ignored_arguments` in a result**
+The tool does not take those arguments, so they were not sent. Check the field names in
+the tool's schema; a filter you meant to apply was not applied.
 
 **A `grvPub_` key**
 Publishable keys cannot call the API. Set `GRAVV_API_KEY` to a secret key starting
@@ -467,9 +509,10 @@ rather than an unusual synonym — or drop the section filter.
 | `GRAVV_API_KEY` | — | Sandbox or live key; selects the environment. Omit for docs-only mode |
 | `GRAVV_ALLOW_LIVE_WRITES` | unset | `true` permits money movement on a live key |
 | `GRAVV_RATE_PER_MINUTE` | `60` | Client-side request throttle |
-| `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
+| `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host. Anything but `https://api.gravv.xyz` starts with a warning |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 | `GRAVV_DOCS_ORIGIN` | `https://gravv-docs.syntext.dev` | Where the documentation tools read the docs. Same as `--docs-origin` |
+| `GRAVV_DOWNLOAD_DIR` | `gravv-mcp-downloads` in the system temp folder | Where downloaded files are saved. Same as `--download-dir` |
 
 The documentation tools read the docs site's `/llms.txt` and `/llms-full.txt`. If the docs
 move, point `GRAVV_DOCS_ORIGIN` at the new address; the docs links the server returns

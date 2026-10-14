@@ -4,6 +4,85 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## 0.4.0 (unreleased)
+
+This release brings the tools in line with the current API reference. API tools go from 72
+to 96 (84 in the default load; 83 on a live key, which hides the sandbox tool). Every
+documented endpoint now has a tool or a stated reason it has none.
+
+### Added
+
+- 24 tools. accounts: `getAccountCapabilities`, `createAccountV2`, `listAccountsV2`,
+  `getAccountV2`, `getAccountRequirements`, `listAccountApplicationsV2`,
+  `getAccountApplicationV2`, `updateAccountApplicationV2`. transfers:
+  `uploadTransferDocument`, `resumeTransfer`, `getCustomerLimits`, `getRemitterLimits`.
+  fx: `listSettlementInstructions`, `createSettlementInstruction`,
+  `getSettlementInstruction`, `updateSettlementInstruction`, `deleteSettlementInstruction`.
+  external-accounts: `updateExternalAccount`. kyc: `downloadCustomerKycDocument`. sandbox:
+  `simulateDeposit`. Plus the four tools under "Renamed and unblocked" below.
+- A `sandbox` toolset. Its tool runs only with a `grvSec_sandbox_` key; on any other key it
+  is hidden from the tool list and refused by name before any request.
+- A confirm step for tools that cannot be undone but move no money: `deleteSavedCard`,
+  `deleteSettlementInstruction`, `deleteAccountApplication` and `activateFeature`. The
+  first call returns a preview; `confirm: true` runs it. `GRAVV_ALLOW_LIVE_WRITES` is not
+  needed for them.
+- `file_path` on every upload tool. The server reads the file, checks its type from its
+  first bytes and its size against the field's limit, and sends the base64 itself, so the
+  file never passes through the model.
+- `downloadCustomerKycDocument` saves the image under a download folder (0700, file 0600)
+  and returns its path. Set it with `GRAVV_DOWNLOAD_DIR` or `--download-dir`.
+- `ignored_arguments` in a result names the arguments a tool does not take and did not
+  send, so a misspelt filter is visible.
+- Results over 100,000 characters are cut: a list keeps fewer items and says to ask for a
+  smaller page.
+- A warning at start when `GRAVV_BASE_URL` is not `https://api.gravv.xyz`. An empty value
+  now means the default.
+- The User-Agent and the server metadata carry the package version.
+
+### Changed
+
+- The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
+  card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
+  warning.
+- `resumeTransfer` is money-gated like `createTransfer`, because resuming releases the
+  payout.
+- `createAccountV2`, `resumeTransfer`, `simulateDeposit` and `updateAccountApplicationV2`
+  send only the fields their schema declares.
+- Array query values are sent comma-joined, as the API reads them.
+- `currency` is upper-cased for `createSettlementInstruction`.
+- New and corrected usage notes on most tools: prerequisites, paused transfers, limits,
+  card KYC, feature activation, the v2 account flow, and how to look up an outcome after a
+  timeout.
+
+### Renamed and unblocked
+
+- Card KYC returns as `startCardholderKyc`, `startCardholderKycS2S` and
+  `uploadCardholderKycDocument`, in `cards`. The old `startRiskKyc*` and
+  `uploadRiskDocument` names answer with the new names.
+- `deleteSavedCard` is available again, now that the specification describes its body.
+
+### Fixed
+
+- A schema built with `allOf` kept the member types, so a field typed in one member is no
+  longer left untyped.
+- The notes for `createAccountV2`, `createWallet` and `withdrawFromCard` no longer tell the
+  model to retry a failed call under the same key, which only replays the failure. The
+  `createCollection` note no longer says every card method returns a `payment_link`.
+
+### Development
+
+- Generation fails on an unmapped operation, an operationId that differs from the curated
+  name, a non-JSON body, a curation key that names no tool, and a name collision.
+- Properties and enum values marked not yet live are left out of the schemas.
+- A coverage test checks that every documented endpoint has a tool or a reason.
+- `npm run sync-specs` deletes specs removed upstream.
+- `yaml` moved to devDependencies; it is used only by the generator and tests.
+- The specs are synced from the client-docs branch for the spec alignment (74e23af), which
+  has not merged. The nightly drift check compares against client-docs main, so it reports
+  drift until that work merges.
+- 0.3.2 is still unreleased. If it is not published on its own, its changes ship in this
+  release.
+
 ## 0.3.2 (unreleased)
 
 This release removes tools that could never succeed and corrects tool descriptions that
