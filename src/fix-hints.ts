@@ -242,8 +242,8 @@ export const ERROR_FIXES: ErrorFix[] = [
     tools: ["createFxOrder"],
     messages: [/order source could not be charged/i],
     hint:
-      "An order may still have been created. Read listFxOrders and match client_reference in the rows before any " +
-      "retry, and check the source balance.",
+      "An order may still have been created. Read listFxOrders and match client_reference, the pair and the amount " +
+      "in the rows before any retry, and check the source balance.",
   },
   {
     id: "fx-destination",

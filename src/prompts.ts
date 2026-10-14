@@ -541,7 +541,7 @@ export const PROMPTS: GoalPrompt[] = [
           "Show \"sell X, receive Y at R, quote expires T\". createFxOrder with quote_id, source, destination and a client_reference, and confirm: true only after the user agrees.",
           "getFxOrder until final, then listTransactions.",
           "\"quote is invalid or expired\": nothing was ordered. Get a new quote, show the new price, and ask again.",
-          "\"order source could not be charged\": an order may still exist. listFxOrders and match `client_reference` in the rows before anything else.",
+          "\"order source could not be charged\": an order may still exist. listFxOrders and match `client_reference`, the pair and the amount in the rows before anything else.",
         ],
       },
       {
@@ -698,7 +698,7 @@ export const PROMPTS: GoalPrompt[] = [
     intro: "Collect money for a customer, in the order below.",
     askFirst: [
       "Which customer pays or receives.",
-      "The amount (collections are in USD) and where the money lands: which wallet or account.",
+      "For a payment request, the amount in US dollars; and where the money lands: which wallet or account.",
     ],
     paths: [
       {
@@ -730,7 +730,7 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-COL-02"],
         steps: [
           "getCustomer for the payer's phone, date of birth and address country; updateCustomer if one is missing.",
-          "createCollection with source methods `bank_transfer` (the only method this tool takes), the amount in USD and the destination. Confirm first: \"Create a bank-transfer collection of X USD from <payer> into <wallet> on <network>?\"",
+          "createCollection with source methods `bank_transfer` (the only method this tool takes), currency set to the payer's local currency, the amount in US dollars (the payer sends `converted_amount` in the local currency), and the destination. Confirm first: \"Create a bank-transfer collection of X USD, paid in <local currency>, from <payer> into <wallet> on <network>?\"",
           "getCollection, or getWebhookHistory with event_type `collection`. Read `new_onramp_status` when present, else `onramp_status`.",
           "\"unable to process payment for this request\": tell the user; do not retry blindly.",
         ],
@@ -852,7 +852,7 @@ export const PROMPTS: GoalPrompt[] = [
           "getTransaction, then getWebhookHistory with transaction_id and event_type `transfer`, and getWebhookEventDetail for the latest event.",
           "`pending`: still working. If the latest event is `transfer.status.failed` with `transfer_status: manual_processing_required`, it is held for manual review: the money is not lost and the outcome is not final. Stop, explain, and escalate to support.",
           "`paused`: it needs something from the user (below).",
-          "`waiting_approval`: it is approved in the Dashboard; there is nothing to send.",
+          "`waiting_approval`: it waits for approval in the Dashboard; there is nothing to send.",
           "`failed`: the amount and fee are refunded to the source (a `transfer_refund` row). Only now may it be sent again, with a new client_reference, after the user agrees.",
         ],
       },
@@ -955,7 +955,9 @@ export function renderPrompt(prompt: GoalPrompt, args: Record<string, string | u
     out.push("", `## ${prompt.common.title}`, ...prompt.common.steps.map((s, i) => `${i + 1}. ${s}`));
   }
   for (const p of paths) {
-    out.push("", `## ${p.title} (${prompt.argument.name}: ${p.keys.join(", ")})`, ...p.steps.map((s, i) => `${i + 1}. ${s}`));
+    // A path argument's values are shown beside each path; a value argument selects none.
+    const keys = prompt.argument.kind === "path" ? ` (${prompt.argument.name}: ${p.keys.join(", ")})` : "";
+    out.push("", `## ${p.title}${keys}`, ...p.steps.map((s, i) => `${i + 1}. ${s}`));
   }
   out.push("", "## Rules for this goal", ...prompt.rules.map((r) => `- ${r}`));
   out.push("", "## Rules for every Gravv task", ...SHARED_RULES.map((r) => `- ${r}`));
