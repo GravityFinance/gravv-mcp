@@ -4,8 +4,10 @@ import { mkdtempSync, writeFileSync, readFileSync, statSync, rmSync, mkdirSync }
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FileArgumentError, resolveUploads, saveDownload, sniff } from "../src/files.ts";
-import { UPLOADS } from "../src/curation.ts";
-import { TOOLS_BY_NAME } from "../src/generated/tools.ts";
+import { SANDBOX_UPLOAD_BYTES, UPLOADS, sizeText } from "../src/curation.ts";
+import { ERROR_FIXES } from "../src/fix-hints.ts";
+import { PROMPTS, renderPrompt } from "../src/prompts.ts";
+import { TOOLS, TOOLS_BY_NAME } from "../src/generated/tools.ts";
 
 const PDF = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(100, 0x20)]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -160,5 +162,52 @@ describe("downloads are saved, not returned", () => {
     const data = { items: [] };
     assert.equal(saveDownload("listAccounts", {}, data, dir), data);
     assert.equal(saveDownload("downloadCustomerKycDocument", {}, null, dir), null);
+  });
+});
+
+/** Every size a text states, as "10 MB" or "700 KB". */
+function sizesIn(text: string): string[] {
+  return [...text.matchAll(/\b(\d+(?:\.\d+)?) ?(KB|MB)\b/g)].map((m) => `${m[1]} ${m[2]}`);
+}
+
+/** All the text a tool shows: its description and every description in its schema. */
+function toolText(node: unknown): string {
+  if (node === null || typeof node !== "object") return "";
+  if (Array.isArray(node)) return node.map(toolText).join("\n");
+  const n = node as Record<string, unknown>;
+  const own = typeof n.description === "string" ? n.description : "";
+  return [own, ...Object.values(n).map(toolText)].join("\n");
+}
+
+describe("upload sizes are stated once", () => {
+  const sandbox = sizeText(SANDBOX_UPLOAD_BYTES);
+  const routeSizes = new Set(Object.values(UPLOADS).flatMap((specs) => specs.map((s) => sizeText(s.maxBytes))));
+
+  test("an upload tool states only its own limit and the sandbox figure", () => {
+    for (const [name, specs] of Object.entries(UPLOADS)) {
+      const allowed = new Set([...specs.map((s) => sizeText(s.maxBytes)), sandbox]);
+      for (const size of sizesIn(toolText(TOOLS_BY_NAME.get(name)))) {
+        assert.ok(allowed.has(size), `${name} says ${size}; it takes ${[...allowed].join(" or ")}`);
+      }
+      assert.ok(sizesIn(toolText(TOOLS_BY_NAME.get(name))).includes(sandbox), `${name} gives the sandbox figure`);
+    }
+  });
+
+  test("no other tool states an upload size", () => {
+    // downloadCustomerKycDocument says how large its answer can be, which is not an upload.
+    for (const tool of TOOLS.filter((t) => !Object.hasOwn(UPLOADS, t.name) && t.name !== "downloadCustomerKycDocument")) {
+      assert.deepEqual(sizesIn(toolText(tool)), [], tool.name);
+    }
+  });
+
+  test("prompts and fix hints state route limits and the sandbox figure only", () => {
+    const allowed = new Set([...routeSizes, sandbox]);
+    const texts = [
+      ...PROMPTS.map((p) => renderPrompt(p, {}, { hasApiKey: true, loadedTools: new Set(TOOLS.map((t) => t.name)) })),
+      ...ERROR_FIXES.map((f) => f.hint),
+    ];
+    for (const text of texts) {
+      for (const size of sizesIn(text)) assert.ok(allowed.has(size), `"${size}" in: ${text.slice(0, 80)}`);
+    }
   });
 });

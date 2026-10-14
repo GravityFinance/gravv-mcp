@@ -4,7 +4,7 @@
  * The scenario and drift checks need to ask "would this request fit the tool schema the
  * model sees?". The tool schemas use a small set of keywords (listed in KEYWORDS), so this
  * covers exactly those. Any other keyword is reported as a problem rather than ignored: a
- * spec sync that brings in `allOf` or `anyOf` must fail the check loudly, not pass it
+ * spec sync that brings in `allOf` or `not` must fail the check loudly, not pass it
  * because the check could not read the schema.
  *
  * `strict` also reports a property the schema does not declare, even when
@@ -34,6 +34,7 @@ export const KEYWORDS = new Set([
   "maxItems",
   "nullable",
   "oneOf",
+  "anyOf",
   "format",
 ]);
 
@@ -105,7 +106,7 @@ export function unsupportedKeywords(schema: unknown, path = ""): string[] {
       for (const [name, sub] of Object.entries(v)) found.push(...unsupportedKeywords(sub, child(path, name)));
     } else if (k === "items" || (k === "additionalProperties" && isObject(v))) {
       found.push(...unsupportedKeywords(v, `${label(path)}[]`));
-    } else if (k === "oneOf" && Array.isArray(v)) {
+    } else if ((k === "oneOf" || k === "anyOf") && Array.isArray(v)) {
       v.forEach((branch, i) => found.push(...unsupportedKeywords(branch, `${label(path)}|${i}`)));
     }
   }
@@ -137,8 +138,10 @@ export function invalidPatterns(schema: unknown, path = ""): string[] {
   }
   if (schema.items !== undefined) found.push(...invalidPatterns(schema.items, `${label(path)}[]`));
   if (isObject(schema.additionalProperties)) found.push(...invalidPatterns(schema.additionalProperties, `${label(path)}[]`));
-  if (Array.isArray(schema.oneOf)) {
-    schema.oneOf.forEach((branch, i) => found.push(...invalidPatterns(branch, `${label(path)}|${i}`)));
+  for (const branches of [schema.oneOf, schema.anyOf]) {
+    if (Array.isArray(branches)) {
+      branches.forEach((branch, i) => found.push(...invalidPatterns(branch, `${label(path)}|${i}`)));
+    }
   }
   return found;
 }
@@ -156,7 +159,14 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
 
   if (value === null) {
     if (schema.nullable === true || types?.includes("null")) return [];
-    if (schema.type === undefined && schema.oneOf === undefined && schema.enum === undefined) return [];
+    if (
+      schema.type === undefined &&
+      schema.oneOf === undefined &&
+      schema.anyOf === undefined &&
+      schema.enum === undefined
+    ) {
+      return [];
+    }
     return [`${label(path)}: is null`];
   }
 
@@ -174,6 +184,15 @@ export function checkSchema(schema: unknown, value: unknown, options: CheckOptio
       return [`${label(path)}: fits none of the ${results.length} allowed shapes (${why})`];
     }
     if (fits > 1) return [`${label(path)}: fits more than one of the allowed shapes`];
+  }
+
+  // anyOf: at least one branch fits; unlike oneOf, fitting several is fine.
+  if (Array.isArray(schema.anyOf)) {
+    const results = schema.anyOf.map((branch) => checkSchema(branch, value, options, path));
+    if (!results.some((r) => r.length === 0)) {
+      const why = results.map((r, i) => `shape ${i + 1}: ${r[0]}`).join("; ");
+      return [`${label(path)}: fits none of the ${results.length} accepted shapes (${why})`];
+    }
   }
 
   const problems: string[] = [];

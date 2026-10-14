@@ -514,6 +514,10 @@ components:
           example: null
     UnifiedAddress:
       type: object
+      description: >-
+        An address. The bank the application goes to decides which parts it
+        needs, such as a state for a US address, and lists a missing or invalid
+        one in `validation_errors`.
       properties:
         street_line_1:
           type: string
@@ -539,12 +543,6 @@ components:
           type: string
           description: Country (ISO 3166-1 alpha-2)
           example: US
-      required:
-        - street_line_1
-        - city
-        - state
-        - postal_code
-        - country
     UnifiedAssociatedPerson:
       type: object
       description: Standardized associated person (UBO, control person, etc.)
@@ -827,6 +825,46 @@ components:
           type: string
           description: Expected monthly volume of crypto transactions.
           example: 10000_TO_50000
+        tax_id_type:
+          type: string
+          description: >-
+            Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`.
+            The bank checks that it was issued by the country of the
+            individual's address.
+          example: tin
+        nationalities:
+          type: array
+          description: Every nationality the individual holds, as ISO 3166 codes.
+          items:
+            type: string
+          example:
+            - NGA
+        place_of_birth:
+          type: object
+          description: Where the individual was born.
+          properties:
+            country:
+              type: string
+              description: Country of birth, as an ISO 3166 code.
+              example: NGA
+            city:
+              type: string
+              description: City of birth.
+              example: Lagos
+        account_purpose:
+          type: string
+          description: >-
+            Main purpose of the account, such as `personal_or_living_expenses`
+            or `receive_salary`. `other` needs `account_purpose_other`.
+          example: receive_salary
+        account_purpose_other:
+          type: string
+          description: The purpose in words, when `account_purpose` is `other`.
+        identification_issue_date:
+          type: string
+          format: date
+          description: Issue date of the identity document, in YYYY-MM-DD format.
+          example: '2020-01-15'
     UnifiedBusinessData:
       type: object
       properties:
@@ -1039,6 +1077,25 @@ components:
           type: string
           description: Expected monthly volume of crypto transactions.
           example: 10000_TO_50000
+        email:
+          type: string
+          format: email
+          description: The business's email address.
+          example: finance@example.com
+        phone:
+          type: string
+          description: The business's phone number, in E.164 format.
+          example: '+2348091234567'
+        tax_id_type:
+          type: string
+          description: >-
+            Kind of tax number sent in `tax_id_number`. It must fit
+            `country_of_incorporation`, for example `tin` for Nigeria, `ein`
+            for the US, `crn`, `utr` or `vat` for the UK.
+          example: tin
+        account_purpose_other:
+          type: string
+          description: The purpose in words, when `account_purpose` is `other`.
     UnifiedApplicationData:
       type: object
       description: >-
@@ -1049,6 +1106,80 @@ components:
       required:
         - account_type
         - currency
+      properties:
+        individual:
+          $ref: '#/components/schemas/UnifiedIndividualData'
+        business:
+          $ref: '#/components/schemas/UnifiedBusinessData'
+        account_type:
+          type: string
+          enum:
+            - regular
+            - savings
+            - card
+            - auto_sweep
+            - collection
+          description: >-
+            Kind of account to open. This is the account type, not the customer
+            type; use `application_type` for individual or business. A customer
+            can have one `card` account.
+          example: regular
+        currency:
+          type: string
+          description: Currency for the account, in ISO 4217 format.
+          example: USD
+        blockchain_network:
+          type: string
+          description: >-
+            Network of the account's wallet, in lower case. Required by every
+            bank that issues a wallet, which is most of them. Use `polygon` for
+            sandbox testing.
+          example: polygon
+        wallet_address:
+          type: string
+          description: >-
+            Address of an existing wallet of yours on `blockchain_network`.
+            Send it together with `wallet_id`, or send neither.
+          example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+        wallet_id:
+          type: string
+          format: uuid
+          description: >-
+            ID of an existing wallet of yours. Send it together with
+            `wallet_address`, or send neither.
+          example: 123e4567-e89b-12d3-a456-426614174000
+        label:
+          type: string
+          description: Human-readable label for the account.
+          example: ops
+        agreement_id:
+          type: string
+          description: >-
+            ID of the signed terms of service agreement. Set it while the
+            application is `draft` or `rejected`, or use the terms of service
+            route while it is `draft`.
+          example: agr_123
+        tos_link:
+          type: string
+          description: >-
+            Set by Gravv on create when the end customer must accept the bank's
+            terms of service. Show it to them before you submit.
+          example: https://example.com/tos
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Arbitrary key-value pairs for storing additional information about
+            the application.
+          example:
+            source: web
+    UpdateApplicationData:
+      type: object
+      description: >-
+        The parts of an application's `data` to change. The fields and types are
+        those of UnifiedApplicationData, and none is required: send only what
+        changes. The update merges into the stored data, so an empty value never
+        clears a field and `true` cannot be set back to `false`.
       properties:
         individual:
           $ref: '#/components/schemas/UnifiedIndividualData'
@@ -1162,7 +1293,7 @@ components:
         - data
       properties:
         data:
-          $ref: '#/components/schemas/UnifiedApplicationData'
+          $ref: '#/components/schemas/UpdateApplicationData'
     Application:
       type: object
       properties:
@@ -1258,35 +1389,43 @@ components:
         - blockchain_network
       properties:
         currency:
-          type: string
           description: >-
             Currency code. Each bank supports fewer currencies than this list:
             `lead_bank` USD, EUR, GBP, MXN and BRL; `cross_river_bank` USD;
             `nigerian_bank` NGN. Call `GET /v1/accounts/capabilities` first.
+            For a `non_custodial` (wallet-only) account any non-empty label,
+            such as `USDC`, is accepted and stored as written.
           example: USD
-          enum:
-            - USD
-            - CAD
-            - MXN
-            - EUR
-            - GBP
-            - CHF
-            - NGN
-            - KES
-            - ZAR
-            - GHS
-            - UGX
-            - TZS
-            - EGP
-            - XOF
-            - XAF
-            - BRL
+          anyOf:
+            - type: string
+              enum:
+                - USD
+                - CAD
+                - MXN
+                - EUR
+                - GBP
+                - CHF
+                - NGN
+                - KES
+                - ZAR
+                - GHS
+                - UGX
+                - TZS
+                - EGP
+                - XOF
+                - XAF
+                - BRL
+            - type: string
+              minLength: 1
+              description: Any label, for `type` `non_custodial` only
         type:
           type: string
           description: >-
             Type of account. `card`, `auto_sweep` and `default` are only for
-            your own accounts; open a customer's card account with an account
-            application.
+            your business's own accounts: send your own customer id (the
+            `customer_id` on an account whose `category` is `main`). An end
+            customer's id is refused. One `card` account backs every card you
+            issue, and a business can hold only one.
           example: regular
           enum:
             - regular
@@ -2691,8 +2830,9 @@ paths:
       description: >-
         Opens an internal account for a customer whose KYC is completed. Call
         `GET /v1/accounts/capabilities` first to choose the bank, currency and
-        network. Business customers and customer card accounts use the account
-        application flow instead.
+        network. Business customers use the account application flow instead.
+        Your business opens its one card account here, with its own customer
+        id; it starts `pending`.
 
 
         USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the

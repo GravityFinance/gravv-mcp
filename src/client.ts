@@ -8,7 +8,8 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
-import { OUTCOME_LOOKUPS, UPPER_CASE_ARGS } from "./curation.ts";
+import { OUTCOME_LOOKUPS, SANDBOX_UPLOAD_BYTES, UPLOADS, UPPER_CASE_ARGS, sizeText } from "./curation.ts";
+import { TRANSFER_LIMIT_CODES, errorFixFor, uploadTooLargeHint } from "./fix-hints.ts";
 import { VERSION } from "./version.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
@@ -619,7 +620,13 @@ function refusedBeforeRunning(status: number, message: string, body: unknown): b
 export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = "", body: unknown = null): boolean {
   if (safeToRepeat(tool)) return false;
   if (status === 0 || status === 408) return true;
-  if (status === 400) return isServerFault400(message);
+  if (status === 400) {
+    // Some known refusals start "failed to" or mention an internal error, and look like a
+    // server fault; their fix hint says whether the call can have run.
+    const fix = errorFixFor(tool.name, status, message, body);
+    if (fix) return fix.outcomeKnown === false;
+    return isServerFault400(message);
+  }
   return status >= 500 && status !== 501 && !refusedBeforeRunning(status, message, body);
 }
 
@@ -636,6 +643,19 @@ export interface HintContext {
 const REPLAYED_STORED =
   "This is the stored answer to an earlier call with the same idempotency key (kept 24 hours); the request did not run again.";
 const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again without idempotency_key.`;
+
+/**
+ * A 413 the upload fixes (fix-hints.ts) did not match: the gateway's `request_body_too_large`
+ * with a `limit`, or "the uploaded file is too large — the maximum is 10MB", sent for any
+ * size refusal further on. Neither states the size the route takes, so the hint does.
+ */
+function hint413(tool: GeneratedTool): string {
+  if (Object.hasOwn(UPLOADS, tool.name)) return uploadTooLargeHint(tool.name);
+  return (
+    "The request is too large, whatever size the message states. Send smaller files; in sandbox, keep the files " +
+    `of one call under ${sizeText(SANDBOX_UPLOAD_BYTES)} together. Then call again without idempotency_key.`
+  );
+}
 
 /** After a timeout or a network error. */
 function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
@@ -757,13 +777,7 @@ function hint5xxByCause(tool: GeneratedTool, status: number, message: string, bo
 }
 
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
-const LIMIT_CODES = new Set([
-  "ERROR_CODE_LIMIT_EXCEEDED",
-  "ERROR_CODE_DAILY_LIMIT_EXCEEDED",
-  "ERROR_CODE_PER_TRANSFER_LIMIT_EXCEEDED",
-  "ERROR_CODE_MONTHLY_LIMIT_EXCEEDED",
-  "ERROR_CODE_ANNUAL_LIMIT_EXCEEDED",
-]);
+const LIMIT_CODES = new Set(TRANSFER_LIMIT_CODES);
 
 /** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
 function hint422(code: string | undefined): string {
@@ -826,6 +840,10 @@ function statusHint(
       message,
     );
 
+  // An answer the scenarios name has its own next step, ahead of what its status means.
+  const fix = errorFixFor(tool.name, status, message, body);
+  if (fix) return fix.hint;
+
   switch (status) {
     case 0:
     case 408:
@@ -857,9 +875,7 @@ function statusHint(
     case 410:
       return hint410(errorCode(body));
     case 413:
-      // Both shapes: request_body_too_large with a limit, and "the uploaded file is too
-      // large". Neither states the size that is refused in practice.
-      return "The upload is too large. Today files from about 600 KB are refused, whatever size the message states. Keep each file under 500 KB.";
+      return hint413(tool);
     case 422:
       return hint422(errorCode(body));
     case 429:

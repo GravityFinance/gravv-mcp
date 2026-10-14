@@ -408,8 +408,9 @@ export interface DescriptionOverride {
 
 export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
   // The ten overrides for the pre-Phase 3 specs (customers, external accounts,
-  // transactions, collections, cards and fx) were deleted when the specs were fixed at
-  // source and synced; generation reported each as stale.
+  // transactions, collections, cards and fx), and the activateFeature card account one
+  // (fixed in docs Phase 6a), were deleted when the specs were fixed at source and synced;
+  // generation reported each as stale.
 
   // ---- retry advice --------------------------------------------------------
   // Three Phase 3 descriptions say to retry a failed call with the same key. A 4xx is
@@ -580,6 +581,93 @@ export function isSandboxOnly(method: string, path: string): boolean {
  */
 export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1/webhooks/"];
 
+/** A file type the upload and download handling recognises by its first bytes. */
+export type FileKind = "pdf" | "png" | "jpeg";
+
+/**
+ * Where a tool takes a file, so the model can pass a local `file_path` instead of
+ * base64 it would have to produce, and carry, in its own context.
+ *
+ * `at` is the object holding the file fields: "" for the top level, or a dotted path
+ * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
+ * generator adds `file_path` there and makes `content` optional; the server reads the
+ * file, checks its type and size, and fills `content` (and the name and type fields when
+ * they are absent). `maxBytes` is the decoded size the route takes in live, as the
+ * services check it:
+ * - uploadCustomerKycDocument: 10 MiB, the customers KYC check and the gateway's
+ *   document body limit (sized for a 10 MiB file).
+ * - uploadCardholderKycDocument: 5 MiB. The card KYC service accepts gRPC requests of
+ *   at most 10 MiB, and the file reaches it base64 in the JSON body, base64 again in the
+ *   gRPC request (16/9 of the file), so about 5.6 MiB of file fits; its own 10 MB check
+ *   is never reached.
+ * - uploadTransferDocument: 700 KiB, the transfers service's default cap, which keeps the
+ *   file under a 1 MiB ingress further down the payout path. A deployment setting can
+ *   change it; the default is what the tool states.
+ * - the v2 account documents: 2 MiB each, the accounts service's inline document cap.
+ */
+export interface UploadSpec {
+  at: string;
+  content: string;
+  nameField?: string;
+  typeField?: string;
+  kinds: FileKind[];
+  maxBytes: number;
+}
+
+const MB = 1024 * 1024;
+const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
+
+export const UPLOADS: Record<string, UploadSpec[]> = {
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
+  uploadTransferDocument: [
+    {
+      at: "",
+      content: "content",
+      nameField: "file_name",
+      typeField: "content_type",
+      kinds: ANY_DOC,
+      maxBytes: 700 * 1024,
+    },
+  ],
+  updateAccountApplicationV2: [
+    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+  createAccountV2: [
+    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+};
+
+/** A size as the tool texts write it: "10 MB", "700 KB". */
+export function sizeText(bytes: number): string {
+  return bytes >= MB ? `${bytes / MB} MB` : `${bytes / 1024} KB`;
+}
+
+/**
+ * What to keep a sandbox call's files under. Sandbox calls reach the services through an
+ * ingress that refuses a request over 1 MiB. The file travels base64 in the JSON body and
+ * the body base64 again in the gRPC request, 16/9 of the file, so files from about 576 KiB
+ * are refused there, with a 413 that says 10MB (sandbox, 2026-10-13: 571 KB taken, 600 KB
+ * refused, on the customer KYC and transfer document routes). 500 KB leaves room for the
+ * other fields. The limit is per request, so a call with several files shares it.
+ */
+export const SANDBOX_UPLOAD_BYTES = 500 * 1024;
+
+/**
+ * The size sentence for a tool's files, the one wording every note, hint and prompt
+ * uses: "at most 700 KB; in sandbox, under 500 KB".
+ */
+export function uploadLimit(tool: string): string {
+  const specs = UPLOADS[tool];
+  if (!specs) throw new Error(`uploadLimit: ${tool} is not in UPLOADS`);
+  const max = sizeText(Math.min(...specs.map((s) => s.maxBytes)));
+  const sandbox = sizeText(SANDBOX_UPLOAD_BYTES);
+  return specs.some((s) => s.at.includes("[]"))
+    ? `at most ${max} each; in sandbox, under ${sandbox} for all of one call's files`
+    : `at most ${max}; in sandbox, under ${sandbox}`;
+}
+
 /**
  * Call-ordering and preconditions, appended to the generated tool description.
  *
@@ -587,12 +675,12 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
  * name routes, the call order across tools, what this server does (file_path, saved
  * downloads, the gates), and the caveats for behaviour that is not live yet. Without it
  * an agent will, for example, create an external account and immediately transfer to
- * it, skipping the poll-until-active step from
- * https://gravv-docs.syntext.dev/recipes/remit-funds-to-a-recipient
+ * it, skipping the wait-until-active step from
+ * https://gravv-docs.syntext.dev/recipes/bank-payouts/pay-a-us-bank-account-by-ach
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. After a failed call, fix the request and leave idempotency_key out.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
 
   updateAccountStatus:
     "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
@@ -604,7 +692,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Call first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
 
   createAccountV2:
-    "PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
+    `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2.`,
 
   getAccountRequirements:
     "Build createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
@@ -619,19 +707,19 @@ export const PREREQUISITES: Record<string, string> = {
     "Read before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
 
   updateAccountApplicationV2:
-    "PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+    `PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("updateAccountApplicationV2")}) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.`,
 
   simulateDeposit:
     "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
   createExternalAccount:
-    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
+    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
 
   uploadTransferDocument:
-    "Upload before createTransfer or resumeTransfer when `requirements` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of at most 700 KB): the server reads it and fills content, file_name and content_type.",
+    `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
 
   resumeTransfer:
     "Only for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
@@ -670,7 +758,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
   createCardApplication:
-    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
 
   createCard:
     "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
@@ -679,13 +767,13 @@ export const PREREQUISITES: Record<string, string> = {
     "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
 
   activateFeature:
-    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account) as well as annual_remuneration and estimated_monthly_limit as JSON numbers: without account_id the call fails with `cards service: internal server error`. Requires confirm: true.",
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
 
   startCardholderKyc:
     "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
 
   uploadCardholderKycDocument:
-    "STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status `error`. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.",
+    `STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status \`error\`. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCardholderKycDocument")}) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.`,
 
   startCardholderKycS2S:
     "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
@@ -700,25 +788,25 @@ export const PREREQUISITES: Record<string, string> = {
     "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
 
   createCardPaymentIntent:
-    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
+    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. client_reference must be unique across collections and payment intents. MOVES MONEY: requires confirm: true.",
 
   createCollection:
-    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.",
+    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals. client_reference must be unique across collections and payment intents.",
 
   chargeSavedCard:
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
+    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
 
   uploadCustomerKycDocument:
-    "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; keep sandbox files under about 500 KB) in place of base64 content.",
+    `STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCustomerKycDocument")}) in place of base64 content.`,
 
   downloadCustomerKycDocument:
     "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
 
   startCustomerKycS2S:
-    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
+    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
 
   getWebhookHistory:
     "Use an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
@@ -734,53 +822,6 @@ export const PREREQUISITES: Record<string, string> = {
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
-};
-
-/** A file type the upload and download handling recognises by its first bytes. */
-export type FileKind = "pdf" | "png" | "jpeg";
-
-/**
- * Where a tool takes a file, so the model can pass a local `file_path` instead of
- * base64 it would have to produce, and carry, in its own context.
- *
- * `at` is the object holding the file fields: "" for the top level, or a dotted path
- * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
- * generator adds `file_path` there and makes `content` optional; the server reads the
- * file, checks its type and size, and fills `content` (and the name and type fields when
- * they are absent). Limits are the decoded sizes each spec states.
- */
-export interface UploadSpec {
-  at: string;
-  content: string;
-  nameField?: string;
-  typeField?: string;
-  kinds: FileKind[];
-  maxBytes: number;
-}
-
-const MB = 1024 * 1024;
-const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
-
-export const UPLOADS: Record<string, UploadSpec[]> = {
-  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
-  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
-  uploadTransferDocument: [
-    {
-      at: "",
-      content: "content",
-      nameField: "file_name",
-      typeField: "content_type",
-      kinds: ANY_DOC,
-      maxBytes: 700 * 1024,
-    },
-  ],
-  updateAccountApplicationV2: [
-    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-  ],
-  createAccountV2: [
-    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
-  ],
 };
 
 /**

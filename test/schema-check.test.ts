@@ -91,6 +91,21 @@ describe("checkSchema", () => {
     ]);
   });
 
+  test("anyOf takes a value that fits one or more of its shapes", () => {
+    // createAccount currency: a listed code, or any label for a wallet-only account.
+    const currency = {
+      anyOf: [{ type: "string", enum: ["USD", "NGN"] }, { type: "string", minLength: 1 }],
+    };
+    assert.deepEqual(checkSchema(currency, "USD"), []);
+    assert.deepEqual(checkSchema(currency, "USDC"), []);
+    assert.deepEqual(checkSchema(currency, ""), [
+      '(arguments): fits none of the 2 accepted shapes (shape 1: (arguments): "" is not one of USD, NGN; ' +
+        "shape 2: (arguments): shorter than 1)",
+    ]);
+    assert.deepEqual(unsupportedKeywords({ anyOf: [{ type: "string", const: "x" }] }), ["(arguments)|0: const"]);
+    assert.deepEqual(invalidPatterns({ anyOf: [{ type: "string", pattern: "(?i)x" }] }), ["(arguments)|0: (?i)x"]);
+  });
+
   test("a placeholder value is not checked, but still counts as sent", () => {
     const isPlaceholder = (v: unknown) => v === "<id>";
     assert.deepEqual(checkSchema(payee, { ...ok, customer_id: "<id>" }, { isPlaceholder }), []);

@@ -11,9 +11,32 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+
+/**
+ * A one-page docs site in the shape of llms.txt and llms-full.txt. The suite runs with no
+ * network (ci.yml), so the documentation tools read this instead of the live site.
+ */
+let docs: Server;
+let docsOrigin = "";
+const docsIndex = () => `# Gravv
+
+## Guides
+
+- [Wallets](${docsOrigin}/platform/wallets/overview.md): Wallets on the stub docs site.
+`;
+const DOCS_CORPUS = `# Gravv — Full Documentation
+
+---
+
+# Wallets
+
+Wallets on the stub docs site.
+`;
 
 class Session {
   private proc: ChildProcessWithoutNullStreams;
@@ -25,7 +48,10 @@ class Session {
     this.proc = spawn(
       process.execPath,
       ["--experimental-strip-types", join(root, "src", "bin", "gravv-mcp.ts")],
-      { env: { ...process.env, GRAVV_API_KEY: "grvSec_sandbox_proto" }, stdio: ["pipe", "pipe", "pipe"] },
+      {
+        env: { ...process.env, GRAVV_API_KEY: "grvSec_sandbox_proto", GRAVV_DOCS_ORIGIN: docsOrigin },
+        stdio: ["pipe", "pipe", "pipe"],
+      },
     ) as ChildProcessWithoutNullStreams;
 
     this.proc.stdout.on("data", (c) => {
@@ -81,10 +107,24 @@ class Session {
 
 let s: Session;
 before(async () => {
+  docs = createServer((req, res) => {
+    if (req.url === "/llms.txt" || req.url === "/llms-full.txt") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end(req.url === "/llms.txt" ? docsIndex() : DOCS_CORPUS);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  await new Promise<void>((r) => docs.listen(0, "127.0.0.1", r));
+  docsOrigin = `http://127.0.0.1:${(docs.address() as AddressInfo).port}`;
   s = new Session();
   await s.handshake();
 });
-after(() => s?.kill());
+after(() => {
+  s?.kill();
+  docs?.close();
+});
 
 describe("initialize", () => {
   test("negotiates the current protocol version", async () => {
@@ -120,11 +160,12 @@ describe("initialize", () => {
     }
   });
 
-  test("declares the tools capability and ships instructions", async () => {
+  test("declares the tools and prompts capabilities and ships instructions", async () => {
     const one = new Session();
     try {
       const res = await one.handshake();
       assert.ok(res.result.capabilities.tools, "clients gate tools/list on this");
+      assert.ok(res.result.capabilities.prompts, "clients gate prompts/list on this");
       assert.equal(typeof res.result.instructions, "string");
       assert.ok(res.result.instructions.length > 100);
     } finally {
@@ -141,7 +182,7 @@ describe("baseline methods", () => {
 
   test("returns -32601 for a method the server does not implement", async () => {
     // Clients probe for optional capabilities. A crash or a hang here breaks the session.
-    for (const method of ["resources/list", "prompts/list", "completion/complete"]) {
+    for (const method of ["resources/list", "completion/complete"]) {
       const res = await s.request(method);
       assert.equal(res.error?.code, -32601, `${method} should report method-not-found`);
     }
@@ -181,6 +222,32 @@ describe("tools/list", () => {
   });
 });
 
+describe("prompts", () => {
+  test("prompts/list returns the ten goal prompts", async () => {
+    const prompts = (await s.request("prompts/list")).result.prompts as any[];
+    assert.equal(prompts.length, 10);
+    for (const p of prompts) {
+      assert.match(p.name, /^[a-z-]+$/);
+      assert.ok(p.description, `${p.name} needs a description`);
+      for (const a of p.arguments ?? []) assert.equal(a.required, false, `${p.name} ${a.name}`);
+    }
+  });
+
+  test("prompts/get returns a user message", async () => {
+    const res = await s.request("prompts/get", { name: "send-payout", arguments: { rail: "ach" } });
+    const [message] = res.result.messages;
+    assert.equal(message.role, "user");
+    assert.equal(message.content.type, "text");
+    assert.match(message.content.text, /A US bank account by ACH/);
+  });
+
+  test("an unknown prompt is a protocol error, not a crash", async () => {
+    const res = await s.request("prompts/get", { name: "noSuchPrompt" });
+    assert.equal(res.error?.code, -32602);
+    assert.equal((await s.request("ping")).result !== undefined, true, "the session still answers");
+  });
+});
+
 describe("tools/call", () => {
   test("an unknown tool is a tool-level error, not a protocol error", async () => {
     // Returning a JSON-RPC error here would abort the client's turn instead of letting
@@ -199,6 +266,8 @@ describe("tools/call", () => {
     assert.ok(Array.isArray(res.result.content));
     assert.equal(res.result.content[0].type, "text");
     assert.equal(typeof res.result.content[0].text, "string");
+    assert.equal(res.result.isError, undefined, "the stub docs site answers, so the search succeeds");
+    assert.match(res.result.content[0].text, /Wallets/);
   });
 
   test("missing required arguments fail gracefully", async () => {

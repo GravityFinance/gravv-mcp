@@ -38,8 +38,41 @@ documented endpoint now has a tool or a stated reason it has none.
 - A warning at start when `GRAVV_BASE_URL` is not `https://api.gravv.xyz`. An empty value
   now means the default.
 - The User-Agent and the server metadata carry the package version.
+- Ten goal prompts (`prompts/list`, `prompts/get`): `open-account`, `onboard-customer`,
+  `send-payout`, `send-remittance`, `send-crypto`, `convert-currency`, `issue-card`,
+  `collect-payment`, `reconcile` and `fix-stuck-transfer`. Each says what to ask first,
+  gives each path's tool order with its confirm steps and recovery, and links a docs page;
+  one optional argument narrows it to one path. They are offered without an API key too.
+- `next_step` on a successful result that is not done: a paused or waiting transfer, a
+  manual-review webhook, a declined or 3-D Secure card payment, a refused card KYC file, the
+  liveness step, a missing v1 application, a v2 account the bank is waiting on, a pending
+  or failed payee, and limits on the default tier or in shadow mode.
+- Fix hints for the 4xx answers the integration scenarios name: duplicate and
+  uncorrectable payees, payees missing an institution, closed routes, transfer limits,
+  resuming a transfer that is not paused, an existing customer email, incomplete or
+  completed KYC, missing KYC documents, the account limit, the card account, saved-card
+  declines, a reused client_reference, and FX quotes, sources and destinations.
 
 ### Changed
+
+- The MCP SDK floor is 1.30.0, the version the server is tested with.
+- An error whose fix hint says the call did not run, such as "failed to add customer:
+  email already exists", is no longer flagged `outcome_unknown`.
+- The `activateFeature` note for `provider_data.account_id` says to always send the
+  business's card account; the spec said it could be left out.
+- `createAccount` takes any non-empty currency label for a `non_custodial` (wallet-only)
+  account, such as `USDC`, and says the business opens its one card account there with
+  its own customer id.
+- Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
+  the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
+  `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
+  500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
+  about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
+  name the tool's limit.
+- The v1 application tools take the fields the bank checks (`tax_id_type`,
+  `nationalities`, `place_of_birth`, `account_purpose`, a business `email` and `phone`),
+  no longer require every address part, and `updateAccountApplication` requires no field
+  in `data`: send only what changes.
 
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
@@ -63,6 +96,9 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Fixed
 
+- `getGravvDocPage` follows the docs site's redirects. A slug for a page that moved, such
+  as `recipes/remit-funds-to-a-recipient`, now returns the page it redirects to and says
+  its new slug; before, it found no page. Its example slug names a page that exists.
 - A schema built with `allOf` kept the member types, so a field typed in one member is no
   longer left untyped.
 - The notes for `createAccountV2`, `createWallet` and `withdrawFromCard` no longer tell the
@@ -76,10 +112,18 @@ documented endpoint now has a tool or a stated reason it has none.
 - Properties and enum values marked not yet live are left out of the schemas.
 - A coverage test checks that every documented endpoint has a tool or a reason.
 - `npm run sync-specs` deletes specs removed upstream.
+- `npm run sync-specs` also copies the docs redirects (client-docs `syntext.json`, then
+  `docs/_redirects.json`) into `src/docs-redirects.ts`, and `--check` reports them stale.
+  It reads them from the directory above `GRAVV_OPENAPI_DIR`, or from `GRAVV_DOCS_DIR`.
 - `yaml` moved to devDependencies; it is used only by the generator and tests.
-- The specs are synced from the client-docs branch for the spec alignment (74e23af), which
-  has not merged. The nightly drift check compares against client-docs main, so it reports
-  drift until that work merges.
+- The specs are synced from the top of the client-docs docs stack, the webhooks catalogue
+  branch (8917a0c), which has not merged. The nightly drift check compares against
+  client-docs main, so it reports drift until that work merges.
+- The scenario and replay schema check reads `anyOf`: a value fits when any shape fits.
+- The publish workflow installs npm 11.20.0 instead of `npm@latest` and publishes with
+  `--provenance`, so a release published with the `NPM_TOKEN` secret carries a provenance
+  statement too, as one through Trusted Publishing does. `id-token: write` is granted to
+  the publish job only.
 - 0.3.2 is still unreleased. If it is not published on its own, its changes ship in this
   release.
 

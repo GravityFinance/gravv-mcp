@@ -125,7 +125,10 @@ components:
             - integer
             - 'null'
           format: int32
-          description: Last HTTP status from your endpoint. Null until one is received.
+          description: >-
+            Last HTTP status from your endpoint. Null until your endpoint has
+            answered. 0 when an attempt failed before any call was made, for
+            example because no webhook URL is set or the URL is not https.
           example: 200
         created_at:
           type: string
@@ -193,7 +196,10 @@ components:
             - integer
             - 'null'
           format: int32
-          description: Last HTTP status from your endpoint
+          description: >-
+            Last HTTP status from your endpoint. Null until your endpoint has
+            answered. 0 when an attempt failed before any call was made, for
+            example because no webhook URL is set or the URL is not https.
           example: 200
         response_body:
           type: object

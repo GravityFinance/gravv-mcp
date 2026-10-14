@@ -2,7 +2,14 @@
  * MCP server assembly: pick the tool set, register handlers, enforce safety.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   GravvClient,
   GravvApiError,
@@ -22,6 +29,8 @@ import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
 import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
 import { VERSION } from "./version.ts";
+import { PROMPTS, PROMPTS_BY_NAME, renderPrompt } from "./prompts.ts";
+import { nextStepFor } from "./fix-hints.ts";
 
 
 /**
@@ -70,7 +79,7 @@ const DOC_TOOLS = [
         slug: {
           type: "string",
           description:
-            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'. The page's full docs URL also works.",
+            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/bank-payouts/pay-a-us-bank-account-by-ach'. The page's full docs URL also works, and so does the slug of a page that moved: the result names its new slug.",
         },
       },
       required: ["slug"],
@@ -138,6 +147,9 @@ export function instructions(
     "schemas describe individual calls; they do not describe how the flows fit together.",
     "The guides do — ordering, prerequisites, corridor rules, and worked examples.",
     "",
+    `PROMPTS walk through whole goals: ${PROMPTS.map((p) => p.name).join(", ")}. When the user starts one`,
+    "of these, suggest they pick the matching prompt in their client.",
+    "",
   ];
 
   if (hasApiKey) {
@@ -152,6 +164,7 @@ export function instructions(
       "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
       "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
       "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",
+      "- An HTTP 200 is not always done. `transfer_status: paused` is not a failure: read `requirements` and resume the transfer; never send it again. When a result carries `next_step`, do that next.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -193,7 +206,7 @@ export function createServer(config: ServerConfig) {
   const server = new Server(
     { name: "gravv", version: VERSION },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, prompts: {} },
       instructions: instructions(environment, gate, active, hasApiKey, isPublishableKey(config.apiKey ?? "")),
     },
   );
@@ -204,6 +217,35 @@ export function createServer(config: ServerConfig) {
       ...active.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
     ],
   }));
+
+  // Prompts are listed without a key too: they teach the flow, and say when the API
+  // tools need one.
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: PROMPTS.map((p) => ({
+      name: p.name,
+      title: p.title,
+      description: p.description,
+      arguments: [{ name: p.argument.name, description: p.argument.description, required: false }],
+    })),
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const prompt = PROMPTS_BY_NAME.get(request.params.name);
+    if (!prompt) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Unknown prompt "${request.params.name}". The prompts are: ${PROMPTS.map((p) => p.name).join(", ")}.`,
+      );
+    }
+    const text = renderPrompt(prompt, request.params.arguments ?? {}, {
+      hasApiKey,
+      loadedTools: new Set(active.map((t) => t.name)),
+    });
+    return {
+      description: prompt.description,
+      messages: [{ role: "user" as const, content: { type: "text" as const, text } }],
+    };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;
@@ -267,9 +309,13 @@ export function createServer(config: ServerConfig) {
             `No documentation page with slug "${args.slug}". Use searchGravvDocs to find the correct slug.`,
           );
         }
-        const note = staleDocsNote(docs);
+        const notes = [
+          staleDocsNote(docs),
+          // Say so, so the next call and any link the model writes use the page's new slug.
+          page.redirectedFrom ? `"${page.redirectedFrom}" has moved; this is its new page, slug "${page.slug}".` : null,
+        ].filter(Boolean);
         return okResult(
-          `${note ? `Note: ${note}\n\n` : ""}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
+          `${notes.map((n) => `Note: ${n}\n\n`).join("")}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
         );
       } catch (err) {
         return errorResult(`Could not fetch documentation page: ${(err as Error).message}`);
@@ -348,8 +394,12 @@ export function createServer(config: ServerConfig) {
 
       const result = await client!.call(tool, callArgs, { idempotencyKey: suppliedKey ?? undefined });
 
+      // A 200 that is not done (a paused transfer, a declined card) says what to do next,
+      // ahead of data so a cut answer keeps it.
+      const nextStep = nextStepFor(tool.name, result.data);
       const payload: Record<string, unknown> = {
         environment,
+        ...(nextStep ? { next_step: nextStep } : {}),
         data: redact(saveDownload(tool.name, callArgs, result.data, config.downloadDir ?? defaultDownloadDir())),
       };
       const ignored = ignoredArguments(tool, callArgs);

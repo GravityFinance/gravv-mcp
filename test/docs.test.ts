@@ -2,7 +2,8 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { DEFAULT_DOCS_ORIGIN, DocsIndex, expandQuery, parseDocsOrigin, slugFromUrl } from "../src/docs.ts";
+import { DEFAULT_DOCS_ORIGIN, DocsIndex, DocsRedirects, expandQuery, parseDocsOrigin, slugFromUrl } from "../src/docs.ts";
+import { DOCS_REDIRECTS } from "../src/docs-redirects.ts";
 import { createServer } from "../src/server.ts";
 
 /**
@@ -87,14 +88,21 @@ function corpus(order: number[] = PAGES.map((_, i) => i)): string {
 /** The served order: the index's third page comes last, as the playground did on 13 October. */
 const CORPUS = corpus([0, 1, 3, 4, 5, 6, 7, 8, 2]);
 
-function index(corpusText = CORPUS, indexText = INDEX) {
-  const fetchImpl = (async (url: any) => {
+function fixtureFetch(corpusText = CORPUS, indexText = INDEX): typeof fetch {
+  return (async (url: any) => {
     const u = String(url);
     if (u.endsWith("/llms.txt")) return new Response(indexText, { status: 200 });
     if (u.endsWith("/llms-full.txt")) return new Response(corpusText, { status: 200 });
     return new Response("not found", { status: 404 });
   }) as unknown as typeof fetch;
-  return new DocsIndex({ origin: "https://docs.test", fetchImpl });
+}
+
+function index(
+  corpusText = CORPUS,
+  indexText = INDEX,
+  redirects?: ReadonlyArray<readonly [string, string]>,
+) {
+  return new DocsIndex({ origin: "https://docs.test", fetchImpl: fixtureFetch(corpusText, indexText), redirects });
 }
 
 /** Every indexed page, through the public API. */
@@ -218,6 +226,86 @@ describe("slugs", () => {
   test("a page can be fetched by its full docs URL", async () => {
     const page = await index().getPage("https://docs.test/recipes/remit-funds-to-a-recipient.md");
     assert.equal(page?.title, "Remit funds to a recipient");
+  });
+});
+
+describe("redirects", () => {
+  const REDIRECTS: Array<[string, string]> = [
+    ["/recipes/old-wallet-recipe", "/platform/wallets/create-a-wallet"],
+    ["/recipes/old-wallet-recipe", "/platform/wallets/overview"], // a later duplicate loses, as on the site
+    ["/docs/hop-1", "/docs/hop-2"],
+    ["/docs/hop-2", "/getting-started/authentication#api-keys"],
+    ["/legacy/*", "/platform/:splat"],
+    ["/loop-a", "/loop-b"],
+    ["/loop-b", "/loop-a"],
+    ["/nowhere", "/platform/never-written"],
+    // A page wins over a redirect from its own path.
+    ["/platform/wallets/overview", "/getting-started/authentication"],
+  ];
+  const docs = () => index(CORPUS, INDEX, REDIRECTS);
+
+  test("a moved page's slug finds the page its redirect names, and says it moved", async () => {
+    const page = await docs().getPage("recipes/old-wallet-recipe");
+    assert.equal(page?.slug, "platform/wallets/create-a-wallet");
+    assert.equal(page?.redirectedFrom, "recipes/old-wallet-recipe");
+    assert.match(page!.content, /The address comes back at once/);
+  });
+
+  test("follows a chain and a splat, and drops the target's anchor", async () => {
+    assert.equal((await docs().getPage("docs/hop-1"))?.slug, "getting-started/authentication");
+    assert.equal((await docs().getPage("/legacy/wallets/create-a-wallet/"))?.slug, "platform/wallets/create-a-wallet");
+    assert.equal((await docs().getPage("https://docs.test/legacy/wallets/overview.md"))?.slug, "platform/wallets/overview");
+  });
+
+  test("a page wins, and a loop or a redirect to no page finds nothing", async () => {
+    const page = await docs().getPage("platform/wallets/overview");
+    assert.equal(page?.slug, "platform/wallets/overview");
+    assert.equal(page?.redirectedFrom, undefined);
+    assert.equal(await docs().getPage("loop-a"), null);
+    assert.equal(await docs().getPage("nowhere"), null);
+  });
+
+  test("stops after five hops, as the docs site's own check does", () => {
+    const chain = (n: number): Array<[string, string]> => [
+      ...Array.from({ length: n - 1 }, (_, i): [string, string] => [`/h${i}`, `/h${i + 1}`]),
+      [`/h${n - 1}`, "/page"],
+    ];
+    const pageFor = (slug: string) => (slug === "page" ? "found" : undefined);
+    assert.equal(new DocsRedirects(chain(5)).follow("h0", pageFor), "found");
+    assert.equal(new DocsRedirects(chain(6)).follow("h0", pageFor), null);
+  });
+
+  test("the vendored copy sends the deleted remit recipe to the bank payouts overview", async () => {
+    const moved = `# Gravv\n\n## Recipes\n\n- [Bank payouts](https://docs.test/recipes/bank-payouts/overview.md): Pay a bank account.\n`;
+    const body = ["# Gravv — Full Documentation\n", page("Bank payouts", "Pay a bank account.", "Choose the recipe.")].join("\n---\n");
+    const got = await index(body, moved).getPage("recipes/remit-funds-to-a-recipient");
+    assert.equal(got?.slug, "recipes/bank-payouts/overview");
+    assert.equal(got?.redirectedFrom, "recipes/remit-funds-to-a-recipient");
+    // Both files of client-docs are copied, syntext.json first.
+    assert.deepEqual(DOCS_REDIRECTS[0], ["/accounts/overview", "/platform/accounts/overview"]);
+    assert.ok(DOCS_REDIRECTS.some(([from]) => from === "/api"));
+  });
+
+  test("getGravvDocPage names the new slug of a page that moved", async () => {
+    const { server } = createServer({
+      toolsets: "all",
+      readOnly: false,
+      allowLiveWrites: false,
+      docsOrigin: "https://docs.test",
+      fetchImpl: fixtureFetch(),
+    });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "docs-test", version: "1.0.0" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    try {
+      // The vendored /wallets/* redirect leads to the platform page.
+      const result = (await client.callTool({ name: "getGravvDocPage", arguments: { slug: "wallets/overview" } })) as any;
+      const text = result.content[0].text as string;
+      assert.match(text, /^Note: "wallets\/overview" has moved; this is its new page, slug "platform\/wallets\/overview"\./);
+      assert.match(text, /# Wallets/);
+    } finally {
+      await client.close();
+    }
   });
 });
 

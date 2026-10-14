@@ -70,14 +70,16 @@ jobs:
 
       - name: Built server answers an MCP handshake
         # Exercises the real protocol path on the minimum runtime: initialize, then
-        # tools/list, asserting the documentation tools are present without a key.
+        # tools/list and prompts/list, asserting the documentation tools and the ten
+        # goal prompts are present without a key.
         # Uses a .cjs file because package.json declares "type": "module" and inline
         # eval semantics vary by Node version.
         run: |
-          printf '%s\n%s\n%s\n' \
+          printf '%s\n%s\n%s\n%s\n' \
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
             '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            '{"jsonrpc":"2.0","id":3,"method":"prompts/list"}' \
             | node dist/bin/gravv-mcp.js > /tmp/out.jsonl 2>/tmp/err.log || true
           cat /tmp/err.log
           cat > /tmp/check-handshake.cjs <<'EOF'
@@ -96,7 +98,12 @@ jobs:
               process.exit(1);
             }
           }
-          console.log(`ok: ${names.length} tools advertised on node ${process.version}`);
+          const prompts = lines.find((m) => m.id === 3);
+          if (!prompts || prompts.result?.prompts?.length !== 10) {
+            console.error("::error::prompts/list did not return the ten prompts");
+            process.exit(1);
+          }
+          console.log(`ok: ${names.length} tools and ${prompts.result.prompts.length} prompts advertised on node ${process.version}`);
           EOF
           node /tmp/check-handshake.cjs
 

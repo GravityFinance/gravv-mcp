@@ -12,6 +12,7 @@ import { PUBLISHABLE_KEY_MESSAGE, baseUrlWarning, isPublishableKey } from "../cl
 import { DEFAULT_DOCS_ORIGIN, InvalidDocsOriginError, parseDocsOrigin } from "../docs.ts";
 import { DEFAULT_TOOLSETS, TOOLSETS, UnknownToolsetError, parseToolsets, type Toolset } from "../curation.ts";
 import { defaultDownloadDir } from "../files.ts";
+import { PROMPTS } from "../prompts.ts";
 
 const VALID_TOOLSETS: readonly Toolset[] = TOOLSETS;
 
@@ -112,13 +113,13 @@ async function main() {
   const docsNote = docsOrigin === DEFAULT_DOCS_ORIGIN ? "" : ` | docs=${docsOrigin}`;
   process.stderr.write(
     apiKey
-      ? `gravv-mcp: ${tools.length} API tools + 2 docs tools | environment=${environment}` +
+      ? `gravv-mcp: ${tools.length} API tools + 2 docs tools + ${PROMPTS.length} prompts | environment=${environment}` +
           (environment !== "sandbox" && process.env.GRAVV_ALLOW_LIVE_WRITES === "true"
             ? " | LIVE WRITES ENABLED"
             : "") +
           docsNote +
           "\n"
-      : `gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs and getGravvDocPage available${docsNote}\n`,
+      : `gravv-mcp: docs-only (GRAVV_API_KEY not set) — searchGravvDocs, getGravvDocPage and ${PROMPTS.length} prompts available${docsNote}\n`,
   );
 
   if (apiKey && isPublishableKey(apiKey)) process.stderr.write(`warning: ${PUBLISHABLE_KEY_MESSAGE}\n`);
