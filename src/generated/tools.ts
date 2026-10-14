@@ -1780,6 +1780,11 @@ export const TOOLS: GeneratedTool[] = [
                           "type": "string",
                           "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
                           "example": "2030-01-14"
+                        },
+                        "file_path": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
                         }
                       }
                     }
@@ -1865,6 +1870,11 @@ export const TOOLS: GeneratedTool[] = [
                     "type": "string",
                     "description": "Expiry date as YYYY-MM-DD. Required for identity documents.",
                     "example": "2030-01-14"
+                  },
+                  "file_path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
                   }
                 }
               }
@@ -4088,6 +4098,57 @@ export const TOOLS: GeneratedTool[] = [
     "needsIdempotency": false,
     "sandboxOnly": false,
     "spec": "settlement-instructions.yaml"
+  },
+  {
+    "name": "downloadCustomerKycDocument",
+    "toolset": "kyc",
+    "method": "get",
+    "path": "/v1/customers/{customer_id}/kyc/documents/{document_id}/download",
+    "description": "Download a KYC document — Returns one side of a stored document as a data URI. Get the `document_id` from the documents list. A two-sided card is two documents: read the back image of the `BACK_SIDE` document with `side=back`. Responses can be large, up to about 13 MB. A scoped API key needs the `customer:update` permission.\n\nThis server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "customer_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of the customer"
+        },
+        "document_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "UUID of the KYC document, from the documents list"
+        },
+        "side": {
+          "type": "string",
+          "enum": [
+            "front",
+            "back"
+          ],
+          "description": "Which image to return"
+        }
+      },
+      "required": [
+        "customer_id",
+        "document_id",
+        "side"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "customer_id",
+      "document_id"
+    ],
+    "queryParams": [
+      "side"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "kyc.yaml"
   },
   {
     "name": "exportTransactions",
@@ -8272,9 +8333,7 @@ export const TOOLS: GeneratedTool[] = [
           "items": {
             "type": "object",
             "required": [
-              "document_type",
-              "filename",
-              "content"
+              "document_type"
             ],
             "properties": {
               "document_type": {
@@ -8329,6 +8388,11 @@ export const TOOLS: GeneratedTool[] = [
               },
               "document_place_of_birth": {
                 "type": "string"
+              },
+              "file_path": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 2 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
               }
             }
           }
@@ -9187,6 +9251,11 @@ export const TOOLS: GeneratedTool[] = [
           "maxLength": 255,
           "pattern": "\\.([Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Pp][Dd][Ff])$"
         },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 5 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+        },
         "idempotency_key": {
           "type": "string",
           "minLength": 1,
@@ -9197,9 +9266,7 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
-        "metadata",
-        "content",
-        "filename"
+        "metadata"
       ],
       "additionalProperties": true
     },
@@ -9334,6 +9401,11 @@ export const TOOLS: GeneratedTool[] = [
           "example": "passport_front.jpg",
           "maxLength": 255
         },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 10 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+        },
         "idempotency_key": {
           "type": "string",
           "minLength": 1,
@@ -9344,9 +9416,7 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
-        "metadata",
-        "content",
-        "filename"
+        "metadata"
       ],
       "additionalProperties": true
     },
@@ -9420,6 +9490,11 @@ export const TOOLS: GeneratedTool[] = [
           "description": "The file as standard base64, at most 700 KB decoded",
           "example": "<base64>"
         },
+        "file_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 700 KB, and sends it as content, filling file_name and content_type when you leave them out. Send file_path or content, not both; with content, send file_name and content_type yourself."
+        },
         "idempotency_key": {
           "type": "string",
           "minLength": 1,
@@ -9430,10 +9505,7 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
-        "document_type",
-        "file_name",
-        "content_type",
-        "content"
+        "document_type"
       ],
       "additionalProperties": true
     },

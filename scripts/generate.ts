@@ -30,7 +30,10 @@ import {
   needsIdempotencyKey,
   isSandboxOnly,
   SANDBOX_ONLY,
+  UPLOADS,
+  DOWNLOADS,
   type Toolset,
+  type UploadSpec,
 } from "../src/curation.ts";
 
 /**
@@ -67,6 +70,48 @@ function restrictEnums(node: any, remove: string[], depth = 0): number {
 
   for (const v of Object.values(node)) touched += restrictEnums(v, remove, depth + 1);
   return touched;
+}
+
+/**
+ * Add `file_path` beside each upload slot in a tool schema and make its content optional.
+ * Returns a problem line for a slot or content field the schema does not have, so a spec
+ * change that moves the file fields fails generation instead of silently dropping them.
+ */
+function addFilePaths(name: string, schema: any, specs: UploadSpec[]): string[] {
+  const problems: string[] = [];
+  for (const spec of specs) {
+    let node = schema;
+    for (const part of spec.at ? spec.at.split(".") : []) {
+      const isArray = part.endsWith("[]");
+      node = node?.properties?.[isArray ? part.slice(0, -2) : part];
+      if (isArray) node = node?.items;
+    }
+    if (!node?.properties?.[spec.content]) {
+      problems.push(`${name}: UPLOADS names "${spec.at || "(top level)"}.${spec.content}", which the schema does not have`);
+      continue;
+    }
+    if (node.properties.file_path) {
+      problems.push(`${name}: the spec declares file_path at "${spec.at || "(top level)"}", which collides with the upload argument`);
+      continue;
+    }
+    const kinds = spec.kinds.map((k) => k.toUpperCase()).join(", ");
+    const mb = spec.maxBytes >= 1024 * 1024 ? `${spec.maxBytes / (1024 * 1024)} MB` : `${spec.maxBytes / 1024} KB`;
+    const others = [spec.nameField, spec.typeField].filter((f): f is string => Boolean(f)).join(" and ");
+    node.properties.file_path = {
+      type: "string",
+      minLength: 1,
+      description:
+        `Path of a local file to send instead of ${spec.content}. The server reads it, checks that it is ${kinds} ` +
+        `(by its bytes, not its name) and at most ${mb}, and sends it as ${spec.content}` +
+        (others ? `, filling ${others} when you leave them out` : "") +
+        `. Send file_path or ${spec.content}, not both` +
+        (others ? `; with ${spec.content}, send ${others} yourself.` : "."),
+    };
+    // The fields the server fills are optional in the schema: required only with content.
+    const filled = [spec.content, spec.nameField, spec.typeField];
+    if (Array.isArray(node.required)) node.required = node.required.filter((r: string) => !filled.includes(r));
+  }
+  return problems;
 }
 
 /** Every `description` string in a schema, for checking what text the model would see. */
@@ -363,6 +408,14 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         description += `\n\nNOT FOR CARD PAYMENTS. ${restriction.because}`;
       }
 
+      // A file argument, read by the server, beside each base64 field (src/files.ts).
+      const uploads = UPLOADS[curated.name];
+      if (uploads) {
+        const root = { type: "object", properties, required };
+        problems.push(...addFilePaths(curated.name, root, uploads));
+        required.splice(0, required.length, ...(root.required as string[]));
+      }
+
       // Money-moving and irreversible tools carry an explicit confirmation argument.
       // Declared here so it appears in the schema the model sees; enforced in safety.ts.
       const movesMoney = isMoneyOp(method, path);
@@ -450,6 +503,12 @@ for (const [set, label] of [
 ] as const) {
   for (const k of set) {
     if (!generatedKeys.has(k)) problems.push(`${label} gates "${k}", but no tool calls it`);
+  }
+}
+
+for (const [map, label] of [[UPLOADS, "UPLOADS"], [DOWNLOADS, "DOWNLOADS"]] as const) {
+  for (const name of Object.keys(map)) {
+    if (!byName.has(name)) problems.push(`${label} names "${name}", which is not a generated tool`);
   }
 }
 

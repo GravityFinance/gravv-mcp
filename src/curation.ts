@@ -166,6 +166,12 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/customers/kyc/upload-document": { name: "uploadCustomerKycDocument", toolset: "kyc" },
   "GET /v1/customers/{customer_id}/kyc/documents": { name: "getCustomerKycDocuments", toolset: "kyc" },
   "GET /v1/customers/{customer_id}/kyc/status": { name: "getCustomerKycStatus", toolset: "kyc" },
+  // Beside getCustomerKycDocuments, which gives the document_id it needs. The file is
+  // saved locally and never returned to the model (DOWNLOADS).
+  "GET /v1/customers/{customer_id}/kyc/documents/{document_id}/download": {
+    name: "downloadCustomerKycDocument",
+    toolset: "kyc",
+  },
 
   // ---- accounts ------------------------------------------------------------
   "POST /v1/accounts": { name: "createAccount", toolset: "accounts" },
@@ -567,11 +573,77 @@ export const PREREQUISITES: Record<string, string> = {
   uploadCustomerKycDocument:
     "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
 
+  downloadCustomerKycDocument:
+    "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
+
   startCustomerKycS2S:
     "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
+};
+
+/** A file type the upload and download handling recognises by its first bytes. */
+export type FileKind = "pdf" | "png" | "jpeg";
+
+/**
+ * Where a tool takes a file, so the model can pass a local `file_path` instead of
+ * base64 it would have to produce, and carry, in its own context.
+ *
+ * `at` is the object holding the file fields: "" for the top level, or a dotted path
+ * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
+ * generator adds `file_path` there and makes `content` optional; the server reads the
+ * file, checks its type and size, and fills `content` (and the name and type fields when
+ * they are absent). Limits are the decoded sizes each spec states.
+ */
+export interface UploadSpec {
+  at: string;
+  content: string;
+  nameField?: string;
+  typeField?: string;
+  kinds: FileKind[];
+  maxBytes: number;
+}
+
+const MB = 1024 * 1024;
+const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
+
+export const UPLOADS: Record<string, UploadSpec[]> = {
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
+  uploadTransferDocument: [
+    {
+      at: "",
+      content: "content",
+      nameField: "file_name",
+      typeField: "content_type",
+      kinds: ANY_DOC,
+      maxBytes: 700 * 1024,
+    },
+  ],
+  updateAccountApplicationV2: [
+    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+  createAccountV2: [
+    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+};
+
+/**
+ * Tools whose answer carries a file, saved to a local file instead of returned. A KYC
+ * image in the model's context is both large (up to about 13 MB) and personal data.
+ * `content` is the data-URI field in `data`; the file name is built from the arguments
+ * named in `nameFrom`, never from the response.
+ */
+export interface DownloadSpec {
+  content: string;
+  prefix: string;
+  nameFrom: string[];
+}
+
+export const DOWNLOADS: Record<string, DownloadSpec> = {
+  downloadCustomerKycDocument: { content: "content", prefix: "kyc", nameFrom: ["document_id", "side"] },
 };
 
 /**

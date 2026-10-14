@@ -493,7 +493,8 @@
     "tool": "getCustomerKycDocuments"
   },
   "S-CUS-05.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "downloadCustomerKycDocument"
   },
   "S-CUS-06.1": {
     "outcome": "ok",

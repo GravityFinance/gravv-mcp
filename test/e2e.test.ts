@@ -12,6 +12,8 @@ import { createServer, type Server } from "node:http";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -32,6 +34,8 @@ A page only the stub docs site has.
 
 Zebracorn payouts settle on the stub docs site.
 `;
+
+const E2E_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 
 let gateway: Server;
 let gatewayPort: number;
@@ -89,6 +93,12 @@ before(async () => {
         res.end(JSON.stringify({ data: { items: [{ id: "acc_1", currency: "USD", balance: "100.00" }] } }));
       } else if (req.url?.startsWith("/v1/transfer")) {
         res.end(JSON.stringify({ data: { transfer_id: "trf_1", status: "pending" } }));
+      } else if (req.url?.includes("/kyc/documents/") && req.url.includes("/download")) {
+        res.end(
+          JSON.stringify({
+            data: { content: `data:image/png;base64,${E2E_PNG.toString("base64")}`, content_type: "image/png", side: "front" },
+          }),
+        );
       } else if (req.url?.startsWith("/v1/cards")) {
         // Includes a sensitive field to prove redaction runs on the way out.
         res.end(JSON.stringify({ data: { id: "card_1", card_number: "4111111111111111", last4: "1111" } }));
@@ -384,6 +394,48 @@ describe("end-to-end over MCP stdio", () => {
       assert.equal(received.length, 1, "a stored 409 is not resent");
     } finally {
       mcp.kill();
+    }
+  });
+
+  test("an upload reads file_path, and a download is saved, never returned", async () => {
+    received = [];
+    const dir = mkdtempSync(join(tmpdir(), "gravv-mcp-e2e-"));
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, `--download-dir=${join(dir, "dl")}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const file = join(dir, "receipt.png");
+      writeFileSync(file, E2E_PNG);
+      await mcp.request("tools/call", {
+        name: "uploadTransferDocument",
+        arguments: { customer_id: "cus_1", document_type: "receipt", file_path: file },
+      });
+      const sent = received.find((r) => r.url === "/v1/transfer/documents")!;
+      assert.equal(sent.body.content, E2E_PNG.toString("base64"));
+      assert.equal(sent.body.content_type, "image/png");
+      assert.equal(sent.body.file_name, "receipt.png");
+      assert.equal(sent.body.file_path, undefined);
+
+      const res = await mcp.request("tools/call", {
+        name: "downloadCustomerKycDocument",
+        arguments: { customer_id: "cus_1", document_id: "doc-1", side: "front" },
+      });
+      const text = textOf(res);
+      assert.doesNotMatch(text, /base64/);
+      const payload = JSON.parse(text);
+      assert.equal(payload.data.saved_to, join(dir, "dl", "kyc-doc-1-front.png"));
+      assert.deepEqual(readFileSync(payload.data.saved_to), E2E_PNG);
+
+      const bad = await mcp.request("tools/call", {
+        name: "uploadTransferDocument",
+        arguments: { customer_id: "cus_1", document_type: "receipt", file_path: join(dir, "missing.pdf") },
+      });
+      assert.equal(bad.result.isError, true);
+      assert.match(textOf(bad), /cannot be read\. Nothing was sent/);
+    } finally {
+      mcp.kill();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 

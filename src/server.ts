@@ -19,6 +19,7 @@ import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
+import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -113,6 +114,8 @@ export interface ServerConfig {
   fetchImpl?: typeof fetch;
   /** Clock for the docs cache; tests replace it, as they replace fetch. */
   now?: () => number;
+  /** Where downloaded files are saved. Defaults to a gravv-mcp-downloads folder in the OS temp dir. */
+  downloadDir?: string;
 }
 
 export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
@@ -315,6 +318,15 @@ export function createServer(config: ServerConfig) {
     }
 
     try {
+      // A local file_path becomes the file's base64 here, so the model never carries it.
+      let callArgs: Record<string, unknown>;
+      try {
+        callArgs = resolveUploads(tool.name, args);
+      } catch (err) {
+        if (err instanceof FileArgumentError) return errorResult(`${tool.name}: ${err.message}. Nothing was sent.`);
+        throw err;
+      }
+
       // A key the model passes back resends a call whose outcome is unknown. A value that
       // is not a valid key cannot be one an earlier result returned, so refuse it before
       // the preview rather than quietly making a new key and running the call twice.
@@ -326,7 +338,7 @@ export function createServer(config: ServerConfig) {
         );
       }
 
-      const preview = client!.buildRequest(tool, args);
+      const preview = client!.buildRequest(tool, callArgs);
 
       // Redirect a card method smuggled past the schema, before it reaches the API and
       // silently succeeds through the weaker path.
@@ -343,11 +355,11 @@ export function createServer(config: ServerConfig) {
         return { content: [{ type: "text" as const, text: JSON.stringify(gateResult, null, 2) }] };
       }
 
-      const result = await client!.call(tool, args, { idempotencyKey: suppliedKey ?? undefined });
+      const result = await client!.call(tool, callArgs, { idempotencyKey: suppliedKey ?? undefined });
 
       const payload: Record<string, unknown> = {
         environment,
-        data: redact(result.data),
+        data: redact(saveDownload(tool.name, callArgs, result.data, config.downloadDir ?? defaultDownloadDir())),
       };
       if (result.idempotencyKey) payload.idempotency_key = result.idempotencyKey;
       if (result.replayed) {
