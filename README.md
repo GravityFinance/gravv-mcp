@@ -148,8 +148,8 @@ then paste a JSON-RPC frame on stdin:
 the Gravv documentation. They need **no API key**, so you can explore Gravv before you
 have credentials.
 
-**API tools** — 87 tools covering customers, KYC, accounts, transfers, cards, wallets,
-FX, collections, payment links, webhooks, and approvals.
+**API tools** — 72 tools (60 load by default) covering customers, KYC, accounts,
+transfers, cards, wallets, FX, collections, and webhooks.
 
 Both matter. The API tools execute calls, but they can't tell you what has to happen
 first — that an account needs a KYC-verified customer, or that a new recipient must reach
@@ -170,12 +170,13 @@ Gravv moves real money, and **sandbox and live share one base URL** — only you
 differs. Nothing in a request visually signals danger, so the server signals it.
 
 **Money-moving tools take two calls.** `createTransfer`, `withdrawFromCard`,
-`createFxOrder`, `createCollection`, `chargeSavedCard`, `approveTransfer`, and
-`approveFxOrder` return a preview on the first call and execute only when called again
+`createFxOrder`, `cancelFxOrder`, `createCollection`, `createCardPaymentIntent`, and
+`chargeSavedCard` return a preview on the first call and execute only when called again
 with `confirm: true`. The unconfirmed call never reaches the API.
 
-Approving is included because releasing a held instruction has the same consequence as
-initiating one. Rejecting is not gated — it only prevents execution.
+`cancelFxOrder` is included because a cancel cannot be undone: funds already debited are
+not returned. `createCardPaymentIntent` is included because, given a saved `card_token`,
+it charges the card at once; it asks for confirmation even when it only makes a link.
 
 ```
 > Send $50 from acc_1 to acc_2
@@ -201,8 +202,10 @@ not registered as tools under any configuration, and responses are scanned for
 [client-side decryption flow](https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview)
 for those.
 
-**Idempotency is automatic.** Every write that needs an `Idempotency-Key` gets one, and
-the key used is returned with the result so a deliberate retry can reuse it.
+**Idempotency is automatic.** Every write that needs an `Idempotency-Key` gets one — a
+new key for every call — and the key is returned with each successful result so you can
+trace the request. A call cannot yet be resent with an old key, so after a timeout check
+whether the operation happened (for example with `getTransaction`) before calling again.
 
 **`--read-only`** disables every non-GET tool, for reporting deployments.
 
@@ -230,12 +233,13 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | `cards` | ✓ | issue, balance, status, withdraw, applications |
 | `wallets` | ✓ | blockchain wallet creation and lookup |
 | `fx` | ✓ | quotes, rates, OTC orders |
-| `collections` | ✓ | card payment intents, saved cards, and pix / mobile money / bank transfer collections |
-| `payment-links` | ✓ | stablecoin payment links |
+| `collections` | ✓ | card payment intents, saved cards, and bank transfer collections |
 | `features` | ✓ | feature eligibility and activation |
 | `webhooks` | ✓ | event history, delivery calls, retry |
-| `approvals` | ✓ | approve/reject transfers, recipients and FX orders |
 | `account-applications` | | account onboarding |
+
+The `approvals` and `payment-links` toolsets were removed in 0.3.2. A configuration that
+still names them starts with a warning, and those names are ignored.
 
 ---
 
@@ -276,31 +280,26 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 
 **fx**
 `getFxQuote` · `listFxRates` · `listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` ·
-`listFxOrders` · `cancelFxOrder` · `listFxPendingApprovals`
+`listFxOrders` · `cancelFxOrder*` · `listFxPendingApprovals`
 
 **collections** — taking money in
 
 Card payments go through `createCardPaymentIntent`. It returns the same hosted payment
 link as a collection, plus the intent id and the card token that recurring and
-merchant-initiated charges need. `createCollection` covers the rails a payment intent
-cannot express — pix, mobile money, and bank transfer.
+merchant-initiated charges need. `createCollection` covers bank transfer, in 16
+countries.
 
-`createCardPaymentIntent` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
-`deleteSavedCard` · `createCollection*` · `getCollection`
+`createCardPaymentIntent*` · `chargeSavedCard*` · `listSavedCards` · `getSavedCard` ·
+`createCollection*` · `getCollection`
 
-**payment-links**
-`createPaymentLink` · `getPaymentLink` · `listPaymentLinks` · `updatePaymentLink` ·
-`updatePaymentLinkStatus` · `deletePaymentLink` · `getPublicPaymentLink`
+`deleteSavedCard` is not available in this release: the API needs a request body that the
+current specification does not describe, so every call would fail.
 
 **features**
 `listFeatures` · `checkFeatureEligibility` · `activateFeature`
 
 **webhooks**
 `getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
-
-**approvals** — sign off on held instructions
-`approveTransfer*` · `rejectTransfer` · `approveExternalAccount` · `rejectExternalAccount` ·
-`approveFxOrder*` · `rejectFxOrder` · `searchWebhookIngestion`
 
 **account-applications** — opt-in via `--toolsets=account-applications`
 `createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
@@ -326,14 +325,15 @@ Asking an assistant to *"pay a supplier in Nigeria 200 USD from my main account"
 2. listAccounts()
    -> finds the funded USD account to pay from
 
-3. listExternalAccountInstitutions({ country: "NG" })
+3. listExternalAccountInstitutions({ country_iso_code: "NG" })
    -> resolves the recipient's bank
 
-4. createExternalAccount({ ...recipient details })
-   -> returns status "pending" — not yet usable
+4. createExternalAccount({ ...bank account recipient details })
+   -> a Nigerian bank account comes back "active" at once
 
 5. getExternalAccount({ external_account_id })
-   -> polls until status is "active"
+   -> confirms "active"; swift, sepa, ach_wire and fps recipients start
+      "pending", so for those the assistant polls until "active" or "setup_failed"
 
 6. createTransfer({ amount: 200, source, destination })
    -> returns a PREVIEW, does not execute:
@@ -392,7 +392,8 @@ The key was rejected. Confirm it is current and that you copied the whole value.
 
 **`404` on an id you know exists**
 You're probably in the other environment. Sandbox and live hold separate data. The
-`environment` field in every response tells you which one you're in.
+`environment` field in every successful result, and the ENVIRONMENT line of the server
+instructions, tell you which one you're in.
 
 **"tool exists but its toolset is not loaded"**
 Restart with `--toolsets=all`, or name the group the error mentions.
@@ -404,12 +405,26 @@ Intentional and not configurable. Use the
 **A transfer returned `confirmation_required` instead of running**
 Working as designed. Call again with `confirm: true` after reviewing the preview.
 
-**`422` mentioning an idempotency key**
-The same key was reused with a different payload. A genuinely new operation needs a new
-key; the server generates one per call, so this usually means a retry changed the body.
+**"Not available over MCP" for an approve or reject tool, a payment-link tool, or `deleteSavedCard`**
+These were removed in 0.3.2: approving and rejecting is done in the Gravv Dashboard,
+payment links are retired, and `deleteSavedCard` returns in a later release. The message
+says what to do instead.
+
+**A `grvPub_` key**
+Publishable keys cannot call the API. Set `GRAVV_API_KEY` to a secret key starting
+`grvSec_sandbox_` or `grvSec_live_`.
+
+**`422`**
+Not always about idempotency. A transfer over a sender limit, a blocked sender, missing
+sender information or a missing supporting document is also a `422`; the error's code and
+the hint say which. A `422` with `idempotency_key_reused` means the key was seen before
+with a different body; the server makes a new key for every call, so calling again sends
+a fresh one.
 
 **Repeated `429`**
-Lower `GRAVV_RATE_PER_MINUTE`.
+The gateway allows 600 requests a minute, burst 50, per Gravv account, shared by every key
+and process. This server throttles itself to 60 a minute, so repeated `429`s usually mean
+another process uses the same account. Wait and try again.
 
 **Documentation search returns nothing**
 It's keyword-based, not semantic. Rephrase using the vocabulary the docs use — "transfer"
@@ -427,8 +442,8 @@ rather than an unusual synonym — or drop the section filter.
 | `GRAVV_BASE_URL` | `https://api.gravv.xyz` | Override the API host |
 | `GRAVV_TOOLSETS` | default set | Same as `--toolsets` |
 
-The client throttles requests locally and backs off on `429`. If you hit rate limits,
-lower `GRAVV_RATE_PER_MINUTE`. See
+The client throttles requests locally (60 a minute, burst 15) and backs off on `429`. The
+gateway allows 600 a minute, burst 50, per Gravv account. See
 [Rate limits](https://gravv-docs.syntext.dev/getting-started/rate-limits).
 
 Your API key is read from the environment and sent only to the Gravv API. It is never
