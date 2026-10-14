@@ -185,10 +185,11 @@ describe("collections routes card payments to payment intents", () => {
     }
   });
 
-  test("the rails payment intents cannot express are still offered", () => {
+  test("only bank_transfer is offered: pix and mobile_money always fail", () => {
     const schema = JSON.stringify(TOOLS_BY_NAME.get("createCollection")!.inputSchema);
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.match(schema, new RegExp(`"${m}"`), `${m} must remain available`);
+    assert.match(schema, /"bank_transfer"/, "bank_transfer must remain available");
+    for (const m of ["pix", "mobile_money"]) {
+      assert.doesNotMatch(schema, new RegExp(`"${m}"`), `${m} should not be offered`);
     }
   });
 
@@ -212,9 +213,15 @@ describe("collections routes card payments to payment intents", () => {
     }
   });
 
-  test("the remaining rails pass through untouched", () => {
-    for (const m of ["pix", "mobile_money", "bank_transfer"]) {
-      assert.equal(checkCollectionMethods("createCollection", { source: { methods: [m] } }), null);
+  test("bank_transfer passes through untouched", () => {
+    assert.equal(checkCollectionMethods("createCollection", { source: { methods: ["bank_transfer"] } }), null);
+  });
+
+  test("pix and mobile_money are refused with the reason", () => {
+    for (const m of ["pix", "mobile_money"]) {
+      const msg = checkCollectionMethods("createCollection", { source: { methods: [m] } });
+      assert.ok(msg, `${m} should be refused`);
+      assert.match(msg, /only bank_transfer/);
     }
   });
 

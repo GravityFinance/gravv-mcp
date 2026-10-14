@@ -76,16 +76,17 @@ export function redact(value: unknown, depth = 0): unknown {
 }
 
 /**
- * Card-family methods removed from createCollection's schema.
+ * Methods removed from createCollection's schema.
  *
  * `additionalProperties: true` means a model can still send `methods: ["card"]` even
- * though the enum no longer lists it, and the API would accept it — producing a card
- * collection through the weaker path with no error to learn from. Checked here so the
- * redirect is explicit rather than silent.
+ * though the enum no longer lists it. For cards the API would accept it — producing a card
+ * collection through the weaker path with no error to learn from. pix and mobile_money
+ * are always rejected. Checked here so the redirect is explicit rather than silent.
  */
 const CARD_METHODS = new Set(["card", "apple_pay", "google_pay"]);
+const REJECTED_METHODS = new Set(["pix", "mobile_money"]);
 
-/** Returns a redirect message when a collection request smuggles a card method through. */
+/** Returns a redirect message when a collection request sends a method it should not. */
 export function checkCollectionMethods(toolName: string, body: unknown): string | null {
   if (toolName !== "createCollection") return null;
 
@@ -93,14 +94,25 @@ export function checkCollectionMethods(toolName: string, body: unknown): string 
   if (!Array.isArray(methods)) return null;
 
   const card = methods.filter((m) => typeof m === "string" && CARD_METHODS.has(m));
-  if (card.length === 0) return null;
+  if (card.length > 0) {
+    return (
+      `createCollection does not handle card payments (received: ${card.join(", ")}). ` +
+      `Use createCardPaymentIntent instead — it returns the same hosted payment link, plus ` +
+      `an intent id and the card token needed for recurring charges. ` +
+      `createCollection covers bank_transfer only, in 16 countries.`
+    );
+  }
 
-  return (
-    `createCollection does not handle card payments (received: ${card.join(", ")}). ` +
-    `Use createCardPaymentIntent instead — it returns the same hosted payment link, plus ` +
-    `an intent id and the card token needed for recurring charges. ` +
-    `createCollection covers pix, mobile_money and bank_transfer.`
-  );
+  const rejected = methods.filter((m) => typeof m === "string" && REJECTED_METHODS.has(m));
+  if (rejected.length > 0) {
+    return (
+      `createCollection accepts only bank_transfer today; ${rejected.join(", ")} ` +
+      `${rejected.length === 1 ? "is" : "are"} always rejected. Send methods: ["bank_transfer"] for a ` +
+      `customer in one of the 16 supported countries listed in the tool description.`
+    );
+  }
+
+  return null;
 }
 
 export class SafetyGate {

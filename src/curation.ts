@@ -304,15 +304,18 @@ export const BLOCKED: Record<string, string> = {
  * recurring and merchant-initiated charges need.
  *
  * Two tools offering the same job is how a model ends up on the weaker one. So the card
- * family is removed from createCollection, leaving it responsible for the rails payment
- * intents cannot express.
+ * family is removed from createCollection.
+ *
+ * pix and mobile_money are removed too: the API rejects both on every call today, so
+ * offering them only teaches the model a path that cannot succeed. That leaves
+ * bank_transfer, which works in 16 countries.
  */
 export const ENUM_RESTRICTIONS: Record<string, { remove: string[]; because: string }> = {
   createCollection: {
-    remove: ["card", "apple_pay", "google_pay"],
+    remove: ["card", "apple_pay", "google_pay", "pix", "mobile_money"],
     because:
-      "Card payments go through createCardPaymentIntent, which returns the same hosted " +
-      "payment link plus the intent id and card token this endpoint cannot provide.",
+      "Bank transfer only: pix and mobile_money are always rejected, and card payments go through " +
+      "createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
   },
 };
 
@@ -365,6 +368,42 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
       "Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is " +
       "`active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with " +
       "code ERROR_CODE_NOT_FOUND.",
+  },
+
+  // ---- transactions --------------------------------------------------------
+  exportTransactions: {
+    whileSpecSays: "Maximum 50,000 records per export",
+    description:
+      "Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 " +
+      "newest matching rows (a known bug).",
+  },
+
+  // ---- collections ---------------------------------------------------------
+  createCollection: {
+    whileSpecSays: "(card, bank transfer, and mobile money)",
+    description:
+      "Initiates a bank-transfer collection. The response carries the payment instructions for the payer.",
+  },
+  getCollection: {
+    whileSpecSays: "no API key is required",
+    description:
+      "Returns the status and details of a collection. It needs an API key like every other call. Pass the " +
+      "transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier " +
+      "getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
+  },
+  createCardPaymentIntent: {
+    whileSpecSays: "token you got from the webhook",
+    params: {
+      card_token: "Saved card token from listSavedCards. When set, the card is charged at once.",
+    },
+  },
+
+  // ---- cards ---------------------------------------------------------------
+  updateCardStatus: {
+    whileSpecSays: "Optional spending limit",
+    params: {
+      limit: "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
+    },
   },
 
   // ---- fx ------------------------------------------------------------------
@@ -508,7 +547,7 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
-    "ASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
+    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
 
   getFxQuote:
     "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
@@ -519,7 +558,11 @@ export const PREREQUISITES: Record<string, string> = {
   listFxPendingApprovals:
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
-  withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
+  withdrawFromCard:
+    "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+
+  updateCardStatus:
+    "ALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
 
   cancelFxOrder:
     "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
@@ -528,7 +571,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
 
   createCollection:
-    "MOVES MONEY: initiates a collection from a payer. Requires confirm: true.",
+    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.",
 
   chargeSavedCard:
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
@@ -542,7 +585,8 @@ export const PREREQUISITES: Record<string, string> = {
   startCustomerKycS2S:
     "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
 
-  exportTransactions: "Capped at 50,000 records per export. Narrow the filters for larger ranges.",
+  exportTransactions:
+    "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
 };
 
 /** Tool names that must carry a `confirm` argument, derived from MONEY_OPS. */

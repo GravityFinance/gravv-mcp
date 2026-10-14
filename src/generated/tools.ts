@@ -1704,7 +1704,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "card_token": {
           "type": "string",
-          "description": "To auto-charge a customer, use the token you got from the webhook response in your first call of this endpoint.",
+          "description": "Saved card token from listSavedCards. When set, the card is charged at once.",
           "example": "tokn_80aebb6ea2594a74bc215a64"
         },
         "metadata": {
@@ -1754,7 +1754,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "post",
     "path": "/v1/collections",
-    "description": "Initiate a collection — Initiates a collection request using a specified collection method (card, bank transfer, and mobile money). If the collection method is card, a payment link will be generated for the customer to complete the payment. For mobile money and bank transfer methods, payment instructions will be provided.\n\nMOVES MONEY: initiates a collection from a payer. Requires confirm: true.\n\nNOT FOR CARD PAYMENTS. Card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token this endpoint cannot provide.",
+    "description": "Initiate a collection — Initiates a bank-transfer collection. The response carries the payment instructions for the payer.\n\nMOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.\n\nNOT FOR CARD PAYMENTS. Bank transfer only: pix and mobile_money are always rejected, and card payments go through createCardPaymentIntent, which returns the same hosted payment link plus the intent id and card token.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1823,14 +1823,9 @@ export const TOOLS: GeneratedTool[] = [
                   "items": {
                     "type": "string",
                     "enum": [
-                      "pix",
-                      "mobile_money",
                       "bank_transfer"
                     ]
-                  },
-                  "example": [
-                    "pix"
-                  ]
+                  }
                 }
               }
             }
@@ -3209,7 +3204,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Create a new blockchain wallet for a customer on the specified network.\n\nASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
+    "description": "Create a wallet — Create a new blockchain wallet for a customer on the specified network.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3294,7 +3289,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transactions",
     "method": "get",
     "path": "/v1/transactions/export",
-    "description": "Export transactions — Exports matching transactions as a downloadable file. Supports CSV and JSON formats. Maximum 50,000 records per export.\n\nCapped at 50,000 records per export. Narrow the filters for larger ranges.",
+    "description": "Export transactions — Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 newest matching rows (a known bug).\n\nReturns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3613,7 +3608,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "collections",
     "method": "get",
     "path": "/v1/collections/{id}",
-    "description": "Get transaction by ID — Returns the status and details of an onramp transaction. This endpoint is public — no API key is required.",
+    "description": "Get transaction by ID — Returns the status and details of a collection. It needs an API key like every other call. Pass the transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6409,7 +6404,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "patch",
     "path": "/v1/cards/{card_id}/update",
-    "description": "Update card status — Update the status of a card. You can freeze a card temporarily or block it permanently. **Status Options:** - `active`: Card is active, and you can use it for transactions - `freeze`: Card is temporarily frozen, and you can't use it until you reactivate it by updating the status to active - `blocked`: Card is permanently blocked, and you can't reactivate it",
+    "description": "Update card status — Update the status of a card. You can freeze a card temporarily or block it permanently. **Status Options:** - `active`: Card is active, and you can use it for transactions - `freeze`: Card is temporarily frozen, and you can't use it until you reactivate it by updating the status to active - `blocked`: Card is permanently blocked, and you can't reactivate it\n\nALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6430,7 +6425,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "limit": {
           "type": "integer",
-          "description": "Optional spending limit for the card",
+          "description": "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
           "example": 1000
         }
       },
@@ -7936,7 +7931,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from card — Withdraw funds from a customer's card balance.\n\nMOVES MONEY: moves funds off a card balance. Requires confirm: true.",
+    "description": "Withdraw from card — Withdraw funds from a customer's card balance.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
     "inputSchema": {
       "type": "object",
       "properties": {
