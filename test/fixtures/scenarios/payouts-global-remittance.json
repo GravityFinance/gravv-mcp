@@ -1,0 +1,690 @@
+{
+  "about": "Requests from the Gravv integration scenarios (payouts-global-remittance), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-REM-01.1",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-REM-01.2",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-REM-01.3",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries?iso_code=NG"
+    },
+    {
+      "id": "S-REM-01.4",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?country_iso_code=NG&institution_type=bank&items_per_page=100"
+    },
+    {
+      "id": "S-REM-01.5",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=NGN"
+    },
+    {
+      "id": "S-REM-01.6",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/fx/rates?from_currency=USD&to_currency=NGN"
+    },
+    {
+      "id": "S-REM-01.7",
+      "scenario": "S-REM-01",
+      "method": "POST",
+      "path": "/v1/external-accounts/verify",
+      "body": {
+        "account_number": "0123456789",
+        "institution_id": "2ce313c8-de20-48dd-bfc6-949b8fd5ad84"
+      }
+    },
+    {
+      "id": "S-REM-01.8",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/external-accounts?customer_id=bc426080-4122-4cb1-8d46-ff4ffda26b44&search=0123456789"
+    },
+    {
+      "id": "S-REM-01.9",
+      "scenario": "S-REM-01",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "bc426080-4122-4cb1-8d46-ff4ffda26b44",
+        "payee_type": "bank_account",
+        "currency": "NGN",
+        "account_name": "Chinedu Eze",
+        "account_number": "0123456789",
+        "institution_id": "2ce313c8-de20-48dd-bfc6-949b8fd5ad84",
+        "institution_country_iso_code": "NG"
+      }
+    },
+    {
+      "id": "S-REM-01.10",
+      "scenario": "S-REM-01",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "d070ac47-fd7a-4c5a-9a42-badd462c0420"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "14418474-20a5-4553-86af-17ac34dde144"
+        },
+        "amount": "250.00",
+        "customer_id": "bc426080-4122-4cb1-8d46-ff4ffda26b44",
+        "description": "Family support October",
+        "client_reference": "ada-ng-2026-10-001"
+      }
+    },
+    {
+      "id": "S-REM-01.11",
+      "scenario": "S-REM-01",
+      "method": "GET",
+      "path": "/v1/transactions/ded00040-b19c-46c9-8e43-b8729bc24a54"
+    },
+    {
+      "id": "S-REM-01.12",
+      "scenario": "S-REM-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "<id>",
+        "amount": "50000.00",
+        "currency": "NGN"
+      }
+    },
+    {
+      "id": "S-REM-01.13",
+      "scenario": "S-REM-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "<id>",
+        "amount": "250.00",
+        "rail": "wire"
+      }
+    },
+    {
+      "id": "S-REM-02.1",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-REM-02.2",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-REM-02.3",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries?iso_code=GH"
+    },
+    {
+      "id": "S-REM-02.4",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?country_iso_code=GH&institution_type=mobile_money"
+    },
+    {
+      "id": "S-REM-02.5",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=GHS"
+    },
+    {
+      "id": "S-REM-02.6",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries-for-address?iso_code=GB"
+    },
+    {
+      "id": "S-REM-02.7",
+      "scenario": "S-REM-02",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "b4dab3d6-6a7f-4c66-9cc9-483404cd8463",
+        "payee_type": "mobile_money",
+        "currency": "GHS",
+        "account_name": "Akosua Mensah",
+        "phone_number": "+233244123456",
+        "institution_id": "ad28c4e4-c303-4505-aa2f-7df94e0588cd",
+        "institution_country_iso_code": "GH"
+      }
+    },
+    {
+      "id": "S-REM-02.8",
+      "scenario": "S-REM-02",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "245b9314-abed-4632-8fb1-ea2ca70baa3c"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "d1762ec1-9f61-4eed-a04b-21925a55dbe4"
+        },
+        "amount": "300.00",
+        "customer_id": "b4dab3d6-6a7f-4c66-9cc9-483404cd8463",
+        "description": "For Mum, October",
+        "client_reference": "kwame-gh-2026-10-007",
+        "additional_information": {
+          "remitter_full_name": "Kwame Mensah",
+          "remitter_date_of_birth": "1988-04-17",
+          "remitter_country": "GB",
+          "remitter_address": {
+            "address_line1": "27 Ashburnham Road",
+            "city": "London",
+            "postal_code": "SW10 0PL",
+            "country": "GB"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-REM-02.9",
+      "scenario": "S-REM-02",
+      "method": "POST",
+      "path": "/v1/transfer/3019b5b3-1ad0-4f00-809a-8e52f727ba0d/resume",
+      "body": {
+        "additional_information": {
+          "remitter_date_of_birth": "1988-04-17",
+          "remitter_address": {
+            "address_line1": "27 Ashburnham Road",
+            "city": "London",
+            "postal_code": "SW10 0PL",
+            "country": "GB"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-REM-02.10",
+      "scenario": "S-REM-02",
+      "method": "GET",
+      "path": "/v1/transactions/d12e8ee7-1965-4e9c-8fbf-c341a9c79f0f"
+    },
+    {
+      "id": "S-REM-03.1",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-REM-03.2",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-REM-03.3",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?country_iso_code=KE&institution_type=mobile_money"
+    },
+    {
+      "id": "S-REM-03.4",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=KES"
+    },
+    {
+      "id": "S-REM-03.5",
+      "scenario": "S-REM-03",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "877231ff-f5e2-4ca2-9e1d-11ee4be57723",
+        "payee_type": "mobile_money",
+        "currency": "KES",
+        "account_name": "Brian Otieno",
+        "phone_number": "+254712345678",
+        "institution_id": "0c6324d5-b26d-4cb3-8f6c-db84c763338b"
+      }
+    },
+    {
+      "id": "S-REM-03.6",
+      "scenario": "S-REM-03",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "8925d474-9e46-4bc2-8d5b-9afd1b1a44e5"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "5f22bdc3-72df-46be-b8a8-176c2942294f"
+        },
+        "amount": "200.00",
+        "customer_id": "877231ff-f5e2-4ca2-9e1d-11ee4be57723",
+        "description": "Week 41 wages",
+        "client_reference": "fleet-ke-wk41-0042",
+        "additional_information": {
+          "remitter_full_name": "Fatima Al Mansoori",
+          "remitter_country": "AE"
+        }
+      }
+    },
+    {
+      "id": "S-REM-03.7",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v1/transactions/187c4388-caab-4310-a4a3-87ec5152e533"
+    },
+    {
+      "id": "S-REM-03.8",
+      "scenario": "S-REM-03",
+      "method": "GET",
+      "path": "/v1/transactions/{id}"
+    },
+    {
+      "id": "S-REM-04.1",
+      "scenario": "S-REM-04",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-REM-04.2",
+      "scenario": "S-REM-04",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries?iso_code=RW"
+    },
+    {
+      "id": "S-REM-04.3",
+      "scenario": "S-REM-04",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?country_iso_code=RW&institution_type=mobile_money"
+    },
+    {
+      "id": "S-REM-04.4",
+      "scenario": "S-REM-04",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "e0c40bf4-c1a6-4714-bde1-316a1c15e956",
+        "payee_type": "mobile_money",
+        "currency": "RWF",
+        "account_name": "Claudine Uwase",
+        "phone_number": "+250788123456",
+        "institution_id": "e3077661-0359-4740-b6bb-bad5f4e965fd"
+      }
+    },
+    {
+      "id": "S-REM-04.5",
+      "scenario": "S-REM-04",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "5151220a-b97c-442a-8cf5-b48ec96c8779"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "ad2fee6e-161f-4b04-ac5f-39ed4e9182bc"
+        },
+        "amount": "150.00",
+        "customer_id": "e0c40bf4-c1a6-4714-bde1-316a1c15e956",
+        "description": "School fees",
+        "client_reference": "jp-rw-2026-10-003",
+        "additional_information": {
+          "remitter_full_name": "Jean-Paul Habimana",
+          "remitter_country": "CA"
+        }
+      }
+    },
+    {
+      "id": "S-REM-04.6",
+      "scenario": "S-REM-04",
+      "method": "GET",
+      "path": "/v1/transactions/22a31043-d85f-44b8-abfd-94bd2924a529"
+    },
+    {
+      "id": "S-REM-05.1",
+      "scenario": "S-REM-05",
+      "method": "GET",
+      "path": "/v1/transfer/supported-currencies"
+    },
+    {
+      "id": "S-REM-05.2",
+      "scenario": "S-REM-05",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?country_iso_code=CI&institution_type=mobile_money"
+    },
+    {
+      "id": "S-REM-05.3",
+      "scenario": "S-REM-05",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=XOF"
+    },
+    {
+      "id": "S-REM-05.4",
+      "scenario": "S-REM-05",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "adfc44c6-3bf4-4c4c-8e53-4bc255cdba4b",
+        "payee_type": "mobile_money",
+        "currency": "XOF",
+        "account_name": "Awa Kone",
+        "phone_number": "+2250708123456",
+        "institution_id": "6c5cf000-ec15-4c95-98ee-b1a1077a31e0",
+        "institution_country_iso_code": "CI"
+      }
+    },
+    {
+      "id": "S-REM-05.5",
+      "scenario": "S-REM-05",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "9a29e7f8-a3e8-4907-8dfd-1fee0169ee96"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "c0407de2-db05-4385-8138-682b326c4b6e"
+        },
+        "amount": "120.00",
+        "customer_id": "adfc44c6-3bf4-4c4c-8e53-4bc255cdba4b",
+        "description": "Lot 118 advance",
+        "client_reference": "cocoa-ci-lot-118"
+      }
+    },
+    {
+      "id": "S-REM-06.1",
+      "scenario": "S-REM-06",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "30c9ae51-00ce-4616-8eb4-e4d189afa159",
+        "payee_type": "bank_account",
+        "currency": "MXN",
+        "account_name": "Diego Hernandez",
+        "account_number": "002180000123456789",
+        "institution_country_iso_code": "MX",
+        "national_id": "GODE561231HDFRRN09",
+        "national_id_type": "CURP",
+        "address": {
+          "address_line1": "Av Vallarta 1520",
+          "city": "Guadalajara",
+          "country": "MX"
+        }
+      }
+    },
+    {
+      "id": "S-REM-06.2",
+      "scenario": "S-REM-06",
+      "method": "PATCH",
+      "path": "/v1/external-accounts/8e65cb04-10e2-4faa-b365-e1e03942b846",
+      "body": {
+        "pix_key": "maria.souza@example.com",
+        "national_id": "529.982.247-25",
+        "national_id_type": "CPF",
+        "address": {
+          "address_line1": "Rua Augusta 1200",
+          "city": "Sao Paulo",
+          "country": "BR"
+        }
+      }
+    },
+    {
+      "id": "S-REM-06.3",
+      "scenario": "S-REM-06",
+      "method": "GET",
+      "path": "/v1/external-accounts/8e65cb04-10e2-4faa-b365-e1e03942b846"
+    },
+    {
+      "id": "S-REM-06.4",
+      "scenario": "S-REM-06",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "e2a61521-87e4-4edf-b259-1f6481585b38"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "2ce0729d-3b00-4b22-8967-58f801966ffc"
+        },
+        "amount": "2000.00",
+        "customer_id": "30c9ae51-00ce-4616-8eb4-e4d189afa159",
+        "client_reference": "mkt-mx-payout-5521"
+      }
+    },
+    {
+      "id": "S-REM-06.5",
+      "scenario": "S-REM-06",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries?iso_code=HK"
+    },
+    {
+      "id": "S-REM-07.1",
+      "scenario": "S-REM-07",
+      "method": "GET",
+      "path": "/v1/wallets/{wallet_id}"
+    },
+    {
+      "id": "S-REM-07.2",
+      "scenario": "S-REM-07",
+      "method": "GET",
+      "path": "/v1/wallets?customer_id=c7ae0522-6a4d-476f-a43c-5a9aac863c31&include_balances=true"
+    },
+    {
+      "id": "S-REM-07.3",
+      "scenario": "S-REM-07",
+      "method": "POST",
+      "path": "/v1/wallets",
+      "body": {
+        "customer_id": "…",
+        "network": "polygon",
+        "name": "Supplier payouts"
+      }
+    },
+    {
+      "id": "S-REM-07.4",
+      "scenario": "S-REM-07",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_crypto_wallet",
+          "id": "b6705e3a-3c6c-49b0-b24f-d55aafd03635",
+          "crypto_asset": "USDC"
+        },
+        "destination": {
+          "destination_type": "crypto_wallet",
+          "wallet_address": "0xdf19d8699ab5aef6fb2d6cd81c18c86fe4b21475",
+          "blockchain_network": "polygon"
+        },
+        "amount": "500.00",
+        "customer_id": "c7ae0522-6a4d-476f-a43c-5a9aac863c31",
+        "description": "PO 7781",
+        "client_reference": "imp-po-7781"
+      }
+    },
+    {
+      "id": "S-REM-07.5",
+      "scenario": "S-REM-07",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_crypto_wallet",
+          "id": "81194af2-92eb-41cf-9667-94e26d069aa3",
+          "crypto_asset": "USDC"
+        },
+        "destination": {
+          "destination_type": "crypto_wallet",
+          "wallet_address": "GCEKNUKI5N5TWQVPA7YHUSCWQPYPI2CHUUSB2Y4J2R2RLNWUMJG3LMYQ",
+          "blockchain_network": "stellar",
+          "blockchain_memo": "4820176"
+        },
+        "amount": "250.00",
+        "customer_id": "c7ae0522-6a4d-476f-a43c-5a9aac863c31",
+        "client_reference": "imp-xlm-withdraw-0031"
+      }
+    },
+    {
+      "id": "S-REM-07.6",
+      "scenario": "S-REM-07",
+      "method": "GET",
+      "path": "/v1/transactions/b937af87-991a-4ca0-bb59-e9eda2bf6f7e"
+    },
+    {
+      "id": "S-REM-07.7",
+      "scenario": "S-REM-07",
+      "method": "GET",
+      "path": "/v1/transactions?tx_hash=0x8c889d983eaa6f598566628a7a2cd05ca78f5bc76cef2b12229e8408648000cc"
+    },
+    {
+      "id": "S-REM-08.1",
+      "scenario": "S-REM-08",
+      "method": "GET",
+      "path": "/v1/wallets/{wallet_id}"
+    },
+    {
+      "id": "S-REM-08.2",
+      "scenario": "S-REM-08",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_crypto_wallet",
+          "id": "b6705e3a-3c6c-49b0-b24f-d55aafd03635",
+          "crypto_asset": "USDC"
+        },
+        "destination": {
+          "destination_type": "crypto_wallet",
+          "wallet_address": "76YbQbwcPcp8MTy6pP8efkicPhTUfYYxeEPuCQmo46K1",
+          "blockchain_network": "solana"
+        },
+        "amount": "1000.00",
+        "customer_id": "c7ae0522-6a4d-476f-a43c-5a9aac863c31",
+        "description": "October contract",
+        "client_reference": "pay-ctr-1009"
+      }
+    },
+    {
+      "id": "S-REM-08.3",
+      "scenario": "S-REM-08",
+      "method": "GET",
+      "path": "/v1/transactions/ea2bfda0-e733-4245-befe-2ca64e43cfcc"
+    },
+    {
+      "id": "S-REM-09.1",
+      "scenario": "S-REM-09",
+      "method": "GET",
+      "path": "/v1/wallets/{id}"
+    },
+    {
+      "id": "S-REM-09.2",
+      "scenario": "S-REM-09",
+      "method": "GET",
+      "path": "/v1/transfer/rates"
+    },
+    {
+      "id": "S-REM-09.3",
+      "scenario": "S-REM-09",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_crypto_wallet",
+          "id": "b6705e3a-3c6c-49b0-b24f-d55aafd03635",
+          "crypto_asset": "USDC"
+        },
+        "destination": {
+          "destination_type": "internal_crypto_wallet",
+          "id": "5485cc5d-3d4b-4b17-9033-95e408405f03",
+          "crypto_asset": "USDT"
+        },
+        "amount": "2.00",
+        "customer_id": "c7ae0522-6a4d-476f-a43c-5a9aac863c31",
+        "description": "Convert USDC to USDT"
+      }
+    },
+    {
+      "id": "S-REM-09.4",
+      "scenario": "S-REM-09",
+      "method": "GET",
+      "path": "/v1/transactions/a7c3e9f1-4d2b-4a8c-b6e0-1f2a3b4c5d6e"
+    },
+    {
+      "id": "S-REM-10.1",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/customers/bc426080-4122-4cb1-8d46-ff4ffda26b44/limits"
+    },
+    {
+      "id": "S-REM-10.2",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/limits/remitters/{remitter_id}"
+    },
+    {
+      "id": "S-REM-10.3",
+      "scenario": "S-REM-10",
+      "method": "POST",
+      "path": "/v1/transfer/c1a2b3c4-d5e6-4f70-8a91-b2c3d4e5f607/resume",
+      "body": {
+        "remitter_verification": {
+          "remitter_id": "rem_ada_bello_01",
+          "level": "enhanced",
+          "provider": "in_house_kyc",
+          "provider_reference": "chk_88213",
+          "verified_at": "2026-10-13T15:30:00Z",
+          "screening": {
+            "sanctions": "clear",
+            "pep": "clear",
+            "adverse_media": "clear"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-REM-10.4",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/transactions/{id}"
+    },
+    {
+      "id": "S-REM-10.5",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/webhooks/event/{id}"
+    },
+    {
+      "id": "S-REM-10.6",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/webhooks/event/4e8a2c6f-1b3d-4f5a-9c7e-2d4f6a8c0e1b"
+    },
+    {
+      "id": "S-REM-10.7",
+      "scenario": "S-REM-10",
+      "method": "GET",
+      "path": "/v1/webhooks/calls/4e8a2c6f-1b3d-4f5a-9c7e-2d4f6a8c0e1b"
+    }
+  ]
+}

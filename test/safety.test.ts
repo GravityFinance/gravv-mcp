@@ -148,6 +148,97 @@ describe("previews for the newly gated tools", () => {
   });
 });
 
+describe("resuming a transfer is gated like a payout", () => {
+  const resume = TOOLS_BY_NAME.get("resumeTransfer")!;
+  const body = { supporting_document_ids: ["doc_1"] };
+  const p = { method: "POST", path: "/v1/transfer/{id}/resume", body };
+
+  test("the preview names the transfer and what is sent", () => {
+    const result = gate().check(resume, { id: "trf_1", ...body }, p);
+    assert.match(result!.willDo, /Resume paused transfer trf_1 with 1 supporting document\. /);
+  });
+
+  test("a live key needs the live-writes switch", () => {
+    assert.throws(() => gate({ environment: "live" }).check(resume, { id: "trf_1", confirm: true }, p), SafetyError);
+  });
+});
+
+describe("confirm-only gating", () => {
+  const del = TOOLS_BY_NAME.get("deleteAccountApplication")!;
+  const activate = TOOLS_BY_NAME.get("activateFeature")!;
+  const delPreview = { method: "DELETE", path: "/v1/accounts/applications/app_1", body: undefined };
+
+  test("a delete returns a preview first, naming what goes", () => {
+    const result = gate().check(del, { id: "app_1" }, delPreview);
+    assert.equal(result?.status, "confirmation_required");
+    assert.match(result!.willDo, /Delete account application app_1\. It cannot be restored/);
+    assert.equal(gate().check(del, { id: "app_1", confirm: true }, delPreview), null);
+  });
+
+  test("a live key needs no live-writes switch for it, but the preview warns", () => {
+    const live = gate({ environment: "live" });
+    const pending = live.check(del, { id: "app_1" }, delPreview);
+    assert.match(pending!.warning!, /LIVE KEY.*cannot be undone/);
+    assert.doesNotMatch(pending!.warning!, /real money/);
+    assert.equal(live.check(del, { id: "app_1", confirm: true }, delPreview), null);
+    assert.equal(gate({ environment: "unknown" }).check(del, { id: "app_1", confirm: true }, delPreview), null);
+  });
+
+  test("a settlement instruction delete names it and the lost default", () => {
+    const tool = TOOLS_BY_NAME.get("deleteSettlementInstruction")!;
+    const p = { method: "DELETE", path: "/v1/settlement-instructions/{id}", body: undefined };
+    const result = gate({ environment: "live" }).check(tool, { id: "si_1" }, p);
+    assert.match(result!.willDo, /Delete settlement instruction si_1\. .*no default/);
+  });
+
+  test("a saved-card delete names the token, which is what chooses the card", () => {
+    const tool = TOOLS_BY_NAME.get("deleteSavedCard")!;
+    const body = { customer_id: "cus_1", card_token: "tokn_1" };
+    const result = gate().check(tool, { card_id: "card_1", ...body }, { method: "DELETE", path: tool.path, body });
+    assert.match(result!.willDo, /token tokn_1 for customer cus_1\. The token chooses the card/);
+  });
+
+  test("feature activation names the feature and the customer", () => {
+    const body = { customer_id: "cus_1", feature_id: "virtual_cards" };
+    const result = gate().check(activate, body, { method: "POST", path: "/v1/risk/features/activate", body });
+    assert.match(result!.willDo, /Activate virtual_cards for customer cus_1/);
+  });
+
+  test("read-only mode still refuses it", () => {
+    assert.throws(() => gate({ readOnly: true }).check(del, { id: "app_1", confirm: true }, delPreview), SafetyError);
+  });
+});
+
+describe("sandbox-only tools", () => {
+  const simulate = TOOLS_BY_NAME.get("simulateDeposit")!;
+  const body = { account_id: "acc_1", amount: "250.00", rail: "wire" };
+  const simPreview = { method: "POST", path: "/v2/accounts/simulate/deposit", body };
+
+  test("are advertised and run on a sandbox key", () => {
+    assert.equal(simulate.sandboxOnly, true);
+    assert.equal(gate().isToolAvailable(simulate), true);
+    assert.equal(gate().check(simulate, body, simPreview), null);
+  });
+
+  test("are hidden and refused on a live or unrecognised key, before any request", () => {
+    for (const environment of ["live", "unknown"] as const) {
+      const g = gate({ environment, allowLiveWrites: true });
+      assert.equal(g.isToolAvailable(simulate), false, environment);
+      assert.throws(
+        () => g.check(simulate, body, simPreview),
+        (e: Error) => e instanceof SafetyError && /sandbox-only/.test(e.message) && /grvSec_sandbox_/.test(e.message),
+      );
+    }
+  });
+
+  test("only the deposit simulator is sandbox-only", () => {
+    assert.deepEqual(
+      [...TOOLS_BY_NAME.values()].filter((t) => t.sandboxOnly).map((t) => t.name),
+      ["simulateDeposit"],
+    );
+  });
+});
+
 describe("read-only mode", () => {
   test("hides non-GET tools from the advertised list", () => {
     const g = gate({ readOnly: true });

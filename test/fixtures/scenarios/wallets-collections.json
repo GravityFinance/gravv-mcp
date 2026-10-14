@@ -1,0 +1,335 @@
+{
+  "about": "Requests from the Gravv integration scenarios (wallets-collections), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-WAL-01.1",
+      "scenario": "S-WAL-01",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-WAL-01.2",
+      "scenario": "S-WAL-01",
+      "method": "POST",
+      "path": "/v1/wallets",
+      "body": {
+        "customer_id": "401d68fb-fe97-4c56-84a6-5651cdbde747",
+        "network": "polygon",
+        "name": "Ada top-up wallet"
+      }
+    },
+    {
+      "id": "S-WAL-01.3",
+      "scenario": "S-WAL-01",
+      "method": "GET",
+      "path": "/v1/wallets?wallet_address="
+    },
+    {
+      "id": "S-WAL-01.4",
+      "scenario": "S-WAL-01",
+      "method": "GET",
+      "path": "/v1/wallets/bbab27f6-04b8-457d-83ed-b92009758340"
+    },
+    {
+      "id": "S-WAL-01.5",
+      "scenario": "S-WAL-01",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=401d68fb-fe97-4c56-84a6-5651cdbde747&transaction_type=crypto_funding"
+    },
+    {
+      "id": "S-WAL-01.6",
+      "scenario": "S-WAL-01",
+      "method": "GET",
+      "path": "/v1/wallets/{id}"
+    },
+    {
+      "id": "S-WAL-02.1",
+      "scenario": "S-WAL-02",
+      "method": "POST",
+      "path": "/v1/wallets",
+      "body": {
+        "customer_id": "401d68fb-fe97-4c56-84a6-5651cdbde747",
+        "network": "stellar",
+        "name": "Kofi USDC"
+      }
+    },
+    {
+      "id": "S-WAL-02.2",
+      "scenario": "S-WAL-02",
+      "method": "GET",
+      "path": "/v1/wallets/{id}"
+    },
+    {
+      "id": "S-WAL-03.1",
+      "scenario": "S-WAL-03",
+      "method": "GET",
+      "path": "/v1/wallets?customer_id=401d68fb-fe97-4c56-84a6-5651cdbde747&include_balances=true&items_per_page=50"
+    },
+    {
+      "id": "S-WAL-04.1",
+      "scenario": "S-WAL-04",
+      "method": "GET",
+      "path": "/v1/transactions?tx_hash=<hash>"
+    },
+    {
+      "id": "S-WAL-04.2",
+      "scenario": "S-WAL-04",
+      "method": "GET",
+      "path": "/v1/webhooks/history?event_type=inflow&start_date=2026-10-13"
+    },
+    {
+      "id": "S-WAL-04.3",
+      "scenario": "S-WAL-04",
+      "method": "GET",
+      "path": "/v1/webhooks/event/{id}"
+    },
+    {
+      "id": "S-WAL-04.4",
+      "scenario": "S-WAL-04",
+      "method": "GET",
+      "path": "/v1/wallets/{id}"
+    },
+    {
+      "id": "S-COL-01.1",
+      "scenario": "S-COL-01",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-COL-01.2",
+      "scenario": "S-COL-01",
+      "method": "GET",
+      "path": "/v2/accounts/416e99b0-e13e-413e-bdaa-ea00a01d616f"
+    },
+    {
+      "id": "S-COL-01.3",
+      "scenario": "S-COL-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "416e99b0-e13e-413e-bdaa-ea00a01d616f",
+        "amount": "2500.00",
+        "rail": "wire"
+      }
+    },
+    {
+      "id": "S-COL-02.1",
+      "scenario": "S-COL-02",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-COL-02.2",
+      "scenario": "S-COL-02",
+      "method": "PUT",
+      "path": "/v1/customers/{id}",
+      "body": {
+        "phone": "+2348031234567",
+        "date_of_birth": "1992-03-14"
+      }
+    },
+    {
+      "id": "S-COL-02.3",
+      "scenario": "S-COL-02",
+      "method": "POST",
+      "path": "/v1/collections",
+      "body": {
+        "customer_id": "401d68fb-fe97-4c56-84a6-5651cdbde747",
+        "client_customer_id": "user-77310",
+        "amount": "50.00",
+        "currency": "NGN",
+        "source": {
+          "source_type": "external",
+          "methods": [
+            "bank_transfer"
+          ]
+        },
+        "destination": {
+          "destination_type": "internal_crypto_wallet",
+          "id": "bbab27f6-04b8-457d-83ed-b92009758340"
+        },
+        "asset": "USDC",
+        "client_reference": "topup-0001",
+        "metadata": {
+          "bank_account_number": "2034567891"
+        }
+      }
+    },
+    {
+      "id": "S-COL-02.4",
+      "scenario": "S-COL-02",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=…"
+    },
+    {
+      "id": "S-COL-02.5",
+      "scenario": "S-COL-02",
+      "method": "GET",
+      "path": "/v1/collections/57bb7d97-3ac4-4a9a-bb81-392137161c16"
+    },
+    {
+      "id": "S-COL-02.6",
+      "scenario": "S-COL-02",
+      "method": "GET",
+      "path": "/v1/transactions"
+    },
+    {
+      "id": "S-COL-02.7",
+      "scenario": "S-COL-02",
+      "method": "GET",
+      "path": "/v1/collections/{id}"
+    },
+    {
+      "id": "S-COL-02.8",
+      "scenario": "S-COL-02",
+      "method": "POST",
+      "path": "/v1/collections/simulate/webhook",
+      "body": {
+        "transaction_id": "<id>",
+        "status": "success"
+      }
+    },
+    {
+      "id": "S-COL-03.1",
+      "scenario": "S-COL-03",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-COL-03.2",
+      "scenario": "S-COL-03",
+      "method": "POST",
+      "path": "/v1/collections/cards/payment-intents",
+      "body": {
+        "customer_id": "401d68fb-fe97-4c56-84a6-5651cdbde747",
+        "client_customer_id": "parent-grace-19",
+        "amount": "20.00",
+        "currency": "USD",
+        "source": {
+          "source_type": "external",
+          "methods": [
+            "card"
+          ]
+        },
+        "destination": {
+          "destination_type": "internal_crypto_wallet",
+          "id": "bbab27f6-04b8-457d-83ed-b92009758340"
+        },
+        "save_card": true,
+        "redirect_url": "https://tutor.example.com/checkout/done",
+        "client_reference": "lesson-4471",
+        "metadata": {
+          "lesson_id": "4471"
+        }
+      }
+    },
+    {
+      "id": "S-COL-03.3",
+      "scenario": "S-COL-03",
+      "method": "GET",
+      "path": "/v1/collections/{id}"
+    },
+    {
+      "id": "S-COL-03.4",
+      "scenario": "S-COL-03",
+      "method": "GET",
+      "path": "/v1/collections/cards?customer_id=401d68fb-fe97-4c56-84a6-5651cdbde747&client_customer_id=parent-grace-19"
+    },
+    {
+      "id": "S-COL-03.5",
+      "scenario": "S-COL-03",
+      "method": "GET",
+      "path": "/v1/collections/cards"
+    },
+    {
+      "id": "S-COL-03.6",
+      "scenario": "S-COL-03",
+      "method": "POST",
+      "path": "/v1/collections/simulate/webhook",
+      "body": {
+        "client_reference": "lesson-4471",
+        "status": "success"
+      }
+    },
+    {
+      "id": "S-COL-04.1",
+      "scenario": "S-COL-04",
+      "method": "GET",
+      "path": "/v1/collections/cards"
+    },
+    {
+      "id": "S-COL-04.2",
+      "scenario": "S-COL-04",
+      "method": "GET",
+      "path": "/v1/collections/cards?customer_id=401d68fb-fe97-4c56-84a6-5651cdbde747&client_customer_id=parent-grace-19"
+    },
+    {
+      "id": "S-COL-04.3",
+      "scenario": "S-COL-04",
+      "method": "GET",
+      "path": "/v1/collections/cards/{card_id}"
+    },
+    {
+      "id": "S-COL-04.4",
+      "scenario": "S-COL-04",
+      "method": "POST",
+      "path": "/v1/collections/cards/payment-intents/charge",
+      "body": {
+        "card_token": "tokn_3f9a1c7e5b2d4086ae",
+        "payment_intent_id": "pi_d4e6f8a0-2b4c-4d6e-8f0a-1b3c5d7e9f20"
+      }
+    },
+    {
+      "id": "S-COL-05.1",
+      "scenario": "S-COL-05",
+      "method": "GET",
+      "path": "/v1/collections/cards"
+    },
+    {
+      "id": "S-COL-05.2",
+      "scenario": "S-COL-05",
+      "method": "GET",
+      "path": "/v1/collections/cards?customer_id=…"
+    },
+    {
+      "id": "S-COL-05.3",
+      "scenario": "S-COL-05",
+      "method": "DELETE",
+      "path": "/v1/collections/cards/0dec6823-fb5c-4d56-98f9-2deafd4bd030",
+      "body": {
+        "customer_id": "401d68fb-fe97-4c56-84a6-5651cdbde747",
+        "card_token": "tokn_3f9a1c7e5b2d4086ae"
+      }
+    },
+    {
+      "id": "S-COL-06.1",
+      "scenario": "S-COL-06",
+      "method": "GET",
+      "path": "/v1/collections/{transaction_id}"
+    },
+    {
+      "id": "S-COL-07.1",
+      "scenario": "S-COL-07",
+      "method": "GET",
+      "path": "/v1/webhooks/event/{id}"
+    },
+    {
+      "id": "S-COL-07.2",
+      "scenario": "S-COL-07",
+      "method": "GET",
+      "path": "/v1/webhooks/history?event_type=collection&status=failed&start_date=2026-10-13T10:00:00Z&limit=100"
+    },
+    {
+      "id": "S-COL-07.3",
+      "scenario": "S-COL-07",
+      "method": "GET",
+      "path": "/v1/webhooks/event/f1b3d5e7-9a2c-4e6f-8b1d-3f5a7c9e1b2d"
+    },
+    {
+      "id": "S-COL-07.4",
+      "scenario": "S-COL-07",
+      "method": "GET",
+      "path": "/v1/webhooks/calls/{id}"
+    }
+  ]
+}

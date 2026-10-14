@@ -1,0 +1,45 @@
+name: Sandbox replay
+
+# Replays a fixed set of calls against the Gravv sandbox through the real server, and
+# compares each answer with what the sandbox answered before (scripts/sandbox-replay.ts).
+# Manual only: it needs a sandbox key, and it adds resources under the two verified
+# sandbox customers, which the report lists for cleanup.
+
+on:
+  workflow_dispatch:
+    inputs:
+      money:
+        description: "Also run the steps that move money (a 1 NGN book transfer between own accounts)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Replay against the sandbox
+        # The script refuses any key that is not a sandbox secret key, and never prints it.
+        env:
+          GRAVV_SANDBOX_KEY: ${{ secrets.GRAVV_SANDBOX_KEY }}
+          MONEY: ${{ inputs.money && '--money' || '' }}
+        run: npm run sandbox-replay -- ${MONEY} --out sandbox-replay-report.json
+
+      - name: Upload the report and cleanup list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-replay-report
+          path: sandbox-replay-report.json
+          if-no-files-found: ignore

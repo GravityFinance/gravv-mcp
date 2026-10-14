@@ -18,56 +18,64 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Required for POST requests. Reuse only for an identical retry.
+      description: >-
+        Required for POST requests. Reuse it only to retry the same request.
+        Each new key creates a new wallet.
       schema:
         type: string
+        minLength: 1
+        maxLength: 255
       example: wallet_create_001
-    EventIdPath:
-      name: event_id
-      in: path
-      required: true
-      description: UUID of the webhook event
-      schema:
-        type: string
-        format: uuid
-      example: 550e8400-e29b-41d4-a716-446655440000
-  responses:
-    BadRequest:
-      description: Bad request — invalid input or missing required fields
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              data:
-                type: 'null'
-                example: null
-              error:
-                type: string
-                example: invalid request body
   schemas:
+    Network:
+      type: string
+      description: Blockchain network, in lower case
+      enum:
+        - polygon
+        - ethereum
+        - base
+        - avalanche
+        - stellar
+        - solana
+      example: stellar
     WalletAsset:
       type: object
       properties:
         symbol:
           type: string
           description: Asset symbol
-          example: XLM
+          example: USDC
         balance:
           type: string
-          description: Current balance as a string
-          example: '1500.0000000'
+          description: Balance in whole units, as a decimal string
+          example: '25.5000000'
         decimals:
           type: integer
           description: Number of decimal places for this asset
           example: 7
+        updated_at:
+          type: string
+          format: date-time
+          description: >-
+            When the balance was last read on-chain. Left out when it is not
+            known.
+          example: '2026-10-12T09:20:00Z'
+        stale:
+          type: boolean
+          description: >-
+            True when the balance is older than 5 minutes. A refresh has been
+            queued, so read the wallet again in a few seconds. Left out when
+            false.
+          example: true
     Wallet:
       type: object
       properties:
         id:
           type: string
           format: uuid
-          description: Unique identifier for the wallet
+          description: >-
+            Wallet ID. Use it in `GET /v1/wallets/{wallet_id}` and as
+            `destination.id` in a collection.
           example: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
         customer_id:
           type: string
@@ -76,32 +84,43 @@ components:
           example: 9e3cccad-e9ae-47a0-81ee-063af0159310
         address:
           type: string
-          description: Blockchain wallet address
+          description: >-
+            Blockchain address. EVM addresses come back in checksum case.
           example: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
         network:
-          type: string
-          description: Blockchain network
-          enum:
-            - stellar
-            - polygon
-            - ethereum
-            - base
-            - solana
-            - avalanche
-            - sui
-            - tron
-          example: stellar
+          $ref: '#/components/schemas/Network'
         name:
           type:
             - string
             - 'null'
-          description: Wallet name or identifier
+          description: >-
+            The name you gave, or the label `wallet_<customer_id>_<network>`
+            when you gave none.
           example: my wallet
+        wallet_type:
+          type: string
+          description: Wallet type
+          enum:
+            - customer
+            - master
+          example: customer
         date_created:
           type: string
           format: date-time
-          description: Timestamp when the wallet was created
-          example: '2025-10-30T12:18:34.484+00:00'
+          description: When the wallet was created, to the second
+          example: '2026-10-12T09:14:03Z'
+    WalletWithAssets:
+      allOf:
+        - $ref: '#/components/schemas/Wallet'
+        - type: object
+          properties:
+            assets:
+              type: array
+              description: >-
+                Balances from the cache, USDC first. A missing asset means it
+                has not been read yet, not that the balance is zero.
+              items:
+                $ref: '#/components/schemas/WalletAsset'
     CreateWalletRequest:
       type: object
       required:
@@ -111,52 +130,52 @@ components:
         customer_id:
           type: string
           format: uuid
-          description: ID of the customer to create a wallet for
+          description: >-
+            ID of the customer to create the wallet for. Gravv does not check
+            that the customer exists, so check the ID before you send it.
           example: 9e3cccad-e9ae-47a0-81ee-063af0159310
         name:
-          type: string
-          description: Optional custom name for the wallet
+          type:
+            - string
+            - 'null'
+          maxLength: 255
+          description: Optional name for the wallet
           example: my wallet
         network:
+          $ref: '#/components/schemas/Network'
+        wallet_type:
           type: string
-          description: Blockchain network for the wallet
+          description: >-
+            Wallet type. A tenant can have one `master` wallet on each network.
           enum:
-            - stellar
-            - polygon
-            - ethereum
-            - base
-            - solana
-            - avalanche
-            - sui
-            - tron
-          example: stellar
+            - customer
+            - master
+          default: customer
+          example: customer
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+          example: null
+        error:
+          type: string
+          example: wallet not found
     CreateWalletResponse:
       type: object
       properties:
         data:
           $ref: '#/components/schemas/Wallet'
         error:
-          type:
-            - string
-            - 'null'
+          type: 'null'
           example: null
     GetWalletResponse:
       type: object
       properties:
         data:
-          allOf:
-            - $ref: '#/components/schemas/Wallet'
-            - type: object
-              properties:
-                assets:
-                  type: array
-                  description: Assets held in this wallet
-                  items:
-                    $ref: '#/components/schemas/WalletAsset'
+          $ref: '#/components/schemas/WalletWithAssets'
         error:
-          type:
-            - string
-            - 'null'
+          type: 'null'
           example: null
     WalletListResponse:
       type: object
@@ -166,13 +185,17 @@ components:
           properties:
             items:
               type: array
+              description: >-
+                Wallets, newest first. Each item has `assets` only when
+                `include_balances` is true.
               items:
-                $ref: '#/components/schemas/Wallet'
+                $ref: '#/components/schemas/WalletWithAssets'
             page:
               type: integer
               example: 1
             items_per_page:
               type: integer
+              description: The page size used, after it is limited to 100
               example: 10
             total_items:
               type: integer
@@ -187,9 +210,7 @@ components:
               type: boolean
               example: false
         error:
-          type:
-            - string
-            - 'null'
+          type: 'null'
           example: null
 security:
   - ApiKeyAuth: []
@@ -202,7 +223,16 @@ paths:
       tags:
         - Wallets
       summary: Create a wallet
-      description: Create a new blockchain wallet for a customer on the specified network.
+      operationId: createWallet
+      description: >-
+        Creates a blockchain wallet for a customer on one network. The call is
+        synchronous: the response has the address.
+
+
+        Every call creates a new wallet with a new address, even for the same
+        customer and network. Reuse the `Idempotency-Key` to retry. A Stellar
+        wallet finishes its trustline setup in the background, so it can take
+        a short time before it can hold USDC.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -213,48 +243,54 @@ paths:
               $ref: '#/components/schemas/CreateWalletRequest'
             examples:
               Stellar wallet example:
-                summary: Create Stellar wallet
+                summary: Create a Stellar wallet
                 value:
                   customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
                   name: my wallet
                   network: stellar
               Polygon wallet example:
-                summary: Create Polygon wallet
+                summary: Create a Polygon wallet
                 value:
                   customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
                   name: my wallet
                   network: polygon
-              Ethereum wallet example:
-                summary: Create Ethereum wallet
-                value:
-                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
-                  name: my wallet
-                  network: ethereum
       responses:
         '200':
-          description: Wallet created successfully
+          description: The new wallet. It has no `assets` yet.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateWalletResponse'
               example:
                 data:
-                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
-                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
-                  date_created: '2025-10-30T12:18:34.484+00:00'
                   id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
-                  name: my wallet
+                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
                   network: stellar
+                  name: my wallet
+                  date_created: '2026-10-12T09:14:03Z'
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  wallet_type: customer
                 error: null
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The request failed. Errors include `missing or invalid customer_id`,
+            `missing or invalid network`, `invalid wallet_type`, and
+            `tenant already has a master wallet on <network>`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: missing or invalid customer_id
     get:
       tags:
         - Wallets
       summary: Get wallets
+      operationId: listWallets
       description: >-
-        Retrieve a paginated list of wallets, with optional filtering by
-        customer and blockchain network.
+        Lists your wallets, newest first. Filters are exact and case-sensitive,
+        except `wallet_name`.
       parameters:
         - in: query
           name: customer_id
@@ -262,15 +298,52 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Filter wallets by customer ID
+          description: Filter by customer ID
           example: 9e3cccad-e9ae-47a0-81ee-063af0159310
+        - in: query
+          name: network
+          schema:
+            $ref: '#/components/schemas/Network'
+          description: Filter by blockchain network
+          example: stellar
+        - in: query
+          name: wallet_name
+          schema:
+            type: string
+          description: >-
+            Matches part of the name you gave, in any case. It does not match
+            the default label.
+          example: payouts
+        - in: query
+          name: wallet_address
+          schema:
+            type: string
+          description: >-
+            Exact address. EVM addresses must be in checksum case.
+          example: '0xF95b56b0Eba262df5461F4ec21E1dB88D0a86c6F'
+        - in: query
+          name: wallet_type
+          schema:
+            type: string
+            enum:
+              - customer
+              - master
+          description: Filter by wallet type
+          example: customer
+        - in: query
+          name: include_balances
+          schema:
+            type: boolean
+            default: false
+          description: When true, each wallet has its `assets`
+          example: true
         - in: query
           name: page
           schema:
             type: integer
             minimum: 1
             default: 1
-          description: Page number for pagination
+          description: Page number
           example: 1
         - in: query
           name: items_per_page
@@ -279,26 +352,12 @@ paths:
             minimum: 1
             maximum: 100
             default: 10
-          description: Number of wallets per page
+          description: >-
+            Wallets per page. A larger value is lowered to 100, not rejected.
           example: 10
-        - in: query
-          name: network
-          schema:
-            type: string
-            enum:
-              - stellar
-              - polygon
-              - ethereum
-              - base
-              - solana
-              - avalanche
-              - sui
-              - tron
-          description: Filter wallets by blockchain network
-          example: stellar
       responses:
         '200':
-          description: List of wallets retrieved successfully
+          description: A page of wallets
           content:
             application/json:
               schema:
@@ -306,18 +365,20 @@ paths:
               example:
                 data:
                   items:
-                    - address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
-                      customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
-                      date_created: '2025-10-30T12:18:34.484+00:00'
-                      id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
-                      name: my wallet
+                    - id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
+                      address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
                       network: stellar
-                    - address: '0xf95b56b0eba262df5461f4ec21e1db88d0a86c6f'
+                      name: my wallet
+                      date_created: '2026-10-12T09:14:03Z'
                       customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
-                      date_created: '2025-10-14T21:07:30.836+00:00'
-                      id: f3c8e5c0-cdb4-4b27-91cb-078943316c8e
-                      name: my wallet2
+                      wallet_type: customer
+                    - id: f3c8e5c0-cdb4-4b27-91cb-078943316c8e
+                      address: '0xF95b56b0Eba262df5461F4ec21E1dB88D0a86c6F'
                       network: ethereum
+                      name: wallet_9e3cccad-e9ae-47a0-81ee-063af0159310_ethereum
+                      date_created: '2026-10-11T21:07:30Z'
+                      customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                      wallet_type: customer
                   page: 1
                   items_per_page: 10
                   total_items: 24
@@ -326,13 +387,30 @@ paths:
                   has_previous_page: false
                 error: null
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The request failed. A `page`, `items_per_page` or `include_balances`
+            value that is not valid returns `invalid request payload`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: invalid request payload
   /v1/wallets/{wallet_id}:
     get:
       tags:
         - Wallets
       summary: Get a single wallet
-      description: Retrieve details of a specific wallet by wallet ID.
+      operationId: getWallet
+      description: >-
+        Returns one wallet with its balances. Balances come from a cache. When
+        one is missing or older than 5 minutes, Gravv queues a refresh and
+        returns without waiting for it.
+
+
+        Balances are tracked for USDC on every listed network, USDT on polygon,
+        ethereum, avalanche and solana, and the network's own coin.
       parameters:
         - in: path
           name: wallet_id
@@ -340,27 +418,43 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Wallet ID to retrieve
+          description: Wallet ID
           example: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
       responses:
         '200':
-          description: Wallet details retrieved successfully
+          description: The wallet and its balances
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GetWalletResponse'
               example:
                 data:
-                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
-                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
-                  date_created: '2025-10-30T12:18:34.484+00:00'
                   id: 2d52eb6d-4fac-44db-a225-d0e6aa13b0e3
-                  name: my wallet
+                  address: GDZQAF4A2E5VZMMQVW7XG4FKWZ5KDSUEZF5VQBDQVM53TMU2YLE54NTX
                   network: stellar
+                  name: my wallet
+                  date_created: '2026-10-12T09:14:03Z'
+                  customer_id: 9e3cccad-e9ae-47a0-81ee-063af0159310
+                  wallet_type: customer
                   assets:
-                    - symbol: XLM
-                      balance: '1500.0000000'
+                    - symbol: USDC
+                      balance: '25.5000000'
                       decimals: 7
+                      updated_at: '2026-10-12T09:20:00Z'
+                    - symbol: XLM
+                      balance: '1.5000000'
+                      decimals: 7
+                      updated_at: '2026-10-12T09:20:00Z'
+                      stale: true
                 error: null
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            The request failed. An unknown ID, or another tenant's wallet,
+            returns `wallet not found`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: wallet not found

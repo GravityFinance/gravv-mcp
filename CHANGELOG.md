@@ -4,6 +4,129 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## 0.4.0 (unreleased)
+
+This release brings the tools in line with the current API reference. API tools go from 72
+to 96 (84 in the default load; 83 on a live key, which hides the sandbox tool). Every
+documented endpoint now has a tool or a stated reason it has none.
+
+### Added
+
+- 24 tools. accounts: `getAccountCapabilities`, `createAccountV2`, `listAccountsV2`,
+  `getAccountV2`, `getAccountRequirements`, `listAccountApplicationsV2`,
+  `getAccountApplicationV2`, `updateAccountApplicationV2`. transfers:
+  `uploadTransferDocument`, `resumeTransfer`, `getCustomerLimits`, `getRemitterLimits`.
+  fx: `listSettlementInstructions`, `createSettlementInstruction`,
+  `getSettlementInstruction`, `updateSettlementInstruction`, `deleteSettlementInstruction`.
+  external-accounts: `updateExternalAccount`. kyc: `downloadCustomerKycDocument`. sandbox:
+  `simulateDeposit`. Plus the four tools under "Renamed and unblocked" below.
+- A `sandbox` toolset. Its tool runs only with a `grvSec_sandbox_` key; on any other key it
+  is hidden from the tool list and refused by name before any request.
+- A confirm step for tools that cannot be undone but move no money: `deleteSavedCard`,
+  `deleteSettlementInstruction`, `deleteAccountApplication` and `activateFeature`. The
+  first call returns a preview; `confirm: true` runs it. `GRAVV_ALLOW_LIVE_WRITES` is not
+  needed for them.
+- `file_path` on every upload tool. The server reads the file, checks its type from its
+  first bytes and its size against the field's limit, and sends the base64 itself, so the
+  file never passes through the model.
+- `downloadCustomerKycDocument` saves the image under a download folder (0700, file 0600)
+  and returns its path. Set it with `GRAVV_DOWNLOAD_DIR` or `--download-dir`.
+- `ignored_arguments` in a result names the arguments a tool does not take and did not
+  send, so a misspelt filter is visible.
+- Results over 100,000 characters are cut: a list keeps fewer items and says to ask for a
+  smaller page.
+- A warning at start when `GRAVV_BASE_URL` is not `https://api.gravv.xyz`. An empty value
+  now means the default.
+- The User-Agent and the server metadata carry the package version.
+- Ten goal prompts (`prompts/list`, `prompts/get`): `open-account`, `onboard-customer`,
+  `send-payout`, `send-remittance`, `send-crypto`, `convert-currency`, `issue-card`,
+  `collect-payment`, `reconcile` and `fix-stuck-transfer`. Each says what to ask first,
+  gives each path's tool order with its confirm steps and recovery, and links a docs page;
+  one optional argument narrows it to one path. They are offered without an API key too.
+- `next_step` on a successful result that is not done: a paused or waiting transfer, a
+  manual-review webhook, a declined or 3-D Secure card payment, a refused card KYC file, the
+  liveness step, a missing v1 application, a v2 account the bank is waiting on, a pending
+  or failed payee, and limits on the default tier or in shadow mode.
+- Fix hints for the 4xx answers the integration scenarios name: duplicate and
+  uncorrectable payees, payees missing an institution, closed routes, transfer limits,
+  resuming a transfer that is not paused, an existing customer email, incomplete or
+  completed KYC, missing KYC documents, the account limit, the card account, saved-card
+  declines, a reused client_reference, and FX quotes, sources and destinations.
+
+### Changed
+
+- The MCP SDK floor is 1.30.0, the version the server is tested with.
+- An error whose fix hint says the call did not run, such as "failed to add customer:
+  email already exists", is no longer flagged `outcome_unknown`.
+- The `activateFeature` note for `provider_data.account_id` says to always send the
+  business's card account; the spec said it could be left out.
+- `createAccount` takes any non-empty currency label for a `non_custodial` (wallet-only)
+  account, such as `USDC`, and says the business opens its one card account there with
+  its own customer id.
+- Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
+  the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
+  `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
+  500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
+  about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
+  name the tool's limit.
+- The v1 application tools take the fields the bank checks (`tax_id_type`,
+  `nationalities`, `place_of_birth`, `account_purpose`, a business `email` and `phone`),
+  no longer require every address part, and `updateAccountApplication` requires no field
+  in `data`: send only what changes.
+
+- The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
+  card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
+  warning.
+- `resumeTransfer` is money-gated like `createTransfer`, because resuming releases the
+  payout.
+- `createAccountV2`, `resumeTransfer`, `simulateDeposit` and `updateAccountApplicationV2`
+  send only the fields their schema declares.
+- Array query values are sent comma-joined, as the API reads them.
+- `currency` is upper-cased for `createSettlementInstruction`.
+- New and corrected usage notes on most tools: prerequisites, paused transfers, limits,
+  card KYC, feature activation, the v2 account flow, and how to look up an outcome after a
+  timeout.
+
+### Renamed and unblocked
+
+- Card KYC returns as `startCardholderKyc`, `startCardholderKycS2S` and
+  `uploadCardholderKycDocument`, in `cards`. The old `startRiskKyc*` and
+  `uploadRiskDocument` names answer with the new names.
+- `deleteSavedCard` is available again, now that the specification describes its body.
+
+### Fixed
+
+- `getGravvDocPage` follows the docs site's redirects. A slug for a page that moved, such
+  as `recipes/remit-funds-to-a-recipient`, now returns the page it redirects to and says
+  its new slug; before, it found no page. Its example slug names a page that exists.
+- A schema built with `allOf` kept the member types, so a field typed in one member is no
+  longer left untyped.
+- The notes for `createAccountV2`, `createWallet` and `withdrawFromCard` no longer tell the
+  model to retry a failed call under the same key, which only replays the failure. The
+  `createCollection` note no longer says every card method returns a `payment_link`.
+
+### Development
+
+- Generation fails on an unmapped operation, an operationId that differs from the curated
+  name, a non-JSON body, a curation key that names no tool, and a name collision.
+- Properties and enum values marked not yet live are left out of the schemas.
+- A coverage test checks that every documented endpoint has a tool or a reason.
+- `npm run sync-specs` deletes specs removed upstream.
+- `npm run sync-specs` also copies the docs redirects (client-docs `syntext.json`, then
+  `docs/_redirects.json`) into `src/docs-redirects.ts`, and `--check` reports them stale.
+  It reads them from the directory above `GRAVV_OPENAPI_DIR`, or from `GRAVV_DOCS_DIR`.
+- `yaml` moved to devDependencies; it is used only by the generator and tests.
+- The specs are synced from the top of the client-docs docs stack, the webhooks catalogue
+  branch (8917a0c), which has not merged. The nightly drift check compares against
+  client-docs main, so it reports drift until that work merges.
+- The scenario and replay schema check reads `anyOf`: a value fits when any shape fits.
+- The publish workflow installs npm 11.20.0 instead of `npm@latest` and publishes with
+  `--provenance`, so a release published with the `NPM_TOKEN` secret carries a provenance
+  statement too, as one through Trusted Publishing does. `id-token: write` is granted to
+  the publish job only.
+- 0.3.2 is still unreleased. If it is not published on its own, its changes ship in this
+  release.
+
 ## 0.3.2 (unreleased)
 
 This release removes tools that could never succeed and corrects tool descriptions that
@@ -120,3 +243,18 @@ not "Unknown tool".
   another host.
 - When a refresh of the docs index fails, the documentation tools keep answering from the
   last copy, with a note saying so, instead of failing.
+
+### Development
+
+- The requests in the integration scenarios are test fixtures. Each is checked against
+  the schema of the tool for its route, and every outcome is pinned, so a spec sync or a
+  curation change that alters one fails the tests until it is reviewed
+  (`npm run scenarios`).
+- A nightly workflow checks `specs/` against the specification source, and that every
+  docs link the server hands out still resolves (`npm run docs-links`). A failed nightly
+  run opens an issue.
+- A manual sandbox replay (`npm run sandbox-replay`) runs a fixed set of calls through the
+  server with a sandbox key, compares the answers with an earlier run, and lists what it
+  created.
+- `npm run typecheck` also covers the tests and scripts.
+- `specs/collections.yaml` and `specs/risk.yaml` are re-synced. No tool changes.

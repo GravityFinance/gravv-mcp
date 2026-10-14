@@ -1,0 +1,382 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  schemas:
+    Window:
+      type:
+        - object
+        - 'null'
+      description: >-
+        Amounts in USD with 2 decimal places. A null `cap_usd` means no cap when
+        `caps_basis` is `tier`.
+      properties:
+        cap_usd:
+          type:
+            - string
+            - 'null'
+          example: '5000.00'
+        used_usd:
+          type:
+            - string
+            - 'null'
+          description: Null for `per_transfer`, and when usage could not be read
+          example: '1250.00'
+        remaining_usd:
+          type:
+            - string
+            - 'null'
+          description: Headroom left in the window. `0.00` for a blocked sender.
+          example: '3750.00'
+    TierCaps:
+      type: object
+      description: Caps in USD. Null means no cap.
+      properties:
+        per_transfer:
+          type:
+            - string
+            - 'null'
+        daily:
+          type:
+            - string
+            - 'null'
+        weekly:
+          type:
+            - string
+            - 'null'
+        monthly:
+          type:
+            - string
+            - 'null'
+        annual:
+          type:
+            - string
+            - 'null'
+        annual_requires_approval:
+          type: boolean
+    Limits:
+      type: object
+      properties:
+        subject_type:
+          type: string
+          enum:
+            - customer
+            - remitter
+        subject_id:
+          type: string
+        tier_code:
+          type: string
+          description: The tier, such as `basic`. Empty when there is none.
+          example: basic
+        tier_assignment:
+          type: string
+          description: How the tier was chosen
+          enum:
+            - operator
+            - kyc
+            - attested
+            - default
+            - per_transfer_attestation
+        caps_basis:
+          type: string
+          description: >-
+            `tier` when the caps are the subject's own, `floor` when they are the
+            lowest tier's (the tier is set on each transfer), and `none` when
+            they are not known
+          enum:
+            - tier
+            - floor
+            - none
+        mode:
+          type: string
+          description: >-
+            `enforce` pauses transfers over a cap. `shadow` only records them.
+            `off` checks nothing.
+          enum:
+            - 'off'
+            - shadow
+            - enforce
+        blocked:
+          type: boolean
+          description: True when the sender may not send transfers
+        usage_available:
+          type: boolean
+          description: False when usage could not be read; `used_usd` is then null
+        as_of:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        windows:
+          type: object
+          description: >-
+            Daily, weekly and monthly windows follow the UTC calendar; annual is
+            the last 12 months.
+          properties:
+            per_transfer:
+              $ref: '#/components/schemas/Window'
+            daily:
+              $ref: '#/components/schemas/Window'
+            weekly:
+              $ref: '#/components/schemas/Window'
+            monthly:
+              $ref: '#/components/schemas/Window'
+            annual:
+              allOf:
+                - $ref: '#/components/schemas/Window'
+                - type: object
+                  properties:
+                    requires_approval:
+                      type: boolean
+                      description: True when transfers over the annual cap need Gravv's approval
+        next_tier:
+          type:
+            - object
+            - 'null'
+          description: The next tier up and its caps
+          properties:
+            tier_code:
+              type: string
+            caps:
+              $ref: '#/components/schemas/TierCaps'
+            requirements:
+              description: What the subject needs for that tier
+        candidate_tiers:
+          type:
+            - array
+            - 'null'
+          description: Tiers a transfer can reach, when the tier is set on each transfer
+          items:
+            type: object
+            properties:
+              tier_code:
+                type: string
+              rank:
+                type: integer
+              tier_caps:
+                $ref: '#/components/schemas/TierCaps'
+              caps:
+                $ref: '#/components/schemas/TierCaps'
+    LimitsEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Limits'
+        error:
+          type: 'null'
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+        error:
+          type: string
+        code:
+          type: string
+  responses:
+    BadRequest:
+      description: The ID is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: >-
+        The subject is not yours, or you have no limits policy. No policy does
+        not mean no limits apply.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: 'not found: no limits policy applies'
+    Unavailable:
+      description: Limits cannot be read right now. Retry.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: limits are temporarily unavailable, please retry
+            code: ERROR_CODE_LIMITS_UNAVAILABLE
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Limits
+    description: Transfer tiers, caps and what is left to send in each window
+paths:
+  /v1/customers/{customer_id}/limits:
+    get:
+      tags:
+        - Limits
+      summary: Get a customer's limits
+      operationId: getCustomerLimits
+      description: >-
+        Returns a customer's transfer tier, the caps for each window and what
+        is left in each. Use it before a large payout, or to explain why a
+        transfer paused. All amounts are USD strings.
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          description: ID of the customer
+          schema:
+            type: string
+            format: uuid
+          example: bb6c6022-f1d8-492f-80f0-7547134bb42f
+      responses:
+        '200':
+          description: The customer's limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitsEnvelope'
+              example:
+                data:
+                  subject_type: customer
+                  subject_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+                  tier_code: basic
+                  tier_assignment: kyc
+                  caps_basis: tier
+                  mode: enforce
+                  blocked: false
+                  usage_available: true
+                  as_of: '2026-10-13T09:15:22Z'
+                  windows:
+                    per_transfer:
+                      cap_usd: '2000.00'
+                      used_usd: null
+                      remaining_usd: null
+                    daily:
+                      cap_usd: '5000.00'
+                      used_usd: '1250.00'
+                      remaining_usd: '3750.00'
+                    weekly:
+                      cap_usd: null
+                      used_usd: '1250.00'
+                      remaining_usd: null
+                    monthly:
+                      cap_usd: '20000.00'
+                      used_usd: '6400.00'
+                      remaining_usd: '13600.00'
+                    annual:
+                      cap_usd: '100000.00'
+                      used_usd: '18000.00'
+                      remaining_usd: '82000.00'
+                      requires_approval: false
+                  next_tier:
+                    tier_code: intermediate
+                    caps:
+                      per_transfer: '10000'
+                      daily: '20000'
+                      weekly: null
+                      monthly: '100000'
+                      annual: null
+                      annual_requires_approval: false
+                  candidate_tiers: null
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /v1/limits/remitters/{remitter_id}:
+    get:
+      tags:
+        - Limits
+      summary: Get a remitter's limits
+      operationId: getRemitterLimits
+      description: >-
+        Returns the same view for a remitter: the sender you name in
+        `additional_information.remitter_verification` on a transfer. Usage
+        counts only transfers that carry it, on a policy with attested tiers.
+        An unknown remitter gets the policy's default tier.
+      parameters:
+        - name: remitter_id
+          in: path
+          required: true
+          description: Your ID for the sender, 1 to 255 characters. It is case-sensitive.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+          example: rem_8842
+      responses:
+        '200':
+          description: The remitter's limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitsEnvelope'
+              example:
+                data:
+                  subject_type: remitter
+                  subject_id: rem_8842
+                  tier_code: ''
+                  tier_assignment: per_transfer_attestation
+                  caps_basis: floor
+                  mode: enforce
+                  blocked: false
+                  usage_available: true
+                  as_of: '2026-10-13T09:15:22Z'
+                  windows:
+                    per_transfer:
+                      cap_usd: '1000.00'
+                      used_usd: null
+                      remaining_usd: null
+                    daily:
+                      cap_usd: '3000.00'
+                      used_usd: '0.00'
+                      remaining_usd: '3000.00'
+                    weekly:
+                      cap_usd: null
+                      used_usd: '0.00'
+                      remaining_usd: null
+                    monthly:
+                      cap_usd: '10000.00'
+                      used_usd: '0.00'
+                      remaining_usd: '10000.00'
+                    annual:
+                      cap_usd: '0.00'
+                      used_usd: '0.00'
+                      remaining_usd: '0.00'
+                      requires_approval: true
+                  next_tier: null
+                  candidate_tiers:
+                    - tier_code: T1
+                      rank: 1
+                      tier_caps:
+                        per_transfer: '1000'
+                        daily: '3000'
+                        weekly: null
+                        monthly: '10000'
+                        annual: null
+                        annual_requires_approval: true
+                      caps:
+                        per_transfer: '1000'
+                        daily: '3000'
+                        weekly: null
+                        monthly: '10000'
+                        annual: null
+                        annual_requires_approval: true
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'

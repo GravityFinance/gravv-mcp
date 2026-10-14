@@ -1,6 +1,6 @@
 {
   "name": "@gravv-infra/mcp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "MCP server for the Gravv payments API — onboard customers, open accounts, move money, issue cards.",
   "license": "MIT",
   "type": "module",
@@ -40,14 +40,17 @@
     "build": "npm run generate && tsc",
     "dev": "node --experimental-strip-types src/bin/gravv-mcp.ts",
     "test": "node --experimental-strip-types --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "scenarios": "node --experimental-strip-types scripts/scenarios.ts",
+    "docs-links": "node --experimental-strip-types scripts/docs-links.ts",
+    "sandbox-replay": "node --experimental-strip-types scripts/sandbox-replay.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "yaml": "^2.6.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "yaml": "^2.6.0"
   }
 }

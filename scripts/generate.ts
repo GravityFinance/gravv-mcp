@@ -16,16 +16,28 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
+import { MANUAL_TOOLS } from "../src/manual-tools.ts";
 import {
   NAMES,
   BLOCKED,
+  BLOCKED_TOOL_NAMES,
+  OUTCOME_LOOKUPS,
+  UPPER_CASE_ARGS,
   PREREQUISITES,
   ENUM_RESTRICTIONS,
   DESCRIPTION_OVERRIDES,
+  MONEY_OPS,
+  CONFIRM_OPS,
   opKey,
   isMoneyOp,
+  needsConfirmation,
   needsIdempotencyKey,
+  isSandboxOnly,
+  SANDBOX_ONLY,
+  UPLOADS,
+  DOWNLOADS,
   type Toolset,
+  type UploadSpec,
 } from "../src/curation.ts";
 
 /**
@@ -62,6 +74,48 @@ function restrictEnums(node: any, remove: string[], depth = 0): number {
 
   for (const v of Object.values(node)) touched += restrictEnums(v, remove, depth + 1);
   return touched;
+}
+
+/**
+ * Add `file_path` beside each upload slot in a tool schema and make its content optional.
+ * Returns a problem line for a slot or content field the schema does not have, so a spec
+ * change that moves the file fields fails generation instead of silently dropping them.
+ */
+function addFilePaths(name: string, schema: any, specs: UploadSpec[]): string[] {
+  const problems: string[] = [];
+  for (const spec of specs) {
+    let node = schema;
+    for (const part of spec.at ? spec.at.split(".") : []) {
+      const isArray = part.endsWith("[]");
+      node = node?.properties?.[isArray ? part.slice(0, -2) : part];
+      if (isArray) node = node?.items;
+    }
+    if (!node?.properties?.[spec.content]) {
+      problems.push(`${name}: UPLOADS names "${spec.at || "(top level)"}.${spec.content}", which the schema does not have`);
+      continue;
+    }
+    if (node.properties.file_path) {
+      problems.push(`${name}: the spec declares file_path at "${spec.at || "(top level)"}", which collides with the upload argument`);
+      continue;
+    }
+    const kinds = spec.kinds.map((k) => k.toUpperCase()).join(", ");
+    const mb = spec.maxBytes >= 1024 * 1024 ? `${spec.maxBytes / (1024 * 1024)} MB` : `${spec.maxBytes / 1024} KB`;
+    const others = [spec.nameField, spec.typeField].filter((f): f is string => Boolean(f)).join(" and ");
+    node.properties.file_path = {
+      type: "string",
+      minLength: 1,
+      description:
+        `Path of a local file to send instead of ${spec.content}. The server reads it, checks that it is ${kinds} ` +
+        `(by its bytes, not its name) and at most ${mb}, and sends it as ${spec.content}` +
+        (others ? `, filling ${others} when you leave them out` : "") +
+        `. Send file_path or ${spec.content}, not both` +
+        (others ? `; with ${spec.content}, send ${others} yourself.` : "."),
+    };
+    // The fields the server fills are optional in the schema: required only with content.
+    const filled = [spec.content, spec.nameField, spec.typeField];
+    if (Array.isArray(node.required)) node.required = node.required.filter((r: string) => !filled.includes(r));
+  }
+  return problems;
 }
 
 /** Every `description` string in a schema, for checking what text the model would see. */
@@ -107,42 +161,80 @@ function deref(node: any, doc: Json, seen: Set<string> = new Set(), depth = 0): 
   for (const [k, v] of Object.entries(node)) out[k] = deref(v, doc, seen, depth + 1);
 
   // allOf is composition — merge the branches into the parent so the model sees one
-  // flat object rather than a construct most MCP clients ignore.
+  // flat schema rather than a construct most MCP clients ignore. The merged node takes
+  // its type from the branches: a scalar wrapped in allOf (a string enum $ref with a
+  // sibling description) must stay a string, not become an object with an enum.
   if (Array.isArray(out.allOf)) {
-    const merged: Json = { type: "object", properties: {}, required: [] as string[] };
+    const merged: Json = {};
+    const props: Json = {};
+    const req: string[] = [];
+    let hasProps = false;
     for (const branch of out.allOf) {
       if (branch?.type && !merged.type) merged.type = branch.type;
-      Object.assign(merged.properties, branch?.properties ?? {});
-      if (Array.isArray(branch?.required)) merged.required.push(...branch.required);
+      if (branch?.properties) {
+        hasProps = true;
+        Object.assign(props, branch.properties);
+      }
+      if (Array.isArray(branch?.required)) req.push(...branch.required);
       for (const [k, v] of Object.entries(branch ?? {})) {
         if (!["properties", "required", "type", "allOf"].includes(k) && !(k in merged)) merged[k] = v;
       }
     }
     delete out.allOf;
-    const { properties = {}, required = [], ...rest } = out;
+    const { properties, required, ...rest } = out;
+    const allRequired = [...new Set([...req, ...(Array.isArray(required) ? required : [])])];
+    const { type, ...others } = merged;
+    if (!hasProps && !properties && (type ?? rest.type) !== "object") {
+      // A scalar or array: keep its own type, with no object keywords added.
+      return { ...(type ? { type } : {}), ...others, ...rest, ...(allRequired.length ? { required: allRequired } : {}) };
+    }
     return {
-      ...merged,
+      type: type ?? "object",
+      properties: { ...props, ...(properties ?? {}) },
+      required: allRequired,
+      ...others,
       ...rest,
-      properties: { ...merged.properties, ...properties },
-      required: [...new Set([...merged.required, ...required])],
     };
   }
 
   return out;
 }
 
-/** Strip keywords that add tokens without helping the model produce valid input. */
+/**
+ * Strip keywords that add tokens without helping the model produce valid input.
+ *
+ * Spec extensions (`x-*`) go too. Two of them change the schema first: a property marked
+ * `x-not-yet-live: true` is removed (and dropped from `required`), and enum values listed in
+ * `x-not-yet-live-values` are removed, because the API does not accept them yet and a tool
+ * must not offer what would fail.
+ */
 function slim(schema: any, depth = 0): any {
   if (schema === null || typeof schema !== "object" || depth > 25) return schema;
   if (Array.isArray(schema)) return schema.map((s) => slim(s, depth + 1));
 
   const DROP = new Set(["xml", "externalDocs", "discriminator", "readOnly", "writeOnly", "deprecated", "$schema"]);
+  const notYetLive = (s: any) => s !== null && typeof s === "object" && s["x-not-yet-live"] === true;
   const out: Json = {};
   for (const [k, v] of Object.entries(schema)) {
-    if (DROP.has(k)) continue;
+    if (DROP.has(k) || k.startsWith("x-")) continue;
     if (k === "example" && "examples" in schema) continue;
+    if (k === "properties" && v !== null && typeof v === "object" && !Array.isArray(v)) {
+      // A map of names to schemas, not a schema: its keys are field names, never keywords.
+      const props: Json = {};
+      for (const [name, sub] of Object.entries(v as Json)) if (!notYetLive(sub)) props[name] = slim(sub, depth + 1);
+      // A map emptied by the removal is dropped, so an open form (v2 data.root) stays open
+      // rather than claiming to declare no fields at all.
+      if (Object.keys(props).length > 0 || Object.keys(v as Json).length === 0) out.properties = props;
+      continue;
+    }
     out[k] = slim(v, depth + 1);
   }
+  if (Array.isArray(out.required) && out.properties) {
+    const gone = Object.keys(schema.properties ?? {}).filter((name) => notYetLive(schema.properties[name]));
+    out.required = out.required.filter((r: string) => !gone.includes(r));
+  }
+  const pending = schema["x-not-yet-live-values"];
+  if (Array.isArray(out.enum) && Array.isArray(pending)) out.enum = out.enum.filter((e: unknown) => !pending.includes(e));
   return out;
 }
 
@@ -168,8 +260,11 @@ interface Generated {
    * We expose a single argument and write it to both.
    */
   alsoInBody: string[];
+  closedBody: boolean;
   movesMoney: boolean;
+  needsConfirm: boolean;
   needsIdempotency: boolean;
+  sandboxOnly: boolean;
   spec: string;
 }
 
@@ -201,6 +296,11 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       if (!curated) {
         unmapped.push(`${file}: ${key}`);
         continue;
+      }
+      // The specs' operationIds are the tool names (docs Phase 3 set them so). A curation
+      // name that differs is two names for one route, in the docs and in the tools.
+      if (typeof op.operationId === "string" && op.operationId !== curated.name) {
+        problems.push(`${key}: curation names it "${curated.name}", but the spec operationId is "${op.operationId}"`);
       }
 
       // ---- description --------------------------------------------------------
@@ -239,15 +339,25 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       }
 
       let bodyMode: "inline" | "wrapped" | "none" = "none";
+      let closedBody = false;
       const bodyProps: string[] = [];
       const alsoInBody: string[] = [];
-      const bodySchemaRaw = op.requestBody?.content?.["application/json"]?.schema;
+      const bodyContent = op.requestBody?.content;
+      if (bodyContent && !bodyContent["application/json"]) {
+        // The client sends JSON only. Without this a multipart or form body silently
+        // became a tool with no body, which fails on every call.
+        problems.push(`${key}: the request body is ${Object.keys(bodyContent).join(", ")}, not application/json`);
+      }
+      const bodySchemaRaw = bodyContent?.["application/json"]?.schema;
       if (bodySchemaRaw) {
         const body = slim(deref(bodySchemaRaw, doc));
 
         if (body?.type === "object" && body.properties && !body.oneOf && !body.anyOf) {
           // Plain object: inline its properties so the model fills one flat argument set.
           bodyMode = "inline";
+          // A body the spec closes is closed in the tool too: the route rejects unknown
+          // fields, so passing extra arguments through would fail the call.
+          closedBody = body.additionalProperties === false;
           for (const [k, v] of Object.entries(body.properties)) {
             if (k in properties) {
               if (paramLocation[k] === "path") {
@@ -265,10 +375,9 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
             properties[k] = v;
             bodyProps.push(k);
           }
-          if (Array.isArray(body.required)) {
-            // A body-required field that is supplied via the path is already required.
-            required.push(...body.required.filter((r: string) => !alsoInBody.includes(r) || true));
-          }
+          // A body-required field supplied through the path is already required; the
+          // duplicate goes when `required` is de-duplicated below.
+          if (Array.isArray(body.required)) required.push(...body.required);
         } else {
           // oneOf/anyOf (e.g. CreateCustomerRequest: individual vs business) or a
           // non-object body. Keep the construct intact under `body` rather than
@@ -296,11 +405,16 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
           );
         }
         for (const [prop, text] of Object.entries(override.params ?? {})) {
-          if (!(prop in properties)) {
+          // A dotted name reaches a nested property: `source.methods`.
+          const parts = prop.split(".");
+          let holder: Json | undefined = properties;
+          for (const part of parts.slice(0, -1)) holder = (holder?.[part] as Json | undefined)?.properties;
+          const last = parts[parts.length - 1]!;
+          if (!holder || !(last in holder)) {
             problems.push(`${curated.name}: DESCRIPTION_OVERRIDES names property "${prop}", which the tool does not have`);
             continue;
           }
-          properties[prop] = { ...(properties[prop] as Json), description: squash(text) };
+          holder[last] = { ...(holder[last] as Json), description: squash(text) };
         }
       }
 
@@ -318,10 +432,19 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         description += `\n\nNOT FOR CARD PAYMENTS. ${restriction.because}`;
       }
 
-      // Money-moving tools carry an explicit confirmation argument. Declared here so it
-      // appears in the schema the model sees; enforced in safety.ts.
+      // A file argument, read by the server, beside each base64 field (src/files.ts).
+      const uploads = UPLOADS[curated.name];
+      if (uploads) {
+        const root = { type: "object", properties, required };
+        problems.push(...addFilePaths(curated.name, root, uploads));
+        required.splice(0, required.length, ...(root.required as string[]));
+      }
+
+      // Money-moving and irreversible tools carry an explicit confirmation argument.
+      // Declared here so it appears in the schema the model sees; enforced in safety.ts.
       const movesMoney = isMoneyOp(method, path);
-      if (movesMoney) {
+      const needsConfirm = needsConfirmation(method, path);
+      if (needsConfirm) {
         properties.confirm = {
           type: "boolean",
           description:
@@ -363,17 +486,21 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
           properties,
           required: [...new Set(required)],
           // Inline bodies stay open: several specs document a subset of accepted fields
-          // and rejecting extras here would block valid calls. Wrapped bodies carry the
-          // full schema already, so extras are a mistake.
-          additionalProperties: bodyMode === "inline",
+          // and rejecting extras here would block valid calls. A body the spec closes
+          // stays closed. Wrapped bodies carry the full schema already, so extras are a
+          // mistake.
+          additionalProperties: bodyMode === "inline" && !closedBody,
         },
         pathParams: Object.keys(paramLocation).filter((k) => paramLocation[k] === "path"),
         queryParams: Object.keys(paramLocation).filter((k) => paramLocation[k] === "query"),
         bodyMode,
         bodyProps,
         alsoInBody,
+        closedBody,
         movesMoney,
+        needsConfirm,
         needsIdempotency,
+        sandboxOnly: isSandboxOnly(method, path),
         spec: file,
       });
     }
@@ -395,6 +522,43 @@ for (const k of curatedKeys) {
   }
 }
 
+for (const [set, label] of [
+  [MONEY_OPS, "MONEY_OPS"],
+  [CONFIRM_OPS, "CONFIRM_OPS"],
+  [SANDBOX_ONLY, "SANDBOX_ONLY"],
+] as const) {
+  for (const k of set) {
+    if (!generatedKeys.has(k)) problems.push(`${label} gates "${k}", but no tool calls it`);
+  }
+}
+
+// Every curation map keyed by tool name must name a tool. A key that names nothing is a
+// hint, lookup or rule that no tool carries, so a rename or a removal would otherwise
+// drop it silently.
+for (const [map, label] of [
+  [UPLOADS, "UPLOADS"],
+  [DOWNLOADS, "DOWNLOADS"],
+  [PREREQUISITES, "PREREQUISITES"],
+  [ENUM_RESTRICTIONS, "ENUM_RESTRICTIONS"],
+  [OUTCOME_LOOKUPS, "OUTCOME_LOOKUPS"],
+  [UPPER_CASE_ARGS, "UPPER_CASE_ARGS"],
+] as const) {
+  for (const name of Object.keys(map)) {
+    if (!byName.has(name)) problems.push(`${label} names "${name}", which is not a generated tool`);
+  }
+}
+
+// A blocked name explains a tool that does not exist; it must not shadow one that does.
+const manualNames = new Set(MANUAL_TOOLS.map((t) => t.name));
+for (const name of Object.keys(BLOCKED_TOOL_NAMES)) {
+  if (byName.has(name) || manualNames.has(name)) {
+    problems.push(`BLOCKED_TOOL_NAMES lists "${name}", which is a tool: delete the entry`);
+  }
+}
+for (const name of manualNames) {
+  if (byName.has(name)) problems.push(`manual tool "${name}" has the same name as a generated tool`);
+}
+
 for (const name of Object.keys(DESCRIPTION_OVERRIDES)) {
   if (!overridesUsed.has(name)) problems.push(`DESCRIPTION_OVERRIDES names "${name}", which is not a generated tool`);
 }
@@ -404,10 +568,9 @@ console.log(`operations: ${operationCount}`);
 console.log(`blocked:    ${blockedSeen.length}`);
 console.log(`tools:      ${tools.length}`);
 
-if (unmapped.length) {
-  console.error(`\n${unmapped.length} operation(s) have no name in curation.ts and were skipped:`);
-  for (const u of unmapped) console.error(`  ${u}`);
-}
+// An operation with neither a name nor a BLOCKED reason is a route the specs document and
+// the server silently does not serve. That is a decision to make, not a warning to scroll.
+for (const u of unmapped) problems.push(`${u}: no name in curation.ts NAMES and no BLOCKED reason`);
 
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
@@ -453,10 +616,16 @@ export interface GeneratedTool {
   bodyProps: string[];
   /** Path parameters that must also be written into the body. */
   alsoInBody: string[];
-  /** Requires confirm: true, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
+  /** The route rejects unknown body fields: undeclared arguments are not passed through. */
+  closedBody: boolean;
+  /** Moves money: GRAVV_ALLOW_LIVE_WRITES is needed on a live key, as well as confirm. */
   movesMoney: boolean;
+  /** Requires confirm: true (every money-moving tool, and the irreversible ones). */
+  needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
+  /** Works only with a sandbox key: hidden and refused on any other. */
+  sandboxOnly: boolean;
   /** Source spec filename, for traceability. */
   spec: string;
 }

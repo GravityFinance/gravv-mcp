@@ -1,0 +1,204 @@
+{
+  "about": "Requests from the Gravv integration scenarios (sandbox), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-SBX-01.1",
+      "scenario": "S-SBX-01",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-SBX-01.2",
+      "scenario": "S-SBX-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11",
+        "amount": "250.00",
+        "rail": "wire"
+      }
+    },
+    {
+      "id": "S-SBX-01.3",
+      "scenario": "S-SBX-01",
+      "method": "GET",
+      "path": "/v2/accounts/6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11"
+    },
+    {
+      "id": "S-SBX-02.1",
+      "scenario": "S-SBX-02",
+      "method": "GET",
+      "path": "/v1/cards/{id}"
+    },
+    {
+      "id": "S-SBX-02.2",
+      "scenario": "S-SBX-02",
+      "method": "GET",
+      "path": "/v1/cards/{id}/balance"
+    },
+    {
+      "id": "S-SBX-02.3",
+      "scenario": "S-SBX-02",
+      "method": "GET",
+      "path": "/v1/cards/a14ec356-f33d-4384-ba68-4d9bfa19765b/balance"
+    },
+    {
+      "id": "S-SBX-02.4",
+      "scenario": "S-SBX-02",
+      "method": "PATCH",
+      "path": "/v1/cards/{id}/update",
+      "body": {
+        "status": "freeze",
+        "limit": 100
+      }
+    },
+    {
+      "id": "S-SBX-02.5",
+      "scenario": "S-SBX-02",
+      "method": "PATCH",
+      "path": "/v1/cards/{id}/update",
+      "body": {
+        "status": "active",
+        "limit": 100
+      }
+    },
+    {
+      "id": "S-SBX-02.6",
+      "scenario": "S-SBX-02",
+      "method": "GET",
+      "path": "/v1/transactions"
+    },
+    {
+      "id": "S-SBX-03.1",
+      "scenario": "S-SBX-03",
+      "method": "GET",
+      "path": "/v1/collections/{transaction_id}"
+    },
+    {
+      "id": "S-SBX-03.2",
+      "scenario": "S-SBX-03",
+      "method": "POST",
+      "path": "/v1/collections/simulate/webhook",
+      "body": {
+        "transaction_id": "57bb7d97-3ac4-4a9a-bb81-392137161c16",
+        "status": "success"
+      }
+    },
+    {
+      "id": "S-SBX-03.3",
+      "scenario": "S-SBX-03",
+      "method": "GET",
+      "path": "/v1/collections/57bb7d97-3ac4-4a9a-bb81-392137161c16"
+    },
+    {
+      "id": "S-SBX-03.4",
+      "scenario": "S-SBX-03",
+      "method": "POST",
+      "path": "/v1/collections/simulate/webhook",
+      "body": {
+        "client_reference": "lesson-4471",
+        "status": "success"
+      }
+    },
+    {
+      "id": "S-SBX-03.5",
+      "scenario": "S-SBX-03",
+      "method": "GET",
+      "path": "/v1/collections/{id}"
+    },
+    {
+      "id": "S-SBX-04.1",
+      "scenario": "S-SBX-04",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-SBX-04.2",
+      "scenario": "S-SBX-04",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries"
+    },
+    {
+      "id": "S-SBX-04.3",
+      "scenario": "S-SBX-04",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions"
+    },
+    {
+      "id": "S-SBX-04.4",
+      "scenario": "S-SBX-04",
+      "method": "GET",
+      "path": "/v1/transfer/rates"
+    },
+    {
+      "id": "S-SBX-04.5",
+      "scenario": "S-SBX-04",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "245b9314-abed-4632-8fb1-ea2ca70baa3c"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "d1762ec1-9f61-4eed-a04b-21925a55dbe4"
+        },
+        "amount": "300.00",
+        "customer_id": "b4dab3d6-6a7f-4c66-9cc9-483404cd8463",
+        "description": "Sandbox test: happy path",
+        "client_reference": "kwame-gh-sbx-0001",
+        "additional_information": {
+          "remitter_full_name": "Kwame Mensah",
+          "remitter_date_of_birth": "1988-04-17",
+          "remitter_country": "GB",
+          "remitter_address": {
+            "address_line1": "27 Ashburnham Road",
+            "city": "London",
+            "postal_code": "SW10 0PL",
+            "country": "GB"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-SBX-04.6",
+      "scenario": "S-SBX-04",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    },
+    {
+      "id": "S-SBX-05.1",
+      "scenario": "S-SBX-05",
+      "method": "GET",
+      "path": "/v1/customers/{id}/kyc/status"
+    },
+    {
+      "id": "S-SBX-05.2",
+      "scenario": "S-SBX-05",
+      "method": "GET",
+      "path": "/v1/customers/{id}"
+    },
+    {
+      "id": "S-SBX-05.3",
+      "scenario": "S-SBX-05",
+      "method": "POST",
+      "path": "/v1/customers/kyc/start",
+      "body": {
+        "customer_id": "3f6b2a1e-8c4d-4e7f-9a2b-5c1d0e9f8a71"
+      }
+    },
+    {
+      "id": "S-SBX-06.1",
+      "scenario": "S-SBX-06",
+      "method": "GET",
+      "path": "/v1/wallets/{id}"
+    },
+    {
+      "id": "S-SBX-06.2",
+      "scenario": "S-SBX-06",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+name: Drift
+
+# Checks that can go stale without any change in this repository. Kept out of ci.yml: a
+# schedule there would rerun the test jobs nightly, and the path filter below applies to a
+# whole workflow, so an unrelated PR never fails because client-docs moved on.
+#
+#   spec-drift  specs/ and src/docs-redirects.ts against client-docs main (nightly, manual,
+#               and PRs that touch them)
+#   docs-links  every docs link the server hands out still resolves (nightly and manual)
+#   report      on a failed nightly run, opens or updates one issue
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "specs/**"
+      - "src/docs-redirects.ts"
+      - "scripts/sync-specs.ts"
+      - ".github/workflows/drift.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  spec-drift:
+    name: vendored specs match client-docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the client-docs read token
+        id: token
+        # client-docs is private, so the checkout below needs a token with read access to it.
+        # A PR run without the secret skips the comparison, so a PR is never red for a missing
+        # repository setting; the nightly and manual runs still fail and open the drift issue.
+        # A skipped run is still green, so the next step says so in its name, in a warning and
+        # in the job summary, where it cannot be taken for a comparison that passed.
+        env:
+          CLIENT_DOCS_READ_TOKEN: ${{ secrets.CLIENT_DOCS_READ_TOKEN }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -n "${CLIENT_DOCS_READ_TOKEN}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          message="The CLIENT_DOCS_READ_TOKEN secret is not set. Add a token with read access to GravityFinance/client-docs."
+          if [ "${EVENT}" = "pull_request" ]; then
+            exit 0
+          fi
+          echo "::error::${message}"
+          exit 1
+
+      - name: "Skipped: CLIENT_DOCS_READ_TOKEN not set, specs not compared"
+        if: steps.token.outputs.present != 'true'
+        run: |
+          echo "::warning title=Spec drift check skipped::CLIENT_DOCS_READ_TOKEN is not set, so specs/ and src/docs-redirects.ts were not compared with client-docs. This green check does not mean they match."
+          {
+            echo "## Spec drift check skipped"
+            echo
+            echo "The \`CLIENT_DOCS_READ_TOKEN\` repository secret is not set, so \`specs/\` and"
+            echo "\`src/docs-redirects.ts\` were **not** compared with client-docs main."
+            echo "This run is green only so that a PR is not red for a missing repository setting;"
+            echo "it does not mean the vendored copies match."
+            echo
+            echo "To turn the check on, add a token with read access to GravityFinance/client-docs"
+            echo "as the \`CLIENT_DOCS_READ_TOKEN\` repository secret."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          repository: GravityFinance/client-docs
+          ref: main
+          path: client-docs
+          token: ${{ secrets.CLIENT_DOCS_READ_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.present == 'true'
+        with:
+          node-version: 22
+
+      - name: Compare specs/ and the docs redirects with client-docs
+        if: steps.token.outputs.present == 'true'
+        # sync-specs.ts has no dependencies, so no npm ci is needed. It reads the redirects
+        # from client-docs/, the directory above GRAVV_OPENAPI_DIR.
+        env:
+          GRAVV_OPENAPI_DIR: client-docs/openapi
+        run: |
+          if ! npm run --silent sync-specs -- --check; then
+            echo "::error::specs/ or src/docs-redirects.ts differs from client-docs main. Run GRAVV_OPENAPI_DIR=<client-docs>/openapi npm run sync-specs, then npm run generate and npm run scenarios, and commit the result."
+            echo "## Spec drift found: specs/ or src/docs-redirects.ts differs from client-docs main" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "## Spec drift check passed: specs/ and src/docs-redirects.ts match client-docs main ($(git -C client-docs rev-parse --short HEAD))" >> "$GITHUB_STEP_SUMMARY"
+
+  docs-links:
+    name: docs links the server hands out resolve
+    # The docs site, not this repository, is what changes, so a PR run would test nothing new.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check each link on the live docs site
+        run: npm run docs-links
+
+  report:
+    name: open an issue for a failed nightly run
+    needs: [spec-drift, docs-links]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the drift issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly drift check failed"
+          number="$(gh issue list --state open --search "in:title \"${title}\"" --json number,title \
+            --jq ".[] | select(.title == \"${title}\") | .number" | head -n1)"
+          body="The nightly drift check failed: ${RUN_URL}"
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body "${body}"
+          else
+            gh issue create --title "${title}" --body "${body}"
+          fi

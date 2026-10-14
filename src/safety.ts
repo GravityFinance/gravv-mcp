@@ -6,8 +6,8 @@
  *
  *   1. Environment. Sandbox and live share https://api.gravv.xyz — only the key differs.
  *      Nothing in a URL signals danger, so the server has to signal it.
- *   2. Confirmation. Value-moving calls need an explicit second step, and on a live key
- *      a second independent signal.
+ *   2. Confirmation. Value-moving and irreversible calls need an explicit second step,
+ *      and a value-moving call on a live key a second independent signal as well.
  *   3. Redaction. Cardholder data must not reach a model's context even if a schema
  *      changes underneath us.
  */
@@ -29,7 +29,7 @@ export class SafetyError extends Error {
   }
 }
 
-/** Returned instead of executing, when a money-moving tool is called without confirm. */
+/** Returned instead of executing, when a gated tool is called without confirm. */
 export interface ConfirmationRequired {
   status: "confirmation_required";
   tool: string;
@@ -138,10 +138,24 @@ export class SafetyGate {
     }
   }
 
+  /** Why a tool is off in this session, or null when it is available. */
+  unavailableReason(tool: GeneratedTool): string | null {
+    if (this.config.readOnly && tool.method.toLowerCase() !== "get") {
+      return `${tool.name} is not available: the server is running in --read-only mode, which disables all non-GET tools.`;
+    }
+    if (tool.sandboxOnly && this.config.environment !== "sandbox") {
+      return (
+        `${tool.name} is a sandbox-only test tool, and this is ${
+          this.config.environment === "live" ? "a LIVE key" : "a key that is not recognised as sandbox"
+        }. It works only with a key that starts grvSec_sandbox_; nothing was sent.`
+      );
+    }
+    return null;
+  }
+
   /** Filter the tool list before it is advertised. */
   isToolAvailable(tool: GeneratedTool): boolean {
-    if (this.config.readOnly && tool.method.toLowerCase() !== "get") return false;
-    return true;
+    return this.unavailableReason(tool) === null;
   }
 
   /**
@@ -155,18 +169,17 @@ export class SafetyGate {
     args: Record<string, unknown>,
     preview: { method: string; path: string; body: unknown },
   ): ConfirmationRequired | null {
-    if (this.config.readOnly && tool.method.toLowerCase() !== "get") {
-      throw new SafetyError(
-        `${tool.name} is not available: the server is running in --read-only mode, which disables all non-GET tools.`,
-      );
-    }
+    const unavailable = this.unavailableReason(tool);
+    if (unavailable) throw new SafetyError(unavailable);
 
-    if (!tool.movesMoney) return null;
+    if (!tool.needsConfirm) return null;
 
     // "unknown" fails closed — an unrecognised key is treated as live.
     const isLive = this.config.environment !== "sandbox";
 
-    if (isLive && !this.config.allowLiveWrites) {
+    // Only value needs the second signal. A delete on a live key is confirmed by the
+    // user like any other, but moves no money.
+    if (tool.movesMoney && isLive && !this.config.allowLiveWrites) {
       throw new SafetyError(
         `${tool.name} moves money and this is a ${this.config.environment.toUpperCase()} key. ` +
           `Refusing to execute. If this is genuinely intended, restart the server with ` +
@@ -184,7 +197,9 @@ export class SafetyGate {
       request: preview,
       next: `Show this to the user and get their agreement. Then call ${tool.name} again with the identical arguments plus confirm: true.`,
       warning: isLive
-        ? "THIS IS A LIVE KEY. Confirming will move real money."
+        ? tool.movesMoney
+          ? "THIS IS A LIVE KEY. Confirming will move real money."
+          : "THIS IS A LIVE KEY. Confirming changes live data, and it cannot be undone."
         : undefined,
     };
   }
@@ -207,7 +222,7 @@ function pairText(pair: unknown): string | undefined {
   return text(pair);
 }
 
-/** Plain-language summary of what a money-moving call will do, for the confirmation step. */
+/** Plain-language summary of what a gated call will do, for the confirmation step. */
 function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unknown>): string {
   const b = (body ?? {}) as Record<string, any>;
   const amount = text(b.amount ?? b.value ?? b.source_amount);
@@ -254,6 +269,36 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
       return text(b.card_token)
         ? `Charge ${money(b.currency)} to saved card token ${b.card_token} now. A decline still returns HTTP 200: check data.status.`
         : `Create a hosted payment link for ${money(b.currency)}. No money moves until the payer pays.`;
+    case "resumeTransfer": {
+      const docs = Array.isArray(b.supporting_document_ids) ? b.supporting_document_ids.length : 0;
+      const sent = [
+        docs ? `${docs} supporting document${docs === 1 ? "" : "s"}` : "",
+        b.remitter_verification ? "the remitter's verification" : "",
+        b.additional_information ? "additional information" : "",
+      ].filter(Boolean);
+      return (
+        `Resume paused transfer ${text(args.id) ?? "(unspecified)"}${sent.length ? ` with ${sent.join(", ")}` : ""}. ` +
+        `If it can go ahead, the payout is released and cannot be reversed from the API.`
+      );
+    }
+    case "deleteSavedCard":
+      return (
+        `Remove the saved card with token ${text(b.card_token) ?? "(unspecified)"} for customer ` +
+        `${text(b.customer_id) ?? "(unspecified)"}. The token chooses the card, not card_id. This cannot be undone.`
+      );
+    case "deleteSettlementInstruction":
+      return (
+        `Delete settlement instruction ${text(args.id) ?? "(unspecified)"}. It cannot be read, used or restored ` +
+        `afterwards; if it is the default, its currency is left with no default.`
+      );
+    case "deleteAccountApplication":
+      return `Delete account application ${text(args.id) ?? "(unspecified)"}. It cannot be restored over the API.`;
+    case "activateFeature":
+      return (
+        `Activate ${text(b.feature_id) ?? "the feature"} for customer ${text(b.customer_id) ?? "(unspecified)"}. ` +
+        `For virtual_cards this creates a card application and can issue a card; there is no route to ` +
+        `deactivate a feature.`
+      );
     case "cancelFxOrder":
       return `Cancel FX order ${text(args.order_id) ?? "(unspecified)"}. Cancelling does not return funds already debited.`;
     default:

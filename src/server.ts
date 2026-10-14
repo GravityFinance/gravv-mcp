@@ -2,10 +2,18 @@
  * MCP server assembly: pick the tool set, register handlers, enforce safety.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   GravvClient,
   GravvApiError,
+  ignoredArguments,
   PUBLISHABLE_KEY_MESSAGE,
   bodyWithoutHtml,
   errorFields,
@@ -19,32 +27,11 @@ import { BLOCKED_TOOL_NAMES, type Toolset } from "./curation.ts";
 import { TOOLS, TOOLS_BY_NAME, type GeneratedTool } from "./generated/tools.ts";
 import { DEFAULT_DOCS_ORIGIN, DocsIndex } from "./docs.ts";
 import { MANUAL_TOOLS } from "./manual-tools.ts";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { FileArgumentError, defaultDownloadDir, resolveUploads, saveDownload } from "./files.ts";
+import { VERSION } from "./version.ts";
+import { PROMPTS, PROMPTS_BY_NAME, renderPrompt } from "./prompts.ts";
+import { nextStepFor } from "./fix-hints.ts";
 
-/**
- * Read the version from package.json rather than hardcoding it. A literal here had
- * already drifted — the server reported 0.1.0 while the package was 0.2.0, so clients
- * were told the wrong version.
- */
-function packageVersion(): string {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    for (const rel of ["../package.json", "../../package.json"]) {
-      try {
-        return JSON.parse(readFileSync(join(here, rel), "utf8")).version;
-      } catch {
-        /* try the next candidate */
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-  return "0.0.0";
-}
-
-const VERSION = packageVersion();
 
 /**
  * Documentation tools, always present regardless of --toolsets.
@@ -92,7 +79,7 @@ const DOC_TOOLS = [
         slug: {
           type: "string",
           description:
-            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/remit-funds-to-a-recipient'. The page's full docs URL also works.",
+            "Page slug without the .md suffix, e.g. 'platform/wallets/create-a-wallet' or 'recipes/bank-payouts/pay-a-us-bank-account-by-ach'. The page's full docs URL also works, and so does the slug of a page that moved: the result names its new slug.",
         },
       },
       required: ["slug"],
@@ -113,13 +100,29 @@ export interface ServerConfig {
   fetchImpl?: typeof fetch;
   /** Clock for the docs cache; tests replace it, as they replace fetch. */
   now?: () => number;
+  /** Where downloaded files are saved. Defaults to a gravv-mcp-downloads folder in the OS temp dir. */
+  downloadDir?: string;
 }
 
-export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): GeneratedTool[] {
+/** Raised when a hand-authored tool takes a generated tool's name: one would hide the other. */
+export class ToolNameCollisionError extends Error {
+  constructor(names: string[]) {
+    super(`manual tool name(s) collide with generated tools: ${names.join(", ")}`);
+    this.name = "ToolNameCollisionError";
+  }
+}
+
+export function selectTools(
+  toolsets: Toolset[] | "all",
+  gate: SafetyGate,
+  manual: readonly GeneratedTool[] = MANUAL_TOOLS,
+): GeneratedTool[] {
   const wanted = toolsets === "all" ? null : new Set(toolsets);
   // Tools for routes no OpenAPI specification covers are hand-authored and merged in
-  // here rather than generated.
-  const candidates: GeneratedTool[] = [...TOOLS, ...MANUAL_TOOLS];
+  // here rather than generated. A shared name would leave one of the two unreachable.
+  const clashes = manual.filter((t) => TOOLS_BY_NAME.has(t.name)).map((t) => t.name);
+  if (clashes.length > 0) throw new ToolNameCollisionError(clashes);
+  const candidates: GeneratedTool[] = [...TOOLS, ...manual];
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
 
@@ -144,6 +147,9 @@ export function instructions(
     "schemas describe individual calls; they do not describe how the flows fit together.",
     "The guides do — ordering, prerequisites, corridor rules, and worked examples.",
     "",
+    `PROMPTS walk through whole goals: ${PROMPTS.map((p) => p.name).join(", ")}. When the user starts one`,
+    "of these, suggest they pick the matching prompt in their client.",
+    "",
   ];
 
   if (hasApiKey) {
@@ -154,10 +160,11 @@ export function instructions(
       "",
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
-      "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
+      "- Operations that move money, and those that cannot be undone (deletes, feature activation), return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
       "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
       "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
       "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",
+      "- An HTTP 200 is not always done. `transfer_status: paused` is not a failure: read `requirements` and resume the transfer; never send it again. When a result carries `next_step`, do that next.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -199,7 +206,7 @@ export function createServer(config: ServerConfig) {
   const server = new Server(
     { name: "gravv", version: VERSION },
     {
-      capabilities: { tools: {} },
+      capabilities: { tools: {}, prompts: {} },
       instructions: instructions(environment, gate, active, hasApiKey, isPublishableKey(config.apiKey ?? "")),
     },
   );
@@ -210,6 +217,35 @@ export function createServer(config: ServerConfig) {
       ...active.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
     ],
   }));
+
+  // Prompts are listed without a key too: they teach the flow, and say when the API
+  // tools need one.
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: PROMPTS.map((p) => ({
+      name: p.name,
+      title: p.title,
+      description: p.description,
+      arguments: [{ name: p.argument.name, description: p.argument.description, required: false }],
+    })),
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const prompt = PROMPTS_BY_NAME.get(request.params.name);
+    if (!prompt) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Unknown prompt "${request.params.name}". The prompts are: ${PROMPTS.map((p) => p.name).join(", ")}.`,
+      );
+    }
+    const text = renderPrompt(prompt, request.params.arguments ?? {}, {
+      hasApiKey,
+      loadedTools: new Set(active.map((t) => t.name)),
+    });
+    return {
+      description: prompt.description,
+      messages: [{ role: "user" as const, content: { type: "text" as const, text } }],
+    };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;
@@ -273,9 +309,13 @@ export function createServer(config: ServerConfig) {
             `No documentation page with slug "${args.slug}". Use searchGravvDocs to find the correct slug.`,
           );
         }
-        const note = staleDocsNote(docs);
+        const notes = [
+          staleDocsNote(docs),
+          // Say so, so the next call and any link the model writes use the page's new slug.
+          page.redirectedFrom ? `"${page.redirectedFrom}" has moved; this is its new page, slug "${page.slug}".` : null,
+        ].filter(Boolean);
         return okResult(
-          `${note ? `Note: ${note}\n\n` : ""}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
+          `${notes.map((n) => `Note: ${n}\n\n`).join("")}# ${page.title}\nSection: ${page.section}\nURL: ${page.url}\n\n${page.content}`,
         );
       } catch (err) {
         return errorResult(`Could not fetch documentation page: ${(err as Error).message}`);
@@ -299,6 +339,8 @@ export function createServer(config: ServerConfig) {
       if (blocked) return errorResult(`${name}: ${blocked.replaceAll(DEFAULT_DOCS_ORIGIN, docs.origin)}`);
 
       const known = TOOLS_BY_NAME.get(name);
+      const off = known ? gate.unavailableReason(known) : null;
+      if (off) return errorResult(off);
       if (known) {
         return errorResult(
           `${name} exists but its toolset is not loaded in this session. Enabled: ${[
@@ -313,6 +355,15 @@ export function createServer(config: ServerConfig) {
     }
 
     try {
+      // A local file_path becomes the file's base64 here, so the model never carries it.
+      let callArgs: Record<string, unknown>;
+      try {
+        callArgs = resolveUploads(tool.name, args);
+      } catch (err) {
+        if (err instanceof FileArgumentError) return errorResult(`${tool.name}: ${err.message}. Nothing was sent.`);
+        throw err;
+      }
+
       // A key the model passes back resends a call whose outcome is unknown. A value that
       // is not a valid key cannot be one an earlier result returned, so refuse it before
       // the preview rather than quietly making a new key and running the call twice.
@@ -324,7 +375,7 @@ export function createServer(config: ServerConfig) {
         );
       }
 
-      const preview = client!.buildRequest(tool, args);
+      const preview = client!.buildRequest(tool, callArgs);
 
       // Redirect a card method smuggled past the schema, before it reaches the API and
       // silently succeeds through the weaker path.
@@ -341,12 +392,23 @@ export function createServer(config: ServerConfig) {
         return { content: [{ type: "text" as const, text: JSON.stringify(gateResult, null, 2) }] };
       }
 
-      const result = await client!.call(tool, args, { idempotencyKey: suppliedKey ?? undefined });
+      const result = await client!.call(tool, callArgs, { idempotencyKey: suppliedKey ?? undefined });
 
+      // A 200 that is not done (a paused transfer, a declined card) says what to do next,
+      // ahead of data so a cut answer keeps it.
+      const nextStep = nextStepFor(tool.name, result.data);
       const payload: Record<string, unknown> = {
         environment,
-        data: redact(result.data),
+        ...(nextStep ? { next_step: nextStep } : {}),
+        data: redact(saveDownload(tool.name, callArgs, result.data, config.downloadDir ?? defaultDownloadDir())),
       };
+      const ignored = ignoredArguments(tool, callArgs);
+      if (ignored.length > 0) {
+        payload.ignored_arguments = ignored;
+        payload.ignored_note = `${tool.name} does not take ${ignored.join(", ")}, so ${
+          ignored.length === 1 ? "it was" : "they were"
+        } not sent. Check the tool's schema for the field names it reads.`;
+      }
       if (result.idempotencyKey) payload.idempotency_key = result.idempotencyKey;
       if (result.replayed) {
         payload.note =
@@ -355,7 +417,7 @@ export function createServer(config: ServerConfig) {
         payload.note = "Rate limited first; retried with a new key. The earlier attempts did not run.";
       }
 
-      return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
+      return { content: [{ type: "text" as const, text: capResult(payload) }] };
     } catch (err) {
       if (err instanceof SafetyError) return errorResult(err.message);
       if (err instanceof GravvApiError) {
@@ -391,6 +453,41 @@ function staleDocsNote(docs: DocsIndex): string | null {
     `The documentation index could not be refreshed: ${reason} This comes from the copy loaded at ` +
     `${f.loadedAt}, which may miss recent changes.`
   );
+}
+
+/** About 25,000 tokens: larger answers crowd out the rest of a model's context. */
+export const MAX_RESULT_CHARS = 100_000;
+
+/**
+ * The result as JSON, cut to MAX_RESULT_CHARS. A list is cut by dropping its last items,
+ * so what remains is still valid JSON and says how many were left out; anything else is
+ * cut as text, with a note.
+ */
+export function capResult(payload: Record<string, unknown>, max = MAX_RESULT_CHARS): string {
+  const full = JSON.stringify(payload, null, 2);
+  if (full.length <= max) return full;
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  const items = data && typeof data === "object" && Array.isArray(data.items) ? (data.items as unknown[]) : undefined;
+  if (items && items.length > 1) {
+    let keep = items.length;
+    let text = full;
+    while (keep > 1 && text.length > max) {
+      keep = Math.max(1, Math.floor(keep * (max / text.length) * 0.95));
+      text = JSON.stringify(
+        {
+          ...payload,
+          data: { ...data, items: items.slice(0, keep) },
+          truncated: `Showing ${keep} of ${items.length} items on this page: the full answer is over ${max} characters. Ask for a smaller page (limit or items_per_page) to see the rest.`,
+        },
+        null,
+        2,
+      );
+    }
+    if (text.length <= max) return text;
+  }
+  const note = `\n[truncated by gravv-mcp: the answer is ${full.length} characters, over the ${max} limit. Narrow the request with filters or a smaller page.]`;
+  return full.slice(0, max - note.length) + note;
 }
 
 function okResult(text: string) {

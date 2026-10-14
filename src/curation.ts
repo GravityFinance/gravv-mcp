@@ -45,8 +45,8 @@ export const TOOLSETS = [
   "fx",
   "collections",
   "kyc",
-  "features",
   "webhooks",
+  "sandbox",
 ] as const;
 
 export type Toolset = (typeof TOOLSETS)[number];
@@ -59,6 +59,16 @@ export type Toolset = (typeof TOOLSETS)[number];
 export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
   approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
   "payment-links": "payment links are retired from the Gravv API",
+};
+
+/**
+ * Toolset names merged into another toolset. A saved configuration that names one loads
+ * the toolset it moved to, with a warning, so it keeps the tools it had.
+ */
+export const MOVED_TOOLSETS: Readonly<Record<string, Toolset>> = {
+  // The feature tools are the card issuance flow (activateFeature with virtual_cards),
+  // and card KYC lives with cards too.
+  features: "cards",
 };
 
 /** Toolsets that load only when named, or with --toolsets=all. */
@@ -105,7 +115,10 @@ export function parseToolsets(
 
   const requested = raw.split(",").map((s) => s.trim()).filter(Boolean);
   const bad = requested.filter(
-    (t) => !(TOOLSETS as readonly string[]).includes(t) && !Object.hasOwn(RETIRED_TOOLSETS, t),
+    (t) =>
+      !(TOOLSETS as readonly string[]).includes(t) &&
+      !Object.hasOwn(RETIRED_TOOLSETS, t) &&
+      !Object.hasOwn(MOVED_TOOLSETS, t),
   );
   if (bad.length) throw new UnknownToolsetError(bad);
 
@@ -115,7 +128,13 @@ export function parseToolsets(
       warn(`toolset "${t}" was removed in 0.3.2 (${RETIRED_TOOLSETS[t]}); ignoring it.`);
       continue;
     }
-    kept.push(t as Toolset);
+    if (Object.hasOwn(MOVED_TOOLSETS, t)) {
+      const to = MOVED_TOOLSETS[t]!;
+      warn(`toolset "${t}" was merged into "${to}" in 0.4.0; loading "${to}" instead.`);
+      if (!kept.includes(to)) kept.push(to);
+      continue;
+    }
+    if (!kept.includes(t as Toolset)) kept.push(t as Toolset);
   }
   if (kept.length === 0 && requested.length > 0) {
     warn("no API toolsets left to load; starting with the documentation tools only.");
@@ -147,12 +166,28 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/customers/kyc/upload-document": { name: "uploadCustomerKycDocument", toolset: "kyc" },
   "GET /v1/customers/{customer_id}/kyc/documents": { name: "getCustomerKycDocuments", toolset: "kyc" },
   "GET /v1/customers/{customer_id}/kyc/status": { name: "getCustomerKycStatus", toolset: "kyc" },
+  // Beside getCustomerKycDocuments, which gives the document_id it needs. The file is
+  // saved locally and never returned to the model (DOWNLOADS).
+  "GET /v1/customers/{customer_id}/kyc/documents/{document_id}/download": {
+    name: "downloadCustomerKycDocument",
+    toolset: "kyc",
+  },
 
   // ---- accounts ------------------------------------------------------------
   "POST /v1/accounts": { name: "createAccount", toolset: "accounts" },
   "GET /v1/accounts": { name: "listAccounts", toolset: "accounts" },
   "GET /v1/accounts/{account_id}": { name: "getAccount", toolset: "accounts" },
   "PATCH /v1/accounts/{account_id}/status": { name: "updateAccountStatus", toolset: "accounts" },
+  "GET /v1/accounts/capabilities": { name: "getAccountCapabilities", toolset: "accounts" },
+  // v2 opens an account and its application in one call. Unlike the v1 application tools
+  // these load by default: the schemas are smaller and v2 is the path the guides teach.
+  "POST /v2/accounts": { name: "createAccountV2", toolset: "accounts" },
+  "GET /v2/accounts": { name: "listAccountsV2", toolset: "accounts" },
+  "GET /v2/accounts/{id}": { name: "getAccountV2", toolset: "accounts" },
+  "GET /v2/accounts/requirements": { name: "getAccountRequirements", toolset: "accounts" },
+  "GET /v2/accounts/applications": { name: "listAccountApplicationsV2", toolset: "accounts" },
+  "GET /v2/accounts/applications/{application_id}": { name: "getAccountApplicationV2", toolset: "accounts" },
+  "PATCH /v2/accounts/applications/{application_id}": { name: "updateAccountApplicationV2", toolset: "accounts" },
   "POST /v1/accounts/applications": { name: "createAccountApplication", toolset: "account-applications" },
   "GET /v1/accounts/applications": { name: "listAccountApplications", toolset: "account-applications" },
   "GET /v1/accounts/applications/pending": { name: "listPendingAccountApplications", toolset: "account-applications" },
@@ -173,6 +208,7 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/external-accounts": { name: "createExternalAccount", toolset: "external-accounts" },
   "GET /v1/external-accounts": { name: "listExternalAccounts", toolset: "external-accounts" },
   "GET /v1/external-accounts/{external_account_id}": { name: "getExternalAccount", toolset: "external-accounts" },
+  "PATCH /v1/external-accounts/{external_account_id}": { name: "updateExternalAccount", toolset: "external-accounts" },
   "POST /v1/external-accounts/verify": { name: "verifyExternalAccount", toolset: "external-accounts" },
   "GET /v1/external-accounts/institutions": {
     name: "listExternalAccountInstitutions",
@@ -188,6 +224,12 @@ export const NAMES: Record<string, Op> = {
     name: "listTransferSupportedCountriesForAddress",
     toolset: "transfers",
   },
+  "POST /v1/transfer/documents": { name: "uploadTransferDocument", toolset: "transfers" },
+  "POST /v1/transfer/{id}/resume": { name: "resumeTransfer", toolset: "transfers" },
+  // Limits answer "why did this transfer pause" and "how much can I send", so they sit
+  // with transfers rather than customers.
+  "GET /v1/customers/{customer_id}/limits": { name: "getCustomerLimits", toolset: "transfers" },
+  "GET /v1/limits/remitters/{remitter_id}": { name: "getRemitterLimits", toolset: "transfers" },
 
   // ---- transactions --------------------------------------------------------
   "GET /v1/transactions": { name: "listTransactions", toolset: "transactions" },
@@ -205,6 +247,15 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/cards/applications/new": { name: "createCardApplication", toolset: "cards" },
   "GET /v1/cards/applications": { name: "listCardApplications", toolset: "cards" },
   "GET /v1/cards/applications/{application_id}": { name: "getCardApplication", toolset: "cards" },
+  // Card KYC: verification of a cardholder for card issuance, separate from customer KYC
+  // (kyc toolset). Names follow the spec operationIds.
+  "POST /v1/risk/start-kyc": { name: "startCardholderKyc", toolset: "cards" },
+  "POST /v1/risk/start-kyc-s2s": { name: "startCardholderKycS2S", toolset: "cards" },
+  "POST /v1/risk/upload-document": { name: "uploadCardholderKycDocument", toolset: "cards" },
+  // The feature routes are how a card is issued in live (activateFeature, virtual_cards).
+  "GET /v1/risk/features": { name: "listFeatures", toolset: "cards" },
+  "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "cards" },
+  "POST /v1/risk/features/activate": { name: "activateFeature", toolset: "cards" },
 
   // ---- wallets -------------------------------------------------------------
   "POST /v1/wallets": { name: "createWallet", toolset: "wallets" },
@@ -220,6 +271,13 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/fx/orders/pending-approvals": { name: "listFxPendingApprovals", toolset: "fx" },
   "GET /v1/fx/orders/{order_id}": { name: "getFxOrder", toolset: "fx" },
   "POST /v1/fx/orders/{order_id}/cancel": { name: "cancelFxOrder", toolset: "fx" },
+  // Settlement instructions are where createFxOrder pays out (destination type
+  // external_account), so they sit with fx.
+  "GET /v1/settlement-instructions": { name: "listSettlementInstructions", toolset: "fx" },
+  "POST /v1/settlement-instructions": { name: "createSettlementInstruction", toolset: "fx" },
+  "GET /v1/settlement-instructions/{id}": { name: "getSettlementInstruction", toolset: "fx" },
+  "PATCH /v1/settlement-instructions/{id}": { name: "updateSettlementInstruction", toolset: "fx" },
+  "DELETE /v1/settlement-instructions/{id}": { name: "deleteSettlementInstruction", toolset: "fx" },
 
   // ---- collections / onramp ------------------------------------------------
   "POST /v1/collections": { name: "createCollection", toolset: "collections" },
@@ -228,11 +286,12 @@ export const NAMES: Record<string, Op> = {
   "POST /v1/collections/cards/payment-intents/charge": { name: "chargeSavedCard", toolset: "collections" },
   "GET /v1/collections/cards": { name: "listSavedCards", toolset: "collections" },
   "GET /v1/collections/cards/{card_id}": { name: "getSavedCard", toolset: "collections" },
+  "DELETE /v1/collections/cards/{card_id}": { name: "deleteSavedCard", toolset: "collections" },
 
-  // ---- features ------------------------------------------------------------
-  "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
-  "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "features" },
-  "POST /v1/risk/features/activate": { name: "activateFeature", toolset: "features" },
+  // ---- sandbox -------------------------------------------------------------
+  // Test-only routes. Default on, but each is hidden unless the key is a sandbox key
+  // (SANDBOX_ONLY), so a live server never advertises them.
+  "POST /v2/accounts/simulate/deposit": { name: "simulateDeposit", toolset: "sandbox" },
 
   // ---- webhooks ------------------------------------------------------------
   "GET /v1/webhooks/history": { name: "getWebhookHistory", toolset: "webhooks" },
@@ -249,17 +308,9 @@ export const NAMES: Record<string, Op> = {
  *    use the client-side decryption flow documented under
  *    platform/cards/view-card-sensitive-details/.
  *
- *  - Superseded KYC. /v1/risk/* is replaced by /v1/customers/kyc/*. Exposing both
- *    gives the model two plausible paths for the same job and it will sometimes pick
- *    the deprecated one.
- *
- *  - Retired. Payment links are no longer part of the Gravv API. Their specification is
- *    still vendored until the next spec sync removes it, so the routes must be listed
- *    here or the generator reports them as unmapped.
- *
- *  - Broken until the specification is fixed. The vendored spec omits a request body the
- *    API requires, so a generated tool would fail on every call. These return when the
- *    spec sync brings the body in.
+ *  - Retired. Payment links are no longer part of the Gravv API, and the docs Phase 3
+ *    sync removed their specification. The entries stay as the written record, so a
+ *    caller who asks for them is told why they are gone.
  *
  *  - Dashboard-only. These routes refuse API keys, so a tool for them fails on every
  *    call. They are in no specification, so the generator never meets them; the
@@ -272,10 +323,6 @@ export const BLOCKED: Record<string, string> = {
     "Returns the encrypted card PIN. Use the client-side decryption flow instead.",
   "PUT /v1/cards/{card_id}/pin":
     "Sets a card PIN, which requires handling cardholder data. Not exposed over MCP.",
-  "POST /v1/risk/start-kyc": "Superseded by startCustomerKyc (POST /v1/customers/kyc/start).",
-  "POST /v1/risk/start-kyc-s2s": "Superseded by startCustomerKycS2S (POST /v1/customers/kyc/start-s2s).",
-  "POST /v1/risk/upload-document":
-    "Superseded by uploadCustomerKycDocument (POST /v1/customers/kyc/upload-document).",
   "POST /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
@@ -283,8 +330,6 @@ export const BLOCKED: Record<string, string> = {
   "DELETE /v1/payment-links/{id}": "Retired: payment links are not part of the Gravv API any more.",
   "PATCH /v1/payment-links/{id}/status": "Retired: payment links are not part of the Gravv API any more.",
   "GET /v1/payment-links/public/{id}": "Retired: payment links are not part of the Gravv API any more.",
-  "DELETE /v1/collections/cards/{card_id}":
-    "The API needs customer_id and card_token in a JSON body, and the vendored spec declares none, so every call would fail with EOF.",
   "POST /v1/transfer/{id}/approve":
     "Dashboard only: API keys always get 403. Approve or reject transfers in the Gravv Dashboard.",
   "POST /v1/transfer/{id}/reject":
@@ -299,6 +344,17 @@ export const BLOCKED: Record<string, string> = {
     "Dashboard only: API keys always get 403. Approve or reject FX orders in the Gravv Dashboard.",
   "GET /v1/webhooks/ingestion/search":
     "Dashboard only: an internal route that API keys cannot call. Check your own deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
+
+  // Routes that take API keys but are outside the 99 in-scope endpoints, so they are in
+  // no specification. The entries record why they have no tool. The rest of the routes
+  // left out of scope (card disputes and their simulator, the trade desk, billing and the
+  // other internal routes) are in no specification either and need no entry to stay out.
+  "POST /v1/cards/{id}/simulate":
+    "Not offered yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  "POST /v1/collections/simulate/webhook":
+    "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
+  "POST /v2/accounts/{id}/settlement/enable": "Out of scope: controlled settlement is not part of the published API.",
+  "POST /v2/accounts/{id}/settlement/disable": "Out of scope: controlled settlement is not part of the published API.",
 };
 
 /**
@@ -346,108 +402,64 @@ export interface DescriptionOverride {
   whileSpecSays: string;
   /** Replaces the spec `description`, the part after the summary. */
   description?: string;
-  /** Replaces the description of the named input properties. */
+  /** Replaces the description of the named input properties (dotted for a nested one). */
   params?: Record<string, string>;
 }
 
 export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
-  // ---- customers -----------------------------------------------------------
-  updateCustomer: {
-    whileSpecSays: "Cosmetic path parameter",
-    description:
-      "Update details of a customer. The customer is taken from the path customer_id; a customer_id in the " +
-      "body is overwritten by the path value. Only provided fields are updated.",
-    params: { customer_id: "Customer to update. Taken from the path; any body value is overwritten." },
-  },
+  // The ten overrides for the pre-Phase 3 specs (customers, external accounts,
+  // transactions, collections, cards and fx), and the activateFeature card account one
+  // (fixed in docs Phase 6a), were deleted when the specs were fixed at source and synced;
+  // generation reported each as stale.
 
-  // ---- external accounts ---------------------------------------------------
-  createExternalAccount: {
-    whileSpecSays: "is idempotent and returns the existing",
+  // ---- retry advice --------------------------------------------------------
+  // Three Phase 3 descriptions say to retry a failed call with the same key. A 4xx is
+  // kept for 24 hours under its key, so that only replays the failure; the key is for a
+  // call whose outcome is unknown, as the idempotency_key argument says.
+  createAccountV2: {
+    whileSpecSays: "When you retry, reuse the same Idempotency-Key.",
     description:
-      "Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and " +
-      "fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and " +
-      "mobile_money payees return HTTP 200 with status `active`. Track a pending payee with " +
-      "getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A " +
-      "duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in " +
-      "data.payee_id.",
+      "Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is " +
+      "completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then " +
+      "getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the " +
+      "account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait " +
+      "for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown " +
+      "fields are rejected.",
   },
-  getExternalAccount: {
-    whileSpecSays: "calling it until the status changes to",
+  createWallet: {
+    whileSpecSays: "Reuse the `Idempotency-Key` to retry.",
     description:
-      "Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is " +
-      "`active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with " +
-      "code ERROR_CODE_NOT_FOUND.",
+      "Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the " +
+      "address. Every call creates a new wallet with a new address, even for the same customer and network. A " +
+      "Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can " +
+      "hold USDC.",
   },
-
-  // ---- transactions --------------------------------------------------------
-  exportTransactions: {
-    whileSpecSays: "Maximum 50,000 records per export",
+  withdrawFromCard: {
+    whileSpecSays: "Retry a failed call with the same Idempotency-Key.",
     description:
-      "Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 " +
-      "newest matching rows (a known bug).",
+      "Moves money from an `active` card back to its card account. Some cards, including every new sandbox " +
+      "card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card " +
+      "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
   },
 
   // ---- collections ---------------------------------------------------------
+  // The route takes card methods, but this tool offers bank_transfer only
+  // (ENUM_RESTRICTIONS), so the card sentences describe a call the tool cannot make.
   createCollection: {
-    whileSpecSays: "(card, bank transfer, and mobile money)",
+    whileSpecSays: "Card methods return a `payment_link`",
     description:
-      "Initiates a bank-transfer collection. The response carries the payment instructions for the payer.",
-  },
-  getCollection: {
-    whileSpecSays: "no API key is required",
-    description:
-      "Returns the status and details of a collection. It needs an API key like every other call. Pass the " +
-      "transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier " +
-      "getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
-  },
-  createCardPaymentIntent: {
-    whileSpecSays: "token you got from the webhook",
+      "Starts a bank-transfer collection from a payer. The response carries the payment instructions and bank " +
+      "details. The funds settle in stablecoin to the destination. Bank transfer works in BJ, BW, BF, CM, CI, " +
+      "CG, GA, ML, MW, NG, RW, ZA, TZ, TG, UG and ZM, chosen by the customer's address country.",
     params: {
-      card_token: "Saved card token from listSavedCards. When set, the card is charged at once.",
+      amount: "Amount in major units, as a string with at most 2 decimal places.",
+      is_anonymous: "Applies to the card checkout, which this tool does not offer. Leave it out.",
+      save_card: "Applies to the card checkout, which this tool does not offer. Leave it out.",
+      "source.methods":
+        "Payment methods to offer. This tool takes `bank_transfer` alone: pix and mobile_money are rejected in " +
+        "every country, and card payments go through createCardPaymentIntent. Availability depends on the " +
+        "customer's address country.",
     },
-  },
-
-  // ---- cards ---------------------------------------------------------------
-  updateCardStatus: {
-    whileSpecSays: "Optional spending limit",
-    params: {
-      limit: "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
-    },
-  },
-
-  // ---- fx ------------------------------------------------------------------
-  // The fx spec predates the current API: its request fields and the approval and
-  // rate-lock claims are all out of date. The schemas stay as generated until the spec
-  // is fixed, so the descriptions say which fields the API actually reads.
-  getFxQuote: {
-    whileSpecSays: "lock in the quoted rate",
-    description:
-      "The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and " +
-      "`amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is " +
-      "sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The " +
-      "response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with " +
-      "createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this " +
-      "server sends one.",
-    params: {
-      amount:
-        "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON " +
-        "number is rejected with `invalid request encoding`.",
-      direction:
-        "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair " +
-        "(for example USD_XAF) instead.",
-    },
-  },
-  createFxOrder: {
-    whileSpecSays: "doesn't execute until a second user approves it",
-    description:
-      "Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is " +
-      "debited at once: there is no approval step and no second user (`waiting_approval` is only for orders " +
-      "placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: " +
-      "internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement " +
-      "instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and " +
-      "`metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes " +
-      "from an older spec and still asks for some of them, so any value passes. The amount is the quote's. " +
-      "The `Idempotency-Key` header is required; this server sends one.",
   },
 };
 
@@ -464,9 +476,22 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardPin:
     "Not available over MCP: returns the encrypted card PIN. Use the client-side decryption flow.",
   updateCardPin: "Not available over MCP: setting a PIN requires handling cardholder data.",
-  startRiskKyc: "Use startCustomerKyc instead — /v1/risk/start-kyc is superseded by /v1/customers/kyc/start.",
-  startRiskKycS2S: "Use startCustomerKycS2S instead — /v1/risk/* KYC is superseded by /v1/customers/kyc/*.",
-  uploadRiskDocument: "Use uploadCustomerKycDocument instead — /v1/risk/* KYC is superseded.",
+  simulateCardEvent:
+    "Not available over MCP yet: the sandbox card simulator (funding and spend events) is outside the published API reference, and whether to offer it is still open. In sandbox, simulateDeposit funds an account.",
+  simulateCardFunding:
+    "Not available over MCP yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCardSpend:
+    "Not available over MCP yet: the sandbox card simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCollectionOutcome:
+    "Not available over MCP yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
+  simulateCollectionWebhook:
+    "Not available over MCP yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open.",
+  startRiskKyc:
+    "Renamed: POST /v1/risk/start-kyc is card KYC for a cardholder, now the tool startCardholderKyc. For a customer's own KYC use startCustomerKyc.",
+  startRiskKycS2S:
+    "Renamed: POST /v1/risk/start-kyc-s2s is now startCardholderKycS2S (card KYC). For a customer's own KYC use startCustomerKycS2S.",
+  uploadRiskDocument:
+    "Renamed: POST /v1/risk/upload-document is now uploadCardholderKycDocument (card KYC). For a customer's own KYC use uploadCustomerKycDocument.",
   createPaymentLink:
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
   listPaymentLinks:
@@ -481,8 +506,6 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
   getPublicPaymentLink:
     "Retired: payment links are not part of the Gravv API any more. To take a card payment through a hosted page, use createCardPaymentIntent.",
-  deleteSavedCard:
-    "Not available in this release: the API needs customer_id and card_token in a JSON request body, and the current spec sends no body, so every call fails with EOF. The tool returns when the spec is fixed. Until then, call DELETE /v1/collections/cards/{card_id} directly with a body of {customer_id, card_token}.",
   approveTransfer:
     "Not available over MCP: approving a transfer is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
   rejectTransfer:
@@ -519,7 +542,38 @@ export const MONEY_OPS = new Set<string>([
   // Cancelling does not return funds already debited, and API-key orders are debited
   // when they are placed, so a cancel cannot be undone.
   "POST /v1/fx/orders/{order_id}/cancel",
+  // A paused transfer has not been paid out; resuming it releases the payout.
+  "POST /v1/transfer/{id}/resume",
 ]);
+
+/**
+ * Operations that cannot be undone but move no money. These require a second call with
+ * `confirm: true`, like MONEY_OPS, but not GRAVV_ALLOW_LIVE_WRITES: the second signal
+ * guards real value, and a delete moves none. Every DELETE tool is here, so a test fails
+ * when a new one arrives without its gate.
+ */
+export const CONFIRM_OPS = new Set<string>([
+  // A deleted application cannot be restored over the API.
+  "DELETE /v1/accounts/applications/{id}",
+  // Activating virtual_cards creates a card application and can issue a card at once;
+  // there is no route to deactivate a feature.
+  "POST /v1/risk/features/activate",
+  // A removed saved card cannot be restored over the API.
+  "DELETE /v1/collections/cards/{card_id}",
+  // A deleted settlement instruction cannot be read, used or restored.
+  "DELETE /v1/settlement-instructions/{id}",
+]);
+
+/**
+ * Routes that work only with a sandbox key; a live key gets 403. Their tools are not
+ * advertised, and are refused before any request, unless the key starts exactly
+ * `grvSec_sandbox_`. An unrecognised key counts as live, as everywhere else.
+ */
+export const SANDBOX_ONLY = new Set<string>(["POST /v2/accounts/simulate/deposit"]);
+
+export function isSandboxOnly(method: string, path: string): boolean {
+  return SANDBOX_ONLY.has(opKey(method, path));
+}
 
 /**
  * The API requires an Idempotency-Key on every POST and returns 400 without one. These
@@ -527,24 +581,154 @@ export const MONEY_OPS = new Set<string>([
  */
 export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1/webhooks/"];
 
+/** A file type the upload and download handling recognises by its first bytes. */
+export type FileKind = "pdf" | "png" | "jpeg";
+
+/**
+ * Where a tool takes a file, so the model can pass a local `file_path` instead of
+ * base64 it would have to produce, and carry, in its own context.
+ *
+ * `at` is the object holding the file fields: "" for the top level, or a dotted path
+ * where `[]` steps into each item of an array (`data.parties[].documents[]`). The
+ * generator adds `file_path` there and makes `content` optional; the server reads the
+ * file, checks its type and size, and fills `content` (and the name and type fields when
+ * they are absent). `maxBytes` is the decoded size the route takes in live, as the
+ * services check it:
+ * - uploadCustomerKycDocument: 10 MiB, the customers KYC check and the gateway's
+ *   document body limit (sized for a 10 MiB file).
+ * - uploadCardholderKycDocument: 5 MiB. The card KYC service accepts gRPC requests of
+ *   at most 10 MiB, and the file reaches it base64 in the JSON body, base64 again in the
+ *   gRPC request (16/9 of the file), so about 5.6 MiB of file fits; its own 10 MB check
+ *   is never reached.
+ * - uploadTransferDocument: 700 KiB, the transfers service's default cap, which keeps the
+ *   file under a 1 MiB ingress further down the payout path. A deployment setting can
+ *   change it; the default is what the tool states.
+ * - the v2 account documents: 2 MiB each, the accounts service's inline document cap.
+ */
+export interface UploadSpec {
+  at: string;
+  content: string;
+  nameField?: string;
+  typeField?: string;
+  kinds: FileKind[];
+  maxBytes: number;
+}
+
+const MB = 1024 * 1024;
+const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
+
+export const UPLOADS: Record<string, UploadSpec[]> = {
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
+  uploadTransferDocument: [
+    {
+      at: "",
+      content: "content",
+      nameField: "file_name",
+      typeField: "content_type",
+      kinds: ANY_DOC,
+      maxBytes: 700 * 1024,
+    },
+  ],
+  updateAccountApplicationV2: [
+    { at: "documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+  createAccountV2: [
+    { at: "data.documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+    { at: "data.parties[].documents[]", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 2 * MB },
+  ],
+};
+
+/** A size as the tool texts write it: "10 MB", "700 KB". */
+export function sizeText(bytes: number): string {
+  return bytes >= MB ? `${bytes / MB} MB` : `${bytes / 1024} KB`;
+}
+
+/**
+ * What to keep a sandbox call's files under. Sandbox calls reach the services through an
+ * ingress that refuses a request over 1 MiB. The file travels base64 in the JSON body and
+ * the body base64 again in the gRPC request, 16/9 of the file, so files from about 576 KiB
+ * are refused there, with a 413 that says 10MB (sandbox, 2026-10-13: 571 KB taken, 600 KB
+ * refused, on the customer KYC and transfer document routes). 500 KB leaves room for the
+ * other fields. The limit is per request, so a call with several files shares it.
+ */
+export const SANDBOX_UPLOAD_BYTES = 500 * 1024;
+
+/**
+ * The size sentence for a tool's files, the one wording every note, hint and prompt
+ * uses: "at most 700 KB; in sandbox, under 500 KB".
+ */
+export function uploadLimit(tool: string): string {
+  const specs = UPLOADS[tool];
+  if (!specs) throw new Error(`uploadLimit: ${tool} is not in UPLOADS`);
+  const max = sizeText(Math.min(...specs.map((s) => s.maxBytes)));
+  const sandbox = sizeText(SANDBOX_UPLOAD_BYTES);
+  return specs.some((s) => s.at.includes("[]"))
+    ? `at most ${max} each; in sandbox, under ${sandbox} for all of one call's files`
+    : `at most ${max}; in sandbox, under ${sandbox}`;
+}
+
 /**
  * Call-ordering and preconditions, appended to the generated tool description.
  *
- * This is the knowledge that exists only in the guides — the OpenAPI specs describe 86
- * independent operations and say nothing about what must happen first. Without this an
- * agent will, for example, create an external account and immediately transfer to it,
- * skipping the poll-until-active step from
- * https://gravv-docs.syntext.dev/recipes/remit-funds-to-a-recipient
+ * This is the knowledge the spec descriptions do not carry: tool names where the specs
+ * name routes, the call order across tools, what this server does (file_path, saved
+ * downloads, the gates), and the caveats for behaviour that is not live yet. Without it
+ * an agent will, for example, create an external account and immediately transfer to
+ * it, skipping the wait-until-active step from
+ * https://gravv-docs.syntext.dev/recipes/bank-payouts/pay-a-us-bank-account-by-ach
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
+
+  updateAccountStatus:
+    "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
+
+  deleteAccountApplication:
+    "Only a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
+
+  getAccountCapabilities:
+    "Call first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+
+  createAccountV2:
+    `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2.`,
+
+  getAccountRequirements:
+    "Build createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
+
+  getAccountV2:
+    "Poll after createAccountV2 until status is `active`. If requires_user_action is true: for awaiting_customer_document or awaiting_customer_data, read getAccountApplicationV2 with application_id and answer with updateAccountApplicationV2; for tos_pending or kyc_pending, send the customer to required_action_url. An unknown id is a 404.",
+
+  listAccountApplicationsV2:
+    "Use getAccountApplicationV2 for the status reason and the required fields and documents.",
+
+  getAccountApplicationV2:
+    "Read before updateAccountApplicationV2. An unknown id is a 404 `Resource not found`.",
+
+  updateAccountApplicationV2:
+    `PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("updateAccountApplicationV2")}) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.`,
+
+  simulateDeposit:
+    "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
   createExternalAccount:
-    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. ach_wire needs payment_rail (ach, wire or rtp).",
+    "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
+
+  uploadTransferDocument:
+    `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
+
+  resumeTransfer:
+    "Only for a transfer returned as `paused`; id is the transfer `reference` from createTransfer. Send exactly what `requirements` lists, uploading documents first with uploadTransferDocument. Leave idempotency_key out on each new attempt: the same key returns the first answer. A 410 means start a new transfer. MOVES MONEY: resuming releases the payout; requires confirm: true.",
+
+  getCustomerLimits:
+    "Use before a large payout, or to explain a pause: remaining_usd is what is left in each window. A null cap means no cap only when caps_basis is `tier`.",
+
+  getRemitterLimits:
+    "remitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
 
   submitAccountApplication:
     "ORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
@@ -556,7 +740,13 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
-    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. Only Stellar wallets finish their trustline setup in the background.",
+    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
+
+  createSettlementInstruction:
+    "These are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",
+
+  updateExternalAccount:
+    "Only for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
 
   getFxQuote:
     "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
@@ -566,6 +756,27 @@ export const PREREQUISITES: Record<string, string> = {
 
   listFxPendingApprovals:
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+
+  createCardApplication:
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+
+  createCard:
+    "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
+
+  checkFeatureEligibility:
+    "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
+
+  activateFeature:
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
+
+  startCardholderKyc:
+    "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
+
+  uploadCardholderKycDocument:
+    `STEP 1 of server-to-server card KYC; then startCardholderKycS2S. Check data.status: a validation failure is HTTP 200 with status \`error\`. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCardholderKycDocument")}) in place of base64 content; filename must end in .jpg, .jpeg, .png or .pdf.`,
+
+  startCardholderKycS2S:
+    "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
 
   withdrawFromCard:
     "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
@@ -577,25 +788,67 @@ export const PREREQUISITES: Record<string, string> = {
     "Only an order in `waiting_approval`, or a `pending` order whose debit is not in flight, can be cancelled. Cancelling does NOT return funds already debited, and API-key orders are debited when they are placed. IRREVERSIBLE: requires confirm: true.",
 
   createCardPaymentIntent:
-    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. MOVES MONEY: requires confirm: true.",
+    "Without card_token: returns payment_link (valid 24 h); send the payer there. With card_token: charges the card at once. Check data.status (processing, requires_action or charge_failed); a decline is HTTP 200. The customer needs phone_number and date_of_birth. card_token comes from listSavedCards, not from webhooks. client_reference must be unique across collections and payment intents. MOVES MONEY: requires confirm: true.",
 
   createCollection:
-    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals.",
+    "MOVES MONEY: requires confirm: true. Bank transfer only. The customer must have phone_number and date_of_birth. Countries: BJ BW BF CM CI CG GA ML MW NG RW ZA TZ TG UG ZM; currency must be that country's local currency; pass metadata.bank_account_number. amount is a string with up to 2 decimals. client_reference must be unique across collections and payment intents.",
 
   chargeSavedCard:
     "MOVES MONEY: charges a stored card token, for recurring or merchant-initiated payments. Requires confirm: true.",
 
   startCustomerKyc:
-    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks.",
+    "For business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
 
   uploadCustomerKycDocument:
-    "STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails.",
+    `STEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of ${uploadLimit("uploadCustomerKycDocument")}) in place of base64 content.`,
+
+  downloadCustomerKycDocument:
+    "This server saves the image to a local file (GRAVV_DOWNLOAD_DIR or --download-dir; by default a gravv-mcp-downloads folder in the system temp folder) and returns saved_to with its type and size, never the image itself. Get document_id from getCustomerKycDocuments. Documents uploaded through card KYC (uploadCardholderKycDocument) cannot be downloaded yet: the call fails with a 500.",
 
   startCustomerKycS2S:
-    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument.",
+    "STEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
+
+  getWebhookHistory:
+    "Use an item's `id` with getWebhookEventDetail, getWebhookCallHistory or retryWebhookEvent.",
+
+  getWebhookEventDetail:
+    "Takes the `id` of a getWebhookHistory item. The stored payload is a re-serialised copy: do not use it to check a signature.",
+
+  getWebhookCallHistory:
+    "Takes the `id` of a getWebhookHistory item.",
+
+  getCollection:
+    "onramp_status `settlement_abandoned` is not live yet; production does not send it.",
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
+};
+
+/**
+ * Tools whose answer carries a file, saved to a local file instead of returned. A KYC
+ * image in the model's context is both large (up to about 13 MB) and personal data.
+ * `content` is the data-URI field in `data`; the file name is built from the arguments
+ * named in `nameFrom`, never from the response.
+ */
+export interface DownloadSpec {
+  content: string;
+  prefix: string;
+  nameFrom: string[];
+}
+
+export const DOWNLOADS: Record<string, DownloadSpec> = {
+  downloadCustomerKycDocument: { content: "content", prefix: "kyc", nameFrom: ["document_id", "side"] },
+};
+
+/**
+ * Top-level arguments sent in upper case, whatever the model passes.
+ *
+ * A settlement instruction stores its currency exactly as sent, and the list filter and
+ * order matching compare it exactly, so a `usd` instruction is never found by `USD`. The
+ * list filter is left as given: rows already stored in lower case must stay findable.
+ */
+export const UPPER_CASE_ARGS: Record<string, string[]> = {
+  createSettlementInstruction: ["currency"],
 };
 
 /**
@@ -614,6 +867,11 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
     lookup:
       "listTransactions with account_id set to the source account (newest first), and find your client_reference in the rows (there is no client_reference filter)",
   },
+  resumeTransfer: { lookup: "getTransaction with the transfer's transaction_id, and read whether it is still paused" },
+  uploadTransferDocument: {
+    lookup:
+      "no tool lists transfer documents, so resend with the same key, which returns the first upload's id if it landed",
+  },
   withdrawFromCard: { lookup: "getCardBalance, and listTransactions with card_id set to the card" },
   createFxOrder: { lookup: "listFxOrders (newest first), and match the pair, side and amount" },
   cancelFxOrder: { lookup: "getFxOrder, and read its status" },
@@ -622,7 +880,13 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   chargeSavedCard: { lookup: "getWebhookHistory, and find the event for your payment_intent_id" },
   createCustomer: { lookup: "listCustomers, and match the email" },
   createExternalAccount: { lookup: "listExternalAccounts, and match the customer, account number and rail" },
+  createSettlementInstruction: {
+    lookup: "listSettlementInstructions with currency, and match the account name (there is no duplicate check)",
+  },
   createAccount: { lookup: "listAccounts with customer_id, and match the currency" },
+  createAccountV2: {
+    lookup: "listAccountsV2 with customer_id and currency, and listAccountApplicationsV2 with customer_id",
+  },
   createWallet: {
     lookup: "listWallets with customer_id and network (a second call creates a second wallet)",
   },
@@ -641,14 +905,33 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   },
   uploadCustomerKycDocument: { lookup: "getCustomerKycDocuments" },
   activateFeature: { lookup: "listFeatures, and read the feature's status" },
+  startCardholderKyc: {
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop",
+  },
+  startCardholderKycS2S: {
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop",
+  },
+  uploadCardholderKycDocument: {
+    lookup:
+      "no tool lists card KYC documents, so resend with the same key, which returns the first upload's answer if it landed",
+  },
+  simulateDeposit: {
+    lookup:
+      "listTransactions with account_id set to the account (newest first), and look for the test deposit; each new key makes a new deposit",
+  },
   getFxQuote: { readOnly: true },
   validateAccountApplication: { readOnly: true },
   checkFeatureEligibility: { readOnly: true },
 };
 
-/** Tool names that must carry a `confirm` argument, derived from MONEY_OPS. */
+/** Routes that move money: confirm, and GRAVV_ALLOW_LIVE_WRITES on a live key. */
 export function isMoneyOp(method: string, path: string): boolean {
   return MONEY_OPS.has(opKey(method, path));
+}
+
+/** Routes whose tool must carry a `confirm` argument: MONEY_OPS and CONFIRM_OPS. */
+export function needsConfirmation(method: string, path: string): boolean {
+  return isMoneyOp(method, path) || CONFIRM_OPS.has(opKey(method, path));
 }
 
 export function needsIdempotencyKey(method: string, path: string): boolean {

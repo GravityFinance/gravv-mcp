@@ -1,0 +1,644 @@
+{
+  "about": "Requests from the Gravv integration scenarios (payouts-bank-rails), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-PAY-01.1",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-PAY-01.2",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-PAY-01.3",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/accounts/{account_id}"
+    },
+    {
+      "id": "S-PAY-01.4",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities?customer_id=<id>&currency=USD"
+    },
+    {
+      "id": "S-PAY-01.5",
+      "scenario": "S-PAY-01",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "ach_wire",
+        "currency": "USD",
+        "account_name": "Maya Chen",
+        "account_number": "000123456789",
+        "routing_number": "021000021",
+        "payment_rail": "ach",
+        "bank_account_type": "checking",
+        "account_owner_type": "individual",
+        "bank_name": "JPMorgan Chase Bank",
+        "internal_account_id": "c56a4180-65aa-42ec-a945-5fd21dec0538",
+        "address": {
+          "address_line1": "350 Fifth Avenue",
+          "city": "New York",
+          "state": "NY",
+          "postal_code": "10118",
+          "country": "US"
+        }
+      }
+    },
+    {
+      "id": "S-PAY-01.6",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/external-accounts/1b4e28ba-2fa1-41d2-883f-0016d3cca427"
+    },
+    {
+      "id": "S-PAY-01.7",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/customers/7c9e6679-7425-40de-944b-e07fc1f90ae7/limits"
+    },
+    {
+      "id": "S-PAY-01.8",
+      "scenario": "S-PAY-01",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+          "rail": "ach"
+        },
+        "amount": "2500.00",
+        "description": "Contractor fee October",
+        "client_reference": "payout-2026-10-0001",
+        "payment_rail_reference": "INV2041"
+      }
+    },
+    {
+      "id": "S-PAY-01.9",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/transactions/8d4e2b6c-1f3a-4e7b-b0c9-5a6d7e8f9a01"
+    },
+    {
+      "id": "S-PAY-01.10",
+      "scenario": "S-PAY-01",
+      "method": "GET",
+      "path": "/v1/external-accounts/{id}"
+    },
+    {
+      "id": "S-PAY-01.11",
+      "scenario": "S-PAY-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "…",
+        "amount": "5000.00",
+        "rail": "ach"
+      }
+    },
+    {
+      "id": "S-PAY-02.1",
+      "scenario": "S-PAY-02",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "ach_wire",
+        "currency": "USD",
+        "account_name": "Lakeside Title LLC",
+        "account_number": "4400918273",
+        "routing_number": "021000021",
+        "payment_rail": "wire",
+        "account_owner_type": "business",
+        "bank_name": "JPMorgan Chase Bank",
+        "internal_account_id": "c56a4180-65aa-42ec-a945-5fd21dec0538",
+        "address": {
+          "address_line1": "200 Park Avenue",
+          "city": "New York",
+          "state": "NY",
+          "postal_code": "10166",
+          "country": "US"
+        }
+      }
+    },
+    {
+      "id": "S-PAY-02.2",
+      "scenario": "S-PAY-02",
+      "method": "GET",
+      "path": "/v1/external-accounts/6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b"
+    },
+    {
+      "id": "S-PAY-02.3",
+      "scenario": "S-PAY-02",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "6ec0bd7f-11c0-43da-975e-2a8ad9ebae0b",
+          "rail": "wire"
+        },
+        "amount": "48000.00",
+        "description": "Closing funds 12 Elm St escrow 5521",
+        "client_reference": "closing-5521",
+        "payment_rail_reference": "Escrow 5521 / 12 Elm St"
+      }
+    },
+    {
+      "id": "S-PAY-02.4",
+      "scenario": "S-PAY-02",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    },
+    {
+      "id": "S-PAY-03.1",
+      "scenario": "S-PAY-03",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "ach_wire",
+        "currency": "USD",
+        "account_name": "Luis Ortega",
+        "account_number": "7781203345",
+        "routing_number": "021000021",
+        "payment_rail": "rtp",
+        "bank_account_type": "checking",
+        "account_owner_type": "individual",
+        "bank_name": "JPMorgan Chase Bank",
+        "internal_account_id": "c56a4180-65aa-42ec-a945-5fd21dec0538",
+        "address": {
+          "address_line1": "1450 Oak Street",
+          "city": "Chicago",
+          "state": "IL",
+          "postal_code": "60610",
+          "country": "US"
+        }
+      }
+    },
+    {
+      "id": "S-PAY-03.2",
+      "scenario": "S-PAY-03",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "3d813cbb-47fb-42ba-91df-831e1593ac29",
+          "rail": "rtp"
+        },
+        "amount": "180.00",
+        "description": "Shift 88123 pay",
+        "client_reference": "shift-88123"
+      }
+    },
+    {
+      "id": "S-PAY-03.3",
+      "scenario": "S-PAY-03",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    },
+    {
+      "id": "S-PAY-04.1",
+      "scenario": "S-PAY-04",
+      "method": "GET",
+      "path": "/v1/external-accounts?customer_id=<id>&search=000555777999"
+    },
+    {
+      "id": "S-PAY-05.1",
+      "scenario": "S-PAY-05",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-PAY-05.2",
+      "scenario": "S-PAY-05",
+      "method": "GET",
+      "path": "/v1/external-accounts/institutions?swift_code=ZEIBNGLA"
+    },
+    {
+      "id": "S-PAY-05.3",
+      "scenario": "S-PAY-05",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries-for-address?iso_code=NG"
+    },
+    {
+      "id": "S-PAY-05.4",
+      "scenario": "S-PAY-05",
+      "method": "GET",
+      "path": "/v1/transfer/supported-countries"
+    },
+    {
+      "id": "S-PAY-05.5",
+      "scenario": "S-PAY-05",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "swift",
+        "currency": "USD",
+        "account_name": "Adebayo Textiles Ltd",
+        "account_number": "1012345678",
+        "bic": "ZEIBNGLA",
+        "account_owner_type": "business",
+        "internal_account_id": "c56a4180-65aa-42ec-a945-5fd21dec0538",
+        "bank_address_line_1": "Plot 84 Ajose Adeogun Street",
+        "bank_city": "Lagos",
+        "bank_state": "Lagos",
+        "bank_postal_code": "101241",
+        "bank_country": "NG",
+        "address": {
+          "address_line1": "12 Broad Street",
+          "city": "Lagos",
+          "state": "Lagos",
+          "postal_code": "102273",
+          "country": "NG"
+        },
+        "intermediary_financial_institution": "Citibank N.A.",
+        "intermediary_bank_routing_number": "021000089",
+        "intermediary_bank_address1": "388 Greenwich Street",
+        "intermediary_bank_city": "New York",
+        "intermediary_bank_state": "NY",
+        "intermediary_bank_zip_code": "10013",
+        "intermediary_bank_country": "US"
+      }
+    },
+    {
+      "id": "S-PAY-05.6",
+      "scenario": "S-PAY-05",
+      "method": "POST",
+      "path": "/v1/transfer/documents",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "document_type": "invoice",
+        "description": "Invoice INV-7731 cotton fabric",
+        "file_name": "INV-7731.pdf",
+        "content_type": "application/pdf",
+        "content": "JVBERi0xLjQKJcfsj6IKMSAwIG9iago8PC9UeXBlL0NhdGFsb2c+PgplbmRvYmoK"
+      }
+    },
+    {
+      "id": "S-PAY-05.7",
+      "scenario": "S-PAY-05",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "rail": "swift"
+        },
+        "amount": "12000.00",
+        "description": "Payment for invoice INV-7731 cotton fabric",
+        "client_reference": "inv-7731",
+        "supporting_document_ids": [
+          "5b0d8f3e-2a71-4c4f-9e0b-7d6c1a2b3c4d"
+        ]
+      }
+    },
+    {
+      "id": "S-PAY-05.8",
+      "scenario": "S-PAY-05",
+      "method": "GET",
+      "path": "/v1/transactions/{transaction_id}"
+    },
+    {
+      "id": "S-PAY-06.1",
+      "scenario": "S-PAY-06",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "a8098c1a-f86e-41c6-8b1e-4f2c3d7e9b10",
+          "rail": "swift"
+        },
+        "amount": "4800.00",
+        "description": "Consulting services September 2026",
+        "client_reference": "contractor-cz-0926"
+      }
+    },
+    {
+      "id": "S-PAY-06.2",
+      "scenario": "S-PAY-06",
+      "method": "GET",
+      "path": "/v1/transactions/0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a4b"
+    },
+    {
+      "id": "S-PAY-06.3",
+      "scenario": "S-PAY-06",
+      "method": "POST",
+      "path": "/v1/transfer/c1a2b3c4-d5e6-4f70-8a91-b2c3d4e5f607/resume",
+      "body": {
+        "supporting_document_ids": [
+          "9f4c2e1a-7b3d-4c5e-8f6a-1b2c3d4e5f60"
+        ]
+      }
+    },
+    {
+      "id": "S-PAY-07.1",
+      "scenario": "S-PAY-07",
+      "method": "POST",
+      "path": "/v1/external-accounts/verify",
+      "body": {
+        "iban": "…"
+      }
+    },
+    {
+      "id": "S-PAY-07.2",
+      "scenario": "S-PAY-07",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=EUR"
+    },
+    {
+      "id": "S-PAY-07.3",
+      "scenario": "S-PAY-07",
+      "method": "POST",
+      "path": "/v1/external-accounts/verify",
+      "body": {
+        "iban": "DE89370400440532013000"
+      }
+    },
+    {
+      "id": "S-PAY-07.4",
+      "scenario": "S-PAY-07",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "sepa",
+        "currency": "EUR",
+        "account_name": "Lena Fischer",
+        "iban": "DE89370400440532013000",
+        "bic": "COBADEFFXXX",
+        "account_owner_type": "individual",
+        "bank_name": "Commerzbank",
+        "address": {
+          "address_line1": "Torstrasse 101",
+          "city": "Berlin",
+          "postal_code": "10119",
+          "country": "DE"
+        }
+      }
+    },
+    {
+      "id": "S-PAY-07.5",
+      "scenario": "S-PAY-07",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "9b2d6f0e-3c1a-4e8b-a7d5-2f4c6e8a0b13"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "0f8fad5b-d9cb-469f-a165-70867728950e",
+          "rail": "sepa"
+        },
+        "amount": "1000.00",
+        "description": "Design work October",
+        "client_reference": "sepa-lf-1013"
+      }
+    },
+    {
+      "id": "S-PAY-08.1",
+      "scenario": "S-PAY-08",
+      "method": "GET",
+      "path": "/v1/transfer/rates?currency=GBP"
+    },
+    {
+      "id": "S-PAY-08.2",
+      "scenario": "S-PAY-08",
+      "method": "POST",
+      "path": "/v1/external-accounts",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "payee_type": "fps",
+        "currency": "GBP",
+        "account_name": "Oliver Bennett",
+        "routing_number": "601613",
+        "account_number": "31926819",
+        "account_owner_type": "individual",
+        "bank_name": "NatWest",
+        "address": {
+          "address_line1": "221 Baker Street",
+          "city": "London",
+          "postal_code": "NW1 6XE",
+          "country": "GB"
+        }
+      }
+    },
+    {
+      "id": "S-PAY-08.3",
+      "scenario": "S-PAY-08",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "9b2d6f0e-3c1a-4e8b-a7d5-2f4c6e8a0b13"
+        },
+        "destination": {
+          "destination_type": "external_account",
+          "id": "7b1a2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+          "rail": "fps"
+        },
+        "amount": "800.00",
+        "description": "Marketplace payout order 5590",
+        "client_reference": "fps-ob-5590"
+      }
+    },
+    {
+      "id": "S-PAY-09.1",
+      "scenario": "S-PAY-09",
+      "method": "GET",
+      "path": "/v1/external-accounts/{id}"
+    },
+    {
+      "id": "S-PAY-09.2",
+      "scenario": "S-PAY-09",
+      "method": "GET",
+      "path": "/v1/external-accounts/f47ac10b-58cc-4372-a567-0e02b2c3d479"
+    },
+    {
+      "id": "S-PAY-09.3",
+      "scenario": "S-PAY-09",
+      "method": "PATCH",
+      "path": "/v1/external-accounts/f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "body": {
+        "account_number": "1012345678"
+      }
+    },
+    {
+      "id": "S-PAY-10.1",
+      "scenario": "S-PAY-10",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-PAY-10.2",
+      "scenario": "S-PAY-10",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "customer_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "source": {
+          "source_type": "internal_account",
+          "id": "c56a4180-65aa-42ec-a945-5fd21dec0538"
+        },
+        "destination": {
+          "destination_type": "internal_account",
+          "id": "e4d909c2-90d0-4b6a-9c1d-3f2e5a7b8c90"
+        },
+        "amount": "15000.00",
+        "description": "Fund payroll October 15",
+        "client_reference": "book-2026-10-13-01"
+      }
+    },
+    {
+      "id": "S-PAY-10.3",
+      "scenario": "S-PAY-10",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "…",
+        "amount": "5000.00",
+        "currency": "NGN"
+      }
+    },
+    {
+      "id": "S-PAY-11.1",
+      "scenario": "S-PAY-11",
+      "method": "GET",
+      "path": "/v1/customers/{id}/limits"
+    },
+    {
+      "id": "S-PAY-11.2",
+      "scenario": "S-PAY-11",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}/limits"
+    },
+    {
+      "id": "S-PAY-11.3",
+      "scenario": "S-PAY-11",
+      "method": "GET",
+      "path": "/v1/limits/remitters/{remitter_id}"
+    },
+    {
+      "id": "S-PAY-11.4",
+      "scenario": "S-PAY-11",
+      "method": "POST",
+      "path": "/v1/transfer/d2c4e6f8-0a1b-4c3d-9e5f-7a8b9c0d1e2f/resume",
+      "body": {
+        "remitter_verification": {
+          "remitter_id": "rem-maria-lopez-01",
+          "level": "enhanced",
+          "provider": "acme-kyc",
+          "provider_reference": "chk_558120",
+          "verified_at": "2026-10-13T11:58:00Z",
+          "screening": {
+            "sanctions": "clear",
+            "pep": "clear",
+            "adverse_media": "clear"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-PAY-11.5",
+      "scenario": "S-PAY-11",
+      "method": "POST",
+      "path": "/v1/transfer/d2c4e6f8-0a1b-4c3d-9e5f-7a8b9c0d1e2f/resume",
+      "body": {
+        "additional_information": {
+          "remitter_full_name": "Maria Lopez",
+          "remitter_date_of_birth": "1988-04-17",
+          "remitter_country": "US",
+          "remitter_address": {
+            "address_line1": "55 Water Street",
+            "city": "Brooklyn",
+            "postal_code": "11201",
+            "country": "US"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-PAY-12.1",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/transactions/8d4e2b6c-1f3a-4e7b-b0c9-5a6d7e8f9a01"
+    },
+    {
+      "id": "S-PAY-12.2",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/transactions?customer_id=<id>&channel=ach,wire,rtp&status=completed&page=1&items_per_page=50"
+    },
+    {
+      "id": "S-PAY-12.3",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/transactions/volume?customer_id=<id>&status=completed&transaction_type=bank_account"
+    },
+    {
+      "id": "S-PAY-12.4",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/transactions/export?customer_id=<id>&start_date=2026-10-01&end_date=2026-10-31&export_format=csv"
+    },
+    {
+      "id": "S-PAY-12.5",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/webhooks/history?event_type=transfer&status=failed"
+    },
+    {
+      "id": "S-PAY-12.6",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/webhooks/event/{id}"
+    },
+    {
+      "id": "S-PAY-12.7",
+      "scenario": "S-PAY-12",
+      "method": "GET",
+      "path": "/v1/webhooks/calls/{id}"
+    }
+  ]
+}

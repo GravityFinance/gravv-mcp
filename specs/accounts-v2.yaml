@@ -1,0 +1,1745 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    This is the API Gateway for Gravv services.
+    Use the `Api-Key` header for authentication.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Required for POST requests. 1 to 255 printable ASCII characters. A
+        retry with the same key within 24 hours returns the first response, so
+        reuse the key when you retry the same request.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: open-usd-account-jane-1
+    AccountIdPath:
+      name: id
+      in: path
+      required: true
+      description: ID of the account
+      schema:
+        type: string
+        format: uuid
+      example: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+    ApplicationIdPath:
+      name: application_id
+      in: path
+      required: true
+      description: >-
+        ID of the account application. Read it from the account
+        (`application_id`) or from the application webhooks.
+      schema:
+        type: string
+        format: uuid
+      example: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+  schemas:
+    Network:
+      type: string
+      description: Network name in lower case
+      enum:
+        - stellar
+        - polygon
+        - ethereum
+        - base
+        - solana
+        - avalanche_c_chain
+        - sui
+        - tron
+        - bsc
+        - flow_evm
+        - canton
+        - bitcoin
+        - celo
+        - gnosis
+        - arbitrum
+        - optimism
+        - xdc
+        - tempo
+      example: polygon
+    Category:
+      type: string
+      enum:
+        - main
+        - sub_account
+        - virtual
+        - multi_currency
+      example: main
+    ErrorResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: 'null'
+          example: null
+        error:
+          type: string
+          description: >-
+            Error message. When several fields fail, it names the first and
+            says how many others are in `details`. Branch on the HTTP status
+            and the `details` codes, not on this text.
+          example: Customer ID is required
+        details:
+          type: object
+          description: >-
+            Field problems, keyed by field path. Each value is `CODE: message`,
+            such as `REQUIRED: Customer ID is required`. Several problems on one
+            field are joined with `; `.
+          additionalProperties:
+            type: string
+    IdempotencyErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum:
+                - idempotency_in_flight
+                - idempotency_key_reused
+            message:
+              type: string
+    DocumentUpload:
+      type: object
+      description: >-
+        A document. Send `id` to reuse a document already on file, or
+        `content` to upload a new one, never both.
+      properties:
+        id:
+          type: string
+          description: ID of a document already on file
+        document_type:
+          type: string
+          description: Type of a new document. Required with `content`.
+          enum:
+            - national_id
+            - passport
+            - drivers_license
+            - permanent_resident_card
+            - employment_authorization
+            - other
+            - proof_of_address
+            - selfie_photo
+            - tax_form_w8ben
+            - signed_terms_document
+            - articles_of_incorporation
+            - ownership_document
+            - control_structure
+            - compliance_document
+            - tax_id_letter
+            - bank_statement
+            - source_of_funds
+            - denial_explanation_letter
+            - regulatory_action_explanation
+          example: passport
+        document_type_side:
+          type: string
+          description: Which side, for identity documents sent one side at a time
+          enum:
+            - front
+            - back
+          default: front
+        document_subtype:
+          type: string
+          description: Optional sub-type
+        content:
+          type: string
+          description: >-
+            The file as standard or URL-safe base64. JPEG, PNG or PDF, at most
+            2 MB decoded.
+          example: <base64>
+        filename:
+          type: string
+          example: passport.jpg
+        issuing_country:
+          type: string
+          description: Issuing country as an alpha-2 code. Required for every type except `selfie_photo`.
+          example: GB
+        number:
+          type: string
+          description: Document number. Required for identity documents.
+          example: '123456789'
+        issued_date:
+          type: string
+          description: Issue date as YYYY-MM-DD. Required for identity documents.
+          example: '2020-01-15'
+        expiration_date:
+          type: string
+          description: Expiry date as YYYY-MM-DD. Required for identity documents.
+          example: '2030-01-14'
+    CreateAccountV2Request:
+      type: object
+      required:
+        - customer_id
+        - currency
+      additionalProperties: false
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            An existing customer whose KYC is completed. It is checked before
+            every other field.
+          example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+        customer_type:
+          type: string
+          description: >-
+            `individual` or `business`. Always send it: bank choice and routing
+            use the value you send. Defaults to the customer's profile type.
+          enum:
+            - individual
+            - business
+          example: individual
+        account_type:
+          type: string
+          description: >-
+            Account type from the capabilities, such as `operating`, `yield` or
+            `revenue`. Defaults to `operating`.
+          example: operating
+        currency:
+          type: string
+          pattern: ^[A-Za-z]{3}$
+          description: Three-letter ISO 4217 code
+          example: USD
+        category:
+          description: Defaults to `multi_currency` for NGN and `main` for other currencies.
+          allOf:
+            - $ref: '#/components/schemas/Category'
+        label:
+          type: string
+          description: Your label for the account, at most 255 bytes
+          example: Jane USD
+        bank_code:
+          type: string
+          description: >-
+            A `bank_code` from `GET /v1/accounts/capabilities`. Leave it out to
+            use the highest-priority bank that fits.
+          example: cross_river_bank
+        network:
+          description: >-
+            Network for the account's token wallet. Required when the bank
+            offers token wallets, unless you send `wallet_id`; refused
+            otherwise. It must be one of the bank's `token_options`. Prefer
+            polygon, ethereum, base or solana, which work end to end.
+          allOf:
+            - $ref: '#/components/schemas/Network'
+        wallet_id:
+          type: string
+          description: An existing wallet of yours to use instead of `network`. Send one, not both.
+        account_structure:
+          type: string
+          description: For banks that offer FBO accounts only
+          enum:
+            - fbo_account
+            - subledger
+        parent_account_id:
+          type: string
+          format: uuid
+          description: The FBO account, with `account_structure` `subledger`
+        data:
+          type: object
+          description: >-
+            The form from `GET /v2/accounts/requirements`. Put `root` scope
+            fields in `data.root`, party fields in `data.parties[]`, and
+            documents in `data.documents[]` or a party's `documents`. Fields the
+            customer record already answers are filled in for you.
+          properties:
+            root:
+              type: object
+              description: >-
+                Applicant fields for an individual, or business fields for a
+                business. Include `citizenship_country` or
+                `incorporation_country`, which routing reads. Do not put
+                `network` or `wallet_id` here.
+              additionalProperties: true
+              properties:
+                autofill_tax_form:
+                  type: boolean
+                  x-not-yet-live: true
+                  description: >-
+                    Not yet live. Lets a non-US applicant ask the bank to fill
+                    the tax form. Production rejects this field as unknown; do
+                    not send it there.
+            parties:
+              type: array
+              description: >-
+                Business only; refused for individuals. Each entry is an
+                associated person from the customer record (`id` plus any
+                changes) or a new person with the new-party fields. Leave it
+                out to declare every associated person on the record.
+              items:
+                type: object
+                additionalProperties: true
+                properties:
+                  id:
+                    type: string
+                    description: ID of an associated person on the customer record
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentUpload'
+            documents:
+              type: array
+              description: >-
+                Root documents. When you send none, documents on the customer
+                record are used.
+              items:
+                $ref: '#/components/schemas/DocumentUpload'
+    AccountV2:
+      type: object
+      description: >-
+        An account. Empty fields are left out. Accounts opened with v1 are
+        returned too, without the v2 fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+        label:
+          type: string
+          example: Jane USD
+        date_created:
+          type: string
+          format: date-time
+          example: '2026-10-13T09:12:44Z'
+        wallet_address:
+          type: string
+          description: The account's wallet address
+          example: '0x5a3e9b0c7d2f41e8a6b4c3d2e1f0a9b8c7d6e5f4'
+        blockchain_network:
+          type: string
+          example: polygon
+        type:
+          type: string
+          description: Account type, such as `operating`. v1 accounts use the v1 names.
+          example: operating
+        customer_id:
+          type: string
+          format: uuid
+          example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+        capabilities:
+          type: array
+          items:
+            type: string
+        currency:
+          type: string
+          example: USD
+        virtual_account_id:
+          type: string
+        tenant_name:
+          type: string
+          example: Acme Pay
+        tenant_id:
+          type: string
+          example: c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f
+        tier:
+          type: string
+        status:
+          type: string
+          description: >-
+            `pending` while opening, then `active`. `rejected` means the bank
+            declined and `failed` means it could not be opened. `deleted` and
+            `manual_review` appear only on older accounts.
+          enum:
+            - pending
+            - active
+            - frozen
+            - closed
+            - rejected
+            - failed
+            - deleted
+            - manual_review
+          example: pending
+        status_reason:
+          type: string
+          description: >-
+            Stable code that explains a status other than `active`; branch on
+            it. You act on `tos_pending` and `kyc_pending` (send the customer to
+            `required_action_url`) and on `awaiting_customer_document` and
+            `awaiting_customer_data` (update the application). Other codes need
+            no action, or mean the account cannot be opened. Only on the single
+            account read.
+          example: awaiting_customer_document
+        status_message:
+          type: string
+          description: Explanation in words. The wording can change; use `status_reason`.
+        required_documents:
+          type: array
+          description: Document types to upload with the application update
+          items:
+            type: string
+        required_fields:
+          type: array
+          description: Field names to send with the application update
+          items:
+            type: string
+        required_action_url:
+          type: string
+          description: Page the end customer must open, for terms or verification
+        requires_user_action:
+          type: boolean
+          description: True when the application is waiting on you
+        restrictions:
+          type: array
+          items:
+            type: string
+            enum:
+              - negative_balance
+        category:
+          $ref: '#/components/schemas/Category'
+        account_structure:
+          type: string
+          enum:
+            - fbo_account
+            - subledger
+        parent_account_id:
+          type: string
+        bank_name:
+          type: string
+          description: Name of the bank that holds the account
+          example: Example Bank
+        bank_code:
+          type: string
+          example: cross_river_bank
+        balance:
+          type: string
+          description: >-
+            Balance in major units. It comes from the wallet, else the bank's
+            last known figure, else the ledger; `balance_source` says which.
+            Omitted when there is no figure, which means unknown, not zero.
+          example: '1250.00'
+        balance_source:
+          type: string
+          enum:
+            - institution
+            - wallet
+            - ledger
+        balance_details:
+          type: object
+          description: The bank's figures, in major units
+          properties:
+            available:
+              type: string
+            ledger:
+              type: string
+            pending_in:
+              type: string
+            pending_out:
+              type: string
+            currency:
+              type: string
+            as_of:
+              type: string
+              format: date-time
+        ledger_balance:
+          type: object
+          description: The Gravv ledger position, in minor units (see `scale`)
+          properties:
+            posted:
+              type: string
+              description: Settled and spendable
+              example: '125000'
+            projected:
+              type: string
+              description: Settled plus in flight. Show this to the customer.
+              example: '125000'
+            scale:
+              type: integer
+              example: 2
+            currency:
+              type: string
+              example: USD
+            as_of_entry_id:
+              type: string
+        balance_sync:
+          type: object
+          properties:
+            status:
+              type: string
+              enum:
+                - synced
+                - stale
+                - cooling_down
+                - syncing
+                - failed
+                - simulated
+                - deferred
+            as_of:
+              type: string
+            adjustment:
+              type: string
+            transaction_id:
+              type: string
+        is_tokenized:
+          type: boolean
+        inflow_behavior:
+          type: string
+        polygon_wallet:
+          type: object
+          properties:
+            address:
+              type: string
+            network:
+              type: string
+            token_balance:
+              type: string
+        virtual_account_bank_name:
+          type: string
+          description: Deposit bank name. Some banks leave it out; then use `bank_name`.
+        virtual_account_bank_address:
+          type: string
+        virtual_account_bank_beneficiary_address:
+          type: string
+        virtual_account_bank_beneficiary_name:
+          type: string
+          example: Jane Doe
+        virtual_account_bank_account_number:
+          type: string
+          example: '9876543210'
+        virtual_account_bank_routing_number:
+          type: string
+          example: '021214891'
+        virtual_account_bank_metadata:
+          type: object
+          description: Extra bank details, such as `bic` and `swift_code`
+          additionalProperties: true
+        assets:
+          type: array
+          items:
+            type: object
+            properties:
+              balance:
+                type: string
+              decimals:
+                type: integer
+              symbol:
+                type: string
+        wallet_uuid:
+          type: string
+        settlement_enabled:
+          type: boolean
+          description: Whether a settlement wallet is attached. Always present.
+          example: false
+        application_id:
+          type: string
+          description: The application to update when the account waits on you
+          example: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+        provider_reference_hash:
+          type: string
+          description: Hash of the bank's reference, for support correlation only
+    Party:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Associated person ID. Use it as `party_id` on a document.
+        role:
+          type: string
+          enum:
+            - primary
+            - joint_owner
+            - authorized_individual
+            - guardian
+            - minor_beneficial_owner
+            - trustee
+            - grantor
+            - trustee_and_grantor
+            - executor
+        status:
+          type: string
+          enum:
+            - declared
+            - documents_pending
+            - verified_locally
+            - submitted_to_provider
+            - flagged
+            - accepted
+        first_name:
+          type: string
+        last_name:
+          type: string
+    ApplicationStatus:
+      type: string
+      description: >-
+        `processing` while the bank works, `blocked` while it waits on you or
+        the customer, `manual_review` while Gravv holds it, then `approved` or
+        `rejected`. `draft` and `submitted` come only from v1 flows.
+      enum:
+        - draft
+        - submitted
+        - processing
+        - blocked
+        - manual_review
+        - approved
+        - rejected
+        - expired
+        - cancelled
+      example: blocked
+    ApplicationV2:
+      type: object
+      properties:
+        application_id:
+          type: string
+          example: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+        customer_id:
+          type: string
+          example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+        customer_type:
+          type: string
+          enum:
+            - individual
+            - business
+        registration_type:
+          type: string
+          enum:
+            - individual
+            - joint
+            - minor
+            - business
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        parties:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        submitted_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+        status_reason:
+          type: string
+          description: Same codes as on the account. Only on the single read.
+        status_message:
+          type: string
+        required_documents:
+          type: array
+          items:
+            type: string
+        required_fields:
+          type: array
+          items:
+            type: string
+        required_action_url:
+          type: string
+        requires_user_action:
+          type: boolean
+        validation:
+          type: object
+          description: Returned by the update when data was checked
+          properties:
+            ok:
+              type: boolean
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  code:
+                    type: string
+                  message:
+                    type: string
+        provisioning:
+          type: object
+          deprecated: true
+          description: Deprecated. Use the flat status fields and `status`.
+          additionalProperties: true
+    FormField:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Field key. Nested keys are dotted, such as `permanent_address.city`.
+          example: first_name
+        type:
+          type: string
+          enum:
+            - string
+            - text
+            - date
+            - email
+            - phone
+            - country
+            - enum
+            - enum_list
+            - boolean
+            - integer
+            - money
+            - document
+            - party_list
+            - group
+            - ''
+        scope:
+          type: string
+          description: '`root` goes in `data.root`; `party[*]` goes in each `data.parties[i]`.'
+          example: root
+        group:
+          type: string
+          example: identity
+        required:
+          type: boolean
+          description: >-
+            True when required or conditionally required. Check
+            `required_when` and `applies_when` before you ask for it.
+        required_when:
+          type: object
+          description: Condition that makes the field required
+          additionalProperties: true
+        applies_when:
+          type: object
+          description: Condition for the field's group to apply
+          additionalProperties: true
+        write_only:
+          type: boolean
+          description: Secret values that are never returned
+        enum:
+          type: string
+          description: Name of the value list
+        options:
+          type: array
+          description: Allowed values
+          items:
+            type: string
+        label:
+          type: string
+        suggestion:
+          type: string
+        is_predefined:
+          type: boolean
+          description: True when the customer record already answers it
+    RequirementsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            min_parties:
+              type:
+                - integer
+                - 'null'
+              description: Null when the form needs no parties
+            max_parties:
+              type:
+                - integer
+                - 'null'
+            fields:
+              type:
+                - array
+                - 'null'
+              items:
+                $ref: '#/components/schemas/FormField'
+            predefined:
+              type: object
+              x-not-yet-live: true
+              description: >-
+                Not yet live. Values that form conditions read. Production
+                never returns it.
+              additionalProperties: true
+            documents:
+              type: array
+              items:
+                type: object
+                properties:
+                  types:
+                    type: array
+                    description: Any one of these types meets the requirement
+                    items:
+                      type: string
+                  scope:
+                    type: string
+                    description: '`root` goes in `data.documents`; `party[*]` in each party''s `documents`.'
+                  required:
+                    type: boolean
+                  required_when:
+                    type: object
+                    x-not-yet-live: true
+                    description: >-
+                      Not yet live. Condition that makes the document required.
+                      Production never returns it.
+                    additionalProperties: true
+                  metadata:
+                    type: object
+                    x-not-yet-live: true
+                    description: Not yet live. Extra details, such as a form's download source.
+                    additionalProperties: true
+                  new_document_fields:
+                    type: array
+                    description: Keys a new upload of this document must carry
+                    items:
+                      type: string
+            token_options:
+              type: array
+              description: Networks you can pass as `network` on create
+              items:
+                type: object
+                properties:
+                  network:
+                    type: string
+                  asset:
+                    type: string
+                    enum:
+                      - usdc
+                      - usdt
+                      - btc
+            suggestions:
+              type: object
+              description: Values on file for the customer, when you send `customer_id`
+              properties:
+                fields:
+                  type: object
+                  additionalProperties: true
+                documents:
+                  type: object
+                  additionalProperties: true
+            has_existing_ref:
+              type: boolean
+              description: >-
+                True when the bank already knows this customer. Root fields are
+                then left out, and create must not send `data.root`.
+            new_party_fields:
+              type: array
+              description: Fields a new business party needs
+              items:
+                $ref: '#/components/schemas/FormField'
+            existing_application:
+              type: object
+              description: >-
+                An application already in progress at this bank. Finish it
+                before you create another account there.
+              properties:
+                application_id:
+                  type: string
+                message:
+                  type: string
+            account_structure_fields:
+              type: array
+              items:
+                $ref: '#/components/schemas/FormField'
+        error:
+          type: 'null'
+    UpdateApplicationV2Request:
+      type: object
+      additionalProperties: false
+      properties:
+        metadata:
+          type: object
+          description: >-
+            Field values by field name, such as `{"tax_id_number":
+            "123456789"}`. On a blocked application, send only fields the bank
+            asked for.
+          additionalProperties: true
+        customer:
+          type: object
+          description: >-
+            Changes to the customer record. They are saved on the customer, not
+            only on this application.
+          properties:
+            first_name:
+              type: string
+            middle_name:
+              type: string
+            last_name:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+            date_of_birth:
+              type: string
+            gender:
+              type: string
+            tax_id_number:
+              type: string
+            business_name:
+              type: string
+            business_description:
+              type: string
+            business_type:
+              type: string
+            business_industry:
+              type: string
+            registration_number:
+              type: string
+            external_id:
+              type: string
+            address:
+              type: object
+              properties:
+                address_line:
+                  type: string
+                address_line2:
+                  type: string
+                city:
+                  type: string
+                state:
+                  type: string
+                postal_code:
+                  type: string
+                country:
+                  type: string
+            associated_persons:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+        parties:
+          type: array
+          description: Party changes, in the create shape. Only on `draft` or `blocked`.
+          items:
+            type: object
+            additionalProperties: true
+        documents:
+          type: array
+          description: >-
+            Documents to upload. Only on `draft`, `blocked` or `manual_review`.
+            Upload every requested type in this one call.
+          items:
+            type: object
+            required:
+              - document_type
+              - filename
+              - content
+            properties:
+              document_type:
+                type: string
+                example: proof_of_address
+              document_type_side:
+                type: string
+                enum:
+                  - front
+                  - back
+              document_subtype:
+                type: string
+              party_id:
+                type: string
+                description: Required for an identity document on a business application
+              party_role:
+                type: string
+              party_name:
+                type: string
+              filename:
+                type: string
+                example: bill.pdf
+              content:
+                type: string
+                description: Standard or URL-safe base64. JPEG, PNG or PDF, at most 2 MB.
+                example: <base64>
+              issuing_country:
+                type: string
+                description: Alpha-2 code. Required except for `selfie_photo`.
+                example: US
+              number:
+                type: string
+              issued_date:
+                type: string
+              expiration_date:
+                type: string
+              date_of_birth:
+                type: string
+              document_place_of_birth:
+                type: string
+    SimulateDepositRequest:
+      type: object
+      required:
+        - account_id
+        - amount
+      additionalProperties: false
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: An `active` account of yours with bank details
+          example: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+        amount:
+          type: string
+          description: >-
+            Positive amount in major units, as a string. It must fit the rail's
+            smallest unit.
+          example: '250.00'
+        currency:
+          type: string
+          description: Defaults to the account currency
+          example: USD
+        rail:
+          type: string
+          description: Rail the deposit arrives on. Defaults to the bank's usual rail.
+          enum:
+            - ach
+            - wire
+            - rtp
+            - swift
+            - sepa
+            - fps
+          example: wire
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: 'invalid request payload: unknown field "sort"'
+    NotFound:
+      description: Not found, or not in your tenant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: Resource not found
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Accounts v2
+    description: >-
+      Open bank accounts at a chosen bank, read them with balances and status
+      reasons, and answer what the bank asks for
+  - name: Sandbox
+    description: Test helpers that work only with a sandbox key
+paths:
+  /v2/accounts:
+    post:
+      tags:
+        - Accounts v2
+      summary: Create an account
+      operationId: createAccountV2
+      description: >-
+        Opens a bank account, with a token wallet where the bank offers one,
+        for a customer whose KYC is completed. First call `GET
+        /v1/accounts/capabilities` to choose `bank_code`, `currency` and
+        `account_type`, then `GET /v2/accounts/requirements` to build `data`.
+
+
+        The response has only `account_id` and `status: pending`. Get the
+        account for `application_id` and `status_reason`, and poll until it is
+        `active`, or wait for the `applications.accounts.completed` webhook.
+        v2 accounts do not send `account.activated`. Unknown fields are
+        rejected. When you retry, reuse the same Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountV2Request'
+            examples:
+              IndividualUSD:
+                summary: Individual USD account with a polygon wallet
+                value:
+                  customer_id: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+                  customer_type: individual
+                  currency: USD
+                  account_type: operating
+                  bank_code: cross_river_bank
+                  network: polygon
+                  label: Jane USD
+                  data:
+                    root:
+                      first_name: Jane
+                      last_name: Doe
+                      date_of_birth: '1990-04-02'
+                      email: jane@example.com
+                      phone_daytime: '+447700900123'
+                      gender: female
+                      citizenship_country: GB
+                      tax_residence_country: GB
+                      permanent_address:
+                        address_line: 1 High St
+                        city: London
+                        state: GB-LND
+                        postal_code: EC1A 1BB
+                        country: GB
+                    documents:
+                      - document_type: passport
+                        issuing_country: GB
+                        number: '123456789'
+                        issued_date: '2020-01-15'
+                        expiration_date: '2030-01-14'
+                        filename: passport.jpg
+                        content: <base64>
+                      - document_type: proof_of_address
+                        issuing_country: GB
+                        filename: bill.pdf
+                        content: <base64>
+      responses:
+        '200':
+          description: Account opening started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      account_id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        enum:
+                          - pending
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  account_id: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+                  status: pending
+                error: null
+        '400':
+          description: >-
+            Invalid request, a customer that does not exist or has not completed
+            KYC, or no bank fits the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                KycIncomplete:
+                  summary: The customer has not completed KYC
+                  value:
+                    data: null
+                    error: >-
+                      the customer for the customer_id supplied has not completed
+                      KYC; complete the customer's KYC before opening an account
+                      for them
+                    details:
+                      customer_id: >-
+                        CUSTOMER_KYC_INCOMPLETE: the customer for the customer_id
+                        supplied has not completed KYC; complete the customer's
+                        KYC before opening an account for them
+                MissingFields:
+                  summary: The form is missing fields
+                  value:
+                    data: null
+                    error: Date of Birth is required (and 1 other field; see details)
+                    details:
+                      date_of_birth: 'required: is required'
+                      permanent_address.city: 'required: is required'
+                NetworkRequired:
+                  summary: The bank offers token wallets and no network was sent
+                  value:
+                    data: null
+                    error: network is required for account options that support wallet integration
+        '409':
+          description: >-
+            The customer is at the account limit, the bank is disabled for this
+            account, an application is already in progress at this bank, or a
+            request with the same Idempotency-Key is still running
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/IdempotencyErrorResponse'
+              example:
+                data: null
+                error: >-
+                  this customer already holds the maximum number of USD accounts
+                  permitted for this account type (5)
+        '422':
+          description: The Idempotency-Key was used before with a different body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdempotencyErrorResponse'
+        '503':
+          description: The customer record could not be read. Retry with the same key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Accounts v2
+      summary: List accounts
+      operationId: listAccountsV2
+      description: >-
+        Lists your accounts, v1 and v2, newest first, with bank details and
+        balances. Status reasons are only on the single read. Unknown query
+        parameters are rejected with a 400. A bad filter value is an error, not
+        an empty page.
+      parameters:
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+          description: Filter by customer
+        - in: query
+          name: excluded_customer_id
+          schema:
+            type: string
+          description: Leave out this customer's accounts
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - pending
+              - active
+              - frozen
+              - closed
+              - rejected
+              - failed
+              - deleted
+              - manual_review
+        - in: query
+          name: category
+          schema:
+            $ref: '#/components/schemas/Category'
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Three-letter ISO 4217 code
+        - in: query
+          name: network
+          schema:
+            $ref: '#/components/schemas/Network'
+        - in: query
+          name: bank_code
+          schema:
+            type: string
+        - in: query
+          name: label
+          schema:
+            type: string
+          description: Exact label. Use `search` for part of a label.
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Account type, such as `operating`
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Case-insensitive search across label, currency, status, type and wallet address
+        - in: query
+          name: created_from
+          schema:
+            type: string
+          description: Created at or after, as RFC 3339 or YYYY-MM-DD (inclusive)
+          example: '2026-10-01'
+        - in: query
+          name: created_to
+          schema:
+            type: string
+          description: Created before, as RFC 3339 or YYYY-MM-DD (exclusive)
+          example: '2026-11-01'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Page size, 1 to 200. Values out of range give 50.
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AccountV2'
+                      page:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                        description: The page size used
+                      total_pages:
+                        type: integer
+                      total_items:
+                        type: integer
+                  error:
+                    type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v2/accounts/requirements:
+    get:
+      tags:
+        - Accounts v2
+      summary: Get account requirements
+      operationId: getAccountRequirements
+      description: >-
+        Returns the form that create checks for one bank, currency and
+        customer type: fields, documents, party rules and token networks. Send
+        `customer_id` to see the values already on file, and `country` so that
+        the same bank as create is chosen.
+
+
+        A field is needed only when `required` is true and its `applies_when`
+        and `required_when` conditions hold. When `has_existing_ref` is true,
+        send no `data.root` on create. When `existing_application` is present,
+        finish that application instead.
+      parameters:
+        - in: query
+          name: customer_type
+          required: true
+          schema:
+            type: string
+            enum:
+              - individual
+              - business
+        - in: query
+          name: currency
+          required: true
+          schema:
+            type: string
+          description: Three-letter ISO 4217 code
+          example: USD
+        - in: query
+          name: bank_code
+          schema:
+            type: string
+          description: A `bank_code` from the capabilities
+          example: cross_river_bank
+        - in: query
+          name: account_type
+          schema:
+            type: string
+          example: operating
+        - in: query
+          name: category
+          schema:
+            $ref: '#/components/schemas/Category'
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: The customer's citizenship or incorporation country, alpha-2 or alpha-3
+          example: GB
+        - in: query
+          name: subdivision
+          schema:
+            type: string
+          description: ISO 3166-2 code or a bare state code. Needs `country`.
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Customer to fill the form for
+      responses:
+        '200':
+          description: The form for this bank
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementsResponse'
+              example:
+                data:
+                  min_parties: null
+                  max_parties: null
+                  fields:
+                    - name: first_name
+                      type: string
+                      scope: root
+                      group: identity
+                      required: true
+                      write_only: false
+                      label: First Name
+                      is_predefined: true
+                    - name: tax_id_number
+                      type: string
+                      scope: root
+                      group: us_tax
+                      required: true
+                      applies_when:
+                        field: citizenship_country
+                        op: eq
+                        value: US
+                      write_only: true
+                      label: Tax ID Number
+                      is_predefined: false
+                  documents:
+                    - types:
+                        - national_id
+                        - passport
+                        - drivers_license
+                      scope: root
+                      required: true
+                      new_document_fields:
+                        - document_type
+                        - content
+                        - issuing_country
+                        - number
+                        - issued_date
+                        - expiration_date
+                  token_options:
+                    - network: polygon
+                      asset: usdc
+                  has_existing_ref: false
+                error: null
+        '400':
+          description: Missing parameters, or no bank fits the request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: Customer Type is required (and 1 other field; see details)
+                details:
+                  currency: 'REQUIRED: Currency is required'
+                  customer_type: 'REQUIRED: Customer Type is required'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v2/accounts/applications:
+    get:
+      tags:
+        - Accounts v2
+      summary: List account applications
+      operationId: listAccountApplicationsV2
+      description: >-
+        Lists your account applications, newest first, without status reasons.
+        `count` is the number on this page, not a total; page until `count` is
+        less than `limit`. A misspelt `status` returns an empty list.
+      parameters:
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/ApplicationStatus'
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of applications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      applications:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ApplicationV2'
+                      count:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                  error:
+                    type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v2/accounts/applications/{application_id}:
+    get:
+      tags:
+        - Accounts v2
+      summary: Get an account application
+      operationId: getAccountApplicationV2
+      description: >-
+        Returns one application with what it waits for. Act on
+        `status_reason`: upload `required_documents` or send
+        `required_fields` with the update, or send the customer to
+        `required_action_url` for terms or verification. Use `status`, not the
+        deprecated `provisioning` object.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationIdPath'
+      responses:
+        '200':
+          description: The application
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ApplicationV2'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  application_id: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+                  customer_id: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+                  customer_type: individual
+                  registration_type: individual
+                  status: blocked
+                  parties:
+                    - role: primary
+                      status: declared
+                      first_name: Jane
+                      last_name: Doe
+                  created_at: '2026-10-13T09:12:44.512031Z'
+                  updated_at: '2026-10-13T09:20:02.118734Z'
+                  status_reason: awaiting_customer_data
+                  required_fields:
+                    - tax_id_number
+                  requires_user_action: true
+                error: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+        - Accounts v2
+      summary: Update an account application
+      operationId: updateAccountApplicationV2
+      description: >-
+        Sends the data or documents the bank asked for, and resumes opening the
+        account. Get the application first. It must be `blocked`, or
+        `manual_review` for documents. Send every requested item in one call;
+        a partial answer stays `blocked`.
+
+
+        There is no Idempotency-Key on this route, so a retry uploads again.
+        The response leaves out the status reason fields; get the application
+        again to see what is still needed. For terms or verification, send the
+        customer to `required_action_url` instead.
+      parameters:
+        - $ref: '#/components/parameters/ApplicationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApplicationV2Request'
+            example:
+              customer:
+                tax_id_number: '123456789'
+              documents:
+                - document_type: proof_of_address
+                  issuing_country: US
+                  filename: bill.pdf
+                  content: <base64>
+      responses:
+        '200':
+          description: The updated application
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ApplicationV2'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  application_id: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+                  customer_id: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+                  customer_type: individual
+                  registration_type: individual
+                  status: processing
+                  created_at: '2026-10-13T09:12:44.512031Z'
+                  updated_at: '2026-10-13T10:02:31.004112Z'
+                  validation:
+                    ok: true
+                error: null
+        '400':
+          description: The application cannot take this update, or a field or document is wrong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                NotEditable:
+                  summary: The application is not waiting for an update
+                  value:
+                    data: null
+                    error: application is not editable
+                NotRequested:
+                  summary: The bank did not ask for this field
+                  value:
+                    data: null
+                    error: Tax ID Number was not requested for this application
+                    details:
+                      tax_id_number: >-
+                        INVALID_VALUE: Tax ID Number was not requested for this
+                        application
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v2/accounts/{id}:
+    get:
+      tags:
+        - Accounts v2
+      summary: Get an account
+      operationId: getAccountV2
+      description: >-
+        Returns one account with bank details, balances and, when it is not
+        `active`, the reason. Poll it after create until `status` is
+        `active`. When `requires_user_action` is true, act on `status_reason`
+        with `application_id`. `balance` and `balance_details` are major
+        units; `ledger_balance` is minor units.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AccountV2'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  id: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+                  label: Jane USD
+                  date_created: '2026-10-13T09:12:44Z'
+                  wallet_address: '0x5a3e9b0c7d2f41e8a6b4c3d2e1f0a9b8c7d6e5f4'
+                  blockchain_network: polygon
+                  type: operating
+                  customer_id: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+                  currency: USD
+                  status: pending
+                  status_reason: awaiting_customer_document
+                  required_documents:
+                    - proof_of_address
+                  requires_user_action: true
+                  category: main
+                  bank_name: Example Bank
+                  bank_code: cross_river_bank
+                  settlement_enabled: false
+                  application_id: 5e7a9c1b-2d4f-4a6b-8c0d-e1f2a3b4c5d6
+                error: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v2/accounts/simulate/deposit:
+    post:
+      tags:
+        - Sandbox
+      summary: Simulate a deposit
+      operationId: simulateDeposit
+      description: >-
+        Sandbox only; a live key gets a 403. Makes a test bank deposit land on
+        an account through the normal deposit flow, with fees, ledger entries
+        and webhooks. The account must be `active` with bank details.
+
+
+        A 200 means the deposit was accepted, not settled; wait for the
+        `transfer.inflow.completed` or `transfer.inflow.deposit_settled`
+        webhook. Each new Idempotency-Key makes a new deposit.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateDepositRequest'
+            example:
+              account_id: 6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11
+              amount: '250.00'
+              rail: wire
+      responses:
+        '200':
+          description: Deposit accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accepted:
+                        type: boolean
+                      reference:
+                        type: string
+                        description: Reference of the test deposit
+                      state:
+                        type: string
+                        enum:
+                          - pending
+                          - processing
+                          - blocked
+                          - completed
+                          - failed
+                          - compensated
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  accepted: true
+                  reference: d3b07384-d9a0-4c8f-9e2b-6f1a2c3d4e5f
+                  state: pending
+                error: null
+        '400':
+          description: Invalid amount or rail, or the account cannot take a test deposit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: account has no linked virtual account to deposit into
+        '403':
+          description: Not a sandbox key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: 'Forbidden: insufficient permissions to perform this action'
+        '404':
+          $ref: '#/components/responses/NotFound'

@@ -1,0 +1,1692 @@
+{
+  "S-ACC2-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-ACC2-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-ACC2-01.3": {
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
+  },
+  "S-ACC2-01.4": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-ACC2-01.5": {
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
+  },
+  "S-ACC2-01.6": {
+    "outcome": "ok",
+    "tool": "getCustomerKycStatus"
+  },
+  "S-ACC2-02.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-ACC2-02.2": {
+    "outcome": "ok",
+    "tool": "listAccountsV2"
+  },
+  "S-ACC2-02.3": {
+    "outcome": "ok",
+    "tool": "getAccountRequirements"
+  },
+  "S-ACC2-02.4": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-ACC2-02.5": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-02.6": {
+    "outcome": "ok",
+    "tool": "createWallet"
+  },
+  "S-ACC2-03.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-ACC2-03.2": {
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].phone_daytime: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].residential_address: is not declared"
+    ]
+  },
+  "S-ACC2-03.3": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-04.1": {
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].tax_id_type: is not declared",
+      "data.parties[0].tax_id_number: is not declared",
+      "data.parties[0].permanent_address: is not declared",
+      "data.parties[0].mailing_address: is not declared"
+    ]
+  },
+  "S-ACC2-04.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-05.1": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-ACC2-05.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-06.1": {
+    "outcome": "mismatch",
+    "tool": "createAccountV2",
+    "problems": [
+      "data.parties[0].party_role: is not declared",
+      "data.parties[0].has_ownership: is not declared",
+      "data.parties[0].ownership_percentage: is not declared",
+      "data.parties[0].has_control: is not declared",
+      "data.parties[0].is_signer: is not declared",
+      "data.parties[0].is_director: is not declared",
+      "data.parties[0].date_of_birth: is not declared",
+      "data.parties[0].citizenship_country: is not declared"
+    ]
+  },
+  "S-ACC2-06.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-07.1": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-ACC2-07.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-08.1": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-ACC2-08.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-09.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-09.2": {
+    "outcome": "ok",
+    "tool": "getAccountApplicationV2"
+  },
+  "S-ACC2-09.3": {
+    "outcome": "ok",
+    "tool": "listAccountApplicationsV2"
+  },
+  "S-ACC2-09.4": {
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
+  },
+  "S-ACC2-09.5": {
+    "outcome": "ok",
+    "tool": "updateAccountApplicationV2"
+  },
+  "S-ACC2-10.1": {
+    "outcome": "ok",
+    "tool": "listAccountsV2"
+  },
+  "S-ACC2-10.2": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-ACC2-10.3": {
+    "outcome": "mismatch",
+    "tool": "getAccountRequirements",
+    "problems": [
+      "customer_type: is required",
+      "currency: is required",
+      "...: is not allowed"
+    ]
+  },
+  "S-ACC2-10.4": {
+    "outcome": "ok",
+    "tool": "listAccountsV2"
+  },
+  "S-ACC2-10.5": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-ACC2-11.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-11.2": {
+    "outcome": "ok",
+    "tool": "listAccountsV2"
+  },
+  "S-ACC2-12.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-ACC2-12.2": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-CRD-01.1": {
+    "outcome": "ok",
+    "tool": "listFeatures"
+  },
+  "S-CRD-01.2": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CRD-01.3": {
+    "outcome": "ok",
+    "tool": "checkFeatureEligibility"
+  },
+  "S-CRD-01.4": {
+    "outcome": "ok",
+    "tool": "createCustomer"
+  },
+  "S-CRD-01.5": {
+    "outcome": "ok",
+    "tool": "startCardholderKyc"
+  },
+  "S-CRD-01.6": {
+    "outcome": "ok",
+    "tool": "activateFeature"
+  },
+  "S-CRD-01.7": {
+    "outcome": "ok",
+    "tool": "listCards"
+  },
+  "S-CRD-01.8": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-01.9": {
+    "outcome": "ok",
+    "tool": "listCardApplications"
+  },
+  "S-CRD-01.10": {
+    "outcome": "ok",
+    "tool": "getCardApplication"
+  },
+  "S-CRD-01.11": {
+    "outcome": "ok",
+    "tool": "getCardApplication"
+  },
+  "S-CRD-01.12": {
+    "outcome": "ok",
+    "tool": "createCard"
+  },
+  "S-CRD-01.13": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-02.1": {
+    "outcome": "ok",
+    "tool": "uploadCardholderKycDocument"
+  },
+  "S-CRD-02.2": {
+    "outcome": "ok",
+    "tool": "startCardholderKycS2S"
+  },
+  "S-CRD-03.1": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-CRD-03.2": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-03.3": {
+    "outcome": "ok",
+    "tool": "activateFeature"
+  },
+  "S-CRD-03.4": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-CRD-03.5": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-CRD-04.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CRD-04.2": {
+    "outcome": "ok",
+    "tool": "createCardApplication"
+  },
+  "S-CRD-04.3": {
+    "outcome": "ok",
+    "tool": "listCardApplications"
+  },
+  "S-CRD-04.4": {
+    "outcome": "ok",
+    "tool": "createCard"
+  },
+  "S-CRD-05.1": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-CRD-05.2": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-CRD-05.3": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-CRD-05.4": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-CRD-05.5": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-CRD-06.1": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-06.2": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-06.3": {
+    "outcome": "ok",
+    "tool": "updateCardStatus"
+  },
+  "S-CRD-07.1": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-07.2": {
+    "outcome": "ok",
+    "tool": "updateCardStatus"
+  },
+  "S-CRD-07.3": {
+    "outcome": "ok",
+    "tool": "createCard"
+  },
+  "S-CRD-07.4": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-CRD-08.1": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-08.2": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-CRD-09.1": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CRD-09.2": {
+    "outcome": "blocked",
+    "problems": [
+      "Returns card PAN and CVV. Use the client-side decryption flow instead: https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview"
+    ]
+  },
+  "S-CRD-09.3": {
+    "outcome": "blocked",
+    "problems": [
+      "Returns the encrypted card PIN. Use the client-side decryption flow instead."
+    ]
+  },
+  "S-CRD-09.4": {
+    "outcome": "blocked",
+    "problems": [
+      "Sets a card PIN, which requires handling cardholder data. Not exposed over MCP."
+    ]
+  },
+  "S-CRD-10.1": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-CRD-10.2": {
+    "outcome": "ok",
+    "tool": "withdrawFromCard"
+  },
+  "S-CRD-10.3": {
+    "outcome": "ok",
+    "tool": "updateCardStatus"
+  },
+  "S-CRD-10.4": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-CRD-10.5": {
+    "outcome": "ok",
+    "tool": "listCards"
+  },
+  "S-CRD-11.1": {
+    "outcome": "ok",
+    "tool": "listCards"
+  },
+  "S-CRD-11.2": {
+    "outcome": "ok",
+    "tool": "listCards"
+  },
+  "S-CRD-11.3": {
+    "outcome": "ok",
+    "tool": "createCard"
+  },
+  "S-CRD-11.4": {
+    "outcome": "ok",
+    "tool": "createCard"
+  },
+  "S-CRD-11.5": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-CUS-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CUS-01.2": {
+    "outcome": "ok",
+    "tool": "listCustomers"
+  },
+  "S-CUS-01.3": {
+    "outcome": "ok",
+    "tool": "createCustomer"
+  },
+  "S-CUS-01.4": {
+    "outcome": "ok",
+    "tool": "startCustomerKyc"
+  },
+  "S-CUS-01.5": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CUS-01.6": {
+    "outcome": "ok",
+    "tool": "getCustomerKycStatus"
+  },
+  "S-CUS-02.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CUS-02.2": {
+    "outcome": "ok",
+    "tool": "getCustomerKycDocuments"
+  },
+  "S-CUS-02.3": {
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
+  },
+  "S-CUS-02.4": {
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
+  },
+  "S-CUS-02.5": {
+    "outcome": "ok",
+    "tool": "getCustomerKycDocuments"
+  },
+  "S-CUS-02.6": {
+    "outcome": "ok",
+    "tool": "startCustomerKycS2S"
+  },
+  "S-CUS-03.1": {
+    "outcome": "ok",
+    "tool": "createCustomer"
+  },
+  "S-CUS-03.2": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CUS-03.3": {
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
+  },
+  "S-CUS-03.4": {
+    "outcome": "ok",
+    "tool": "startCustomerKycS2S"
+  },
+  "S-CUS-04.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-CUS-04.2": {
+    "outcome": "ok",
+    "tool": "getCustomerKycStatus"
+  },
+  "S-CUS-04.3": {
+    "outcome": "ok",
+    "tool": "startCustomerKyc"
+  },
+  "S-CUS-04.4": {
+    "outcome": "ok",
+    "tool": "uploadCustomerKycDocument"
+  },
+  "S-CUS-05.1": {
+    "outcome": "ok",
+    "tool": "getCustomerKycDocuments"
+  },
+  "S-CUS-05.2": {
+    "outcome": "ok",
+    "tool": "getCustomerKycDocuments"
+  },
+  "S-CUS-05.3": {
+    "outcome": "ok",
+    "tool": "downloadCustomerKycDocument"
+  },
+  "S-CUS-06.1": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-CUS-06.2": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-CUS-06.3": {
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
+  },
+  "S-CUS-06.4": {
+    "outcome": "no-tool"
+  },
+  "S-CUS-07.1": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-CUS-07.2": {
+    "outcome": "ok",
+    "tool": "updateCustomer"
+  },
+  "S-CUS-07.3": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-ACC1-01.1": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-ACC1-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-ACC1-01.3": {
+    "outcome": "ok",
+    "tool": "listAccounts"
+  },
+  "S-ACC1-02.1": {
+    "outcome": "ok",
+    "tool": "createAccount"
+  },
+  "S-ACC1-02.2": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-02.3": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-03.1": {
+    "outcome": "ok",
+    "tool": "createAccount"
+  },
+  "S-ACC1-03.2": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-04.1": {
+    "outcome": "ok",
+    "tool": "createAccount"
+  },
+  "S-ACC1-04.2": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-05.1": {
+    "outcome": "ok",
+    "tool": "createAccount"
+  },
+  "S-ACC1-05.2": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-06.1": {
+    "outcome": "ok",
+    "tool": "validateAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-06.2": {
+    "outcome": "ok",
+    "tool": "createAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-06.3": {
+    "outcome": "ok",
+    "tool": "updateAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-06.4": {
+    "outcome": "ok",
+    "tool": "completeAccountApplicationTos",
+    "optIn": true
+  },
+  "S-ACC1-06.5": {
+    "outcome": "ok",
+    "tool": "getAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-06.6": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-07.1": {
+    "outcome": "ok",
+    "tool": "createAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-07.2": {
+    "outcome": "ok",
+    "tool": "updateAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-07.3": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-08.1": {
+    "outcome": "ok",
+    "tool": "listAccountApplications",
+    "optIn": true
+  },
+  "S-ACC1-08.2": {
+    "outcome": "ok",
+    "tool": "getAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-08.3": {
+    "outcome": "ok",
+    "tool": "getAccountApplicationHistory",
+    "optIn": true
+  },
+  "S-ACC1-08.4": {
+    "outcome": "ok",
+    "tool": "getAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-08.5": {
+    "outcome": "ok",
+    "tool": "getAccountApplicationHistory",
+    "optIn": true
+  },
+  "S-ACC1-08.6": {
+    "outcome": "ok",
+    "tool": "updateAccountApplication",
+    "optIn": true
+  },
+  "S-ACC1-08.7": {
+    "outcome": "ok",
+    "tool": "listPendingAccountApplications",
+    "optIn": true
+  },
+  "S-ACC1-09.1": {
+    "outcome": "ok",
+    "tool": "listAccounts"
+  },
+  "S-ACC1-09.2": {
+    "outcome": "ok",
+    "tool": "updateAccountStatus"
+  },
+  "S-ACC1-09.3": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-ACC1-09.4": {
+    "outcome": "ok",
+    "tool": "listAccounts"
+  },
+  "S-FX-01.1": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-FX-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-FX-01.3": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-FX-01.4": {
+    "outcome": "ok",
+    "tool": "listFxRates"
+  },
+  "S-FX-01.5": {
+    "outcome": "ok",
+    "tool": "listFxCurrencyPairs"
+  },
+  "S-FX-01.6": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-FX-01.7": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-FX-01.8": {
+    "outcome": "ok",
+    "tool": "getFxQuote"
+  },
+  "S-FX-01.9": {
+    "outcome": "ok",
+    "tool": "createFxOrder"
+  },
+  "S-FX-01.10": {
+    "outcome": "ok",
+    "tool": "getFxOrder"
+  },
+  "S-FX-01.11": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-FX-02.1": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-FX-02.2": {
+    "outcome": "ok",
+    "tool": "listSettlementInstructions"
+  },
+  "S-FX-02.3": {
+    "outcome": "ok",
+    "tool": "createSettlementInstruction"
+  },
+  "S-FX-02.4": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-FX-02.5": {
+    "outcome": "ok",
+    "tool": "getFxQuote"
+  },
+  "S-FX-02.6": {
+    "outcome": "ok",
+    "tool": "createFxOrder"
+  },
+  "S-FX-02.7": {
+    "outcome": "ok",
+    "tool": "getFxOrder"
+  },
+  "S-FX-03.1": {
+    "outcome": "ok",
+    "tool": "getFxQuote"
+  },
+  "S-FX-03.2": {
+    "outcome": "ok",
+    "tool": "listFxOrders"
+  },
+  "S-FX-04.1": {
+    "outcome": "ok",
+    "tool": "listFxCurrencyPairs"
+  },
+  "S-FX-04.2": {
+    "outcome": "ok",
+    "tool": "listFxRates"
+  },
+  "S-FX-04.3": {
+    "outcome": "ok",
+    "tool": "getFxQuote"
+  },
+  "S-FX-04.4": {
+    "outcome": "ok",
+    "tool": "createFxOrder"
+  },
+  "S-FX-04.5": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-FX-05.1": {
+    "outcome": "ok",
+    "tool": "createSettlementInstruction"
+  },
+  "S-FX-05.2": {
+    "outcome": "ok",
+    "tool": "updateSettlementInstruction"
+  },
+  "S-FX-05.3": {
+    "outcome": "ok",
+    "tool": "listSettlementInstructions"
+  },
+  "S-FX-05.4": {
+    "outcome": "ok",
+    "tool": "getSettlementInstruction"
+  },
+  "S-FX-06.1": {
+    "outcome": "ok",
+    "tool": "getFxOrder"
+  },
+  "S-FX-06.2": {
+    "outcome": "ok",
+    "tool": "listFxOrders"
+  },
+  "S-FX-06.3": {
+    "outcome": "ok",
+    "tool": "getFxOrder"
+  },
+  "S-FX-06.4": {
+    "outcome": "ok",
+    "tool": "listFxPendingApprovals"
+  },
+  "S-TXN-01.1": {
+    "outcome": "ok",
+    "tool": "listAccounts"
+  },
+  "S-TXN-01.2": {
+    "outcome": "ok",
+    "tool": "listAccountsV2"
+  },
+  "S-TXN-01.3": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-01.4": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-TXN-01.5": {
+    "outcome": "ok",
+    "tool": "exportTransactions"
+  },
+  "S-TXN-01.6": {
+    "outcome": "ok",
+    "tool": "getTransactionsVolume"
+  },
+  "S-TXN-01.7": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-TXN-02.1": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-02.2": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-TXN-02.3": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-TXN-02.4": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-TXN-02.5": {
+    "outcome": "ok",
+    "tool": "getWebhookCallHistory"
+  },
+  "S-TXN-02.6": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-TXN-02.7": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-03.1": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-TXN-03.2": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-03.3": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-03.4": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-TXN-04.1": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-04.2": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-05.1": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-TXN-05.2": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-TXN-05.3": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-TXN-05.4": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-TXN-05.5": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-TXN-06.1": {
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
+  },
+  "S-TXN-06.2": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-PAY-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-PAY-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-PAY-01.3": {
+    "outcome": "ok",
+    "tool": "getAccount"
+  },
+  "S-PAY-01.4": {
+    "outcome": "ok",
+    "tool": "getAccountCapabilities"
+  },
+  "S-PAY-01.5": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-01.6": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-PAY-01.7": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-PAY-01.8": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-01.9": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-01.10": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-PAY-01.11": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-PAY-02.1": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-02.2": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-PAY-02.3": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-02.4": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-03.1": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-03.2": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-03.3": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-04.1": {
+    "outcome": "ok",
+    "tool": "listExternalAccounts"
+  },
+  "S-PAY-05.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-PAY-05.2": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-PAY-05.3": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountriesForAddress"
+  },
+  "S-PAY-05.4": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-PAY-05.5": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-05.6": {
+    "outcome": "ok",
+    "tool": "uploadTransferDocument"
+  },
+  "S-PAY-05.7": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-05.8": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-06.1": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-06.2": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-06.3": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-PAY-07.1": {
+    "outcome": "ok",
+    "tool": "verifyExternalAccount"
+  },
+  "S-PAY-07.2": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-PAY-07.3": {
+    "outcome": "ok",
+    "tool": "verifyExternalAccount"
+  },
+  "S-PAY-07.4": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-07.5": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-08.1": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-PAY-08.2": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-PAY-08.3": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-09.1": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-PAY-09.2": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-PAY-09.3": {
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
+  },
+  "S-PAY-10.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-PAY-10.2": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-PAY-10.3": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-PAY-11.1": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-PAY-11.2": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-PAY-11.3": {
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
+  },
+  "S-PAY-11.4": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-PAY-11.5": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-PAY-12.1": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-PAY-12.2": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-PAY-12.3": {
+    "outcome": "ok",
+    "tool": "getTransactionsVolume"
+  },
+  "S-PAY-12.4": {
+    "outcome": "ok",
+    "tool": "exportTransactions"
+  },
+  "S-PAY-12.5": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-PAY-12.6": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-PAY-12.7": {
+    "outcome": "ok",
+    "tool": "getWebhookCallHistory"
+  },
+  "S-REM-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-REM-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-REM-01.3": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-REM-01.4": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-REM-01.5": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-REM-01.6": {
+    "outcome": "ok",
+    "tool": "listFxRates"
+  },
+  "S-REM-01.7": {
+    "outcome": "ok",
+    "tool": "verifyExternalAccount"
+  },
+  "S-REM-01.8": {
+    "outcome": "ok",
+    "tool": "listExternalAccounts"
+  },
+  "S-REM-01.9": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-01.10": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-01.11": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-01.12": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-REM-01.13": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-REM-02.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-REM-02.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-REM-02.3": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-REM-02.4": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-REM-02.5": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-REM-02.6": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountriesForAddress"
+  },
+  "S-REM-02.7": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-02.8": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-02.9": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-REM-02.10": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-03.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-REM-03.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-REM-03.3": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-REM-03.4": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-REM-03.5": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-03.6": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-03.7": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-03.8": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-04.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-REM-04.2": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-REM-04.3": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-REM-04.4": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-04.5": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-04.6": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-05.1": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCurrencies"
+  },
+  "S-REM-05.2": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-REM-05.3": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-REM-05.4": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-05.5": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-06.1": {
+    "outcome": "ok",
+    "tool": "createExternalAccount"
+  },
+  "S-REM-06.2": {
+    "outcome": "ok",
+    "tool": "updateExternalAccount"
+  },
+  "S-REM-06.3": {
+    "outcome": "ok",
+    "tool": "getExternalAccount"
+  },
+  "S-REM-06.4": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-06.5": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-REM-07.1": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-REM-07.2": {
+    "outcome": "ok",
+    "tool": "listWallets"
+  },
+  "S-REM-07.3": {
+    "outcome": "ok",
+    "tool": "createWallet"
+  },
+  "S-REM-07.4": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-07.5": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-07.6": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-07.7": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-REM-08.1": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-REM-08.2": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-08.3": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-09.1": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-REM-09.2": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-REM-09.3": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-REM-09.4": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-10.1": {
+    "outcome": "ok",
+    "tool": "getCustomerLimits"
+  },
+  "S-REM-10.2": {
+    "outcome": "ok",
+    "tool": "getRemitterLimits"
+  },
+  "S-REM-10.3": {
+    "outcome": "ok",
+    "tool": "resumeTransfer"
+  },
+  "S-REM-10.4": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-REM-10.5": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-REM-10.6": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-REM-10.7": {
+    "outcome": "ok",
+    "tool": "getWebhookCallHistory"
+  },
+  "S-SBX-01.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-SBX-01.2": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-SBX-01.3": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-SBX-02.1": {
+    "outcome": "ok",
+    "tool": "getCard"
+  },
+  "S-SBX-02.2": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-SBX-02.3": {
+    "outcome": "ok",
+    "tool": "getCardBalance"
+  },
+  "S-SBX-02.4": {
+    "outcome": "ok",
+    "tool": "updateCardStatus"
+  },
+  "S-SBX-02.5": {
+    "outcome": "ok",
+    "tool": "updateCardStatus"
+  },
+  "S-SBX-02.6": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-SBX-03.1": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-SBX-03.2": {
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
+  },
+  "S-SBX-03.3": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-SBX-03.4": {
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
+  },
+  "S-SBX-03.5": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-SBX-04.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-SBX-04.2": {
+    "outcome": "ok",
+    "tool": "listTransferSupportedCountries"
+  },
+  "S-SBX-04.3": {
+    "outcome": "ok",
+    "tool": "listExternalAccountInstitutions"
+  },
+  "S-SBX-04.4": {
+    "outcome": "ok",
+    "tool": "getTransferRates"
+  },
+  "S-SBX-04.5": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-SBX-04.6": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-SBX-05.1": {
+    "outcome": "ok",
+    "tool": "getCustomerKycStatus"
+  },
+  "S-SBX-05.2": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-SBX-05.3": {
+    "outcome": "ok",
+    "tool": "startCustomerKyc"
+  },
+  "S-SBX-06.1": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-SBX-06.2": {
+    "outcome": "ok",
+    "tool": "getTransaction"
+  },
+  "S-WAL-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-WAL-01.2": {
+    "outcome": "ok",
+    "tool": "createWallet"
+  },
+  "S-WAL-01.3": {
+    "outcome": "ok",
+    "tool": "listWallets"
+  },
+  "S-WAL-01.4": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-WAL-01.5": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-WAL-01.6": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-WAL-02.1": {
+    "outcome": "ok",
+    "tool": "createWallet"
+  },
+  "S-WAL-02.2": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-WAL-03.1": {
+    "outcome": "ok",
+    "tool": "listWallets"
+  },
+  "S-WAL-04.1": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-WAL-04.2": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-WAL-04.3": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-WAL-04.4": {
+    "outcome": "ok",
+    "tool": "getWallet"
+  },
+  "S-COL-01.1": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-COL-01.2": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-COL-01.3": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-COL-02.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-COL-02.2": {
+    "outcome": "ok",
+    "tool": "updateCustomer"
+  },
+  "S-COL-02.3": {
+    "outcome": "ok",
+    "tool": "createCollection"
+  },
+  "S-COL-02.4": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-COL-02.5": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-COL-02.6": {
+    "outcome": "ok",
+    "tool": "listTransactions"
+  },
+  "S-COL-02.7": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-COL-02.8": {
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
+  },
+  "S-COL-03.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-COL-03.2": {
+    "outcome": "mismatch",
+    "tool": "createCardPaymentIntent",
+    "problems": [
+      "metadata.lesson_id: is not declared"
+    ]
+  },
+  "S-COL-03.3": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-COL-03.4": {
+    "outcome": "ok",
+    "tool": "listSavedCards"
+  },
+  "S-COL-03.5": {
+    "outcome": "mismatch",
+    "tool": "listSavedCards",
+    "problems": [
+      "customer_id: is required"
+    ]
+  },
+  "S-COL-03.6": {
+    "outcome": "blocked",
+    "problems": [
+      "Not offered yet: the sandbox collection simulator is outside the published API reference, and whether to offer it is still open."
+    ]
+  },
+  "S-COL-04.1": {
+    "outcome": "mismatch",
+    "tool": "listSavedCards",
+    "problems": [
+      "customer_id: is required"
+    ]
+  },
+  "S-COL-04.2": {
+    "outcome": "ok",
+    "tool": "listSavedCards"
+  },
+  "S-COL-04.3": {
+    "outcome": "ok",
+    "tool": "getSavedCard"
+  },
+  "S-COL-04.4": {
+    "outcome": "ok",
+    "tool": "chargeSavedCard"
+  },
+  "S-COL-05.1": {
+    "outcome": "mismatch",
+    "tool": "listSavedCards",
+    "problems": [
+      "customer_id: is required"
+    ]
+  },
+  "S-COL-05.2": {
+    "outcome": "ok",
+    "tool": "listSavedCards"
+  },
+  "S-COL-05.3": {
+    "outcome": "ok",
+    "tool": "deleteSavedCard"
+  },
+  "S-COL-06.1": {
+    "outcome": "ok",
+    "tool": "getCollection"
+  },
+  "S-COL-07.1": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-COL-07.2": {
+    "outcome": "ok",
+    "tool": "getWebhookHistory"
+  },
+  "S-COL-07.3": {
+    "outcome": "ok",
+    "tool": "getWebhookEventDetail"
+  },
+  "S-COL-07.4": {
+    "outcome": "ok",
+    "tool": "getWebhookCallHistory"
+  }
+}

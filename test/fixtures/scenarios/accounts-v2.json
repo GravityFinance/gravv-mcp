@@ -1,0 +1,667 @@
+{
+  "about": "Requests from the Gravv integration scenarios (accounts-v2), written 2026-10-13 and checked against the service code. Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-ACC2-01.1",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-ACC2-01.2",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities?customer_id=<id>&customer_type=individual&currency=USD"
+    },
+    {
+      "id": "S-ACC2-01.3",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v2/accounts/requirements?customer_type=individual&currency=USD&bank_code=<bank_code>&country=GB&customer_id=<id>"
+    },
+    {
+      "id": "S-ACC2-01.4",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities?customer_id=...&customer_type=...&currency=..."
+    },
+    {
+      "id": "S-ACC2-01.5",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v2/accounts/requirements?customer_type=...&currency=...&bank_code=...&country=...&customer_id=..."
+    },
+    {
+      "id": "S-ACC2-01.6",
+      "scenario": "S-ACC2-01",
+      "method": "GET",
+      "path": "/v1/customers/{id}/kyc/status"
+    },
+    {
+      "id": "S-ACC2-02.1",
+      "scenario": "S-ACC2-02",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-ACC2-02.2",
+      "scenario": "S-ACC2-02",
+      "method": "GET",
+      "path": "/v2/accounts?customer_id=...&currency=USD"
+    },
+    {
+      "id": "S-ACC2-02.3",
+      "scenario": "S-ACC2-02",
+      "method": "GET",
+      "path": "/v2/accounts/requirements?customer_type=individual&currency=USD&bank_code=<bank_code>&country=<citizenship>&customer_id=<id>"
+    },
+    {
+      "id": "S-ACC2-02.4",
+      "scenario": "S-ACC2-02",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33",
+        "customer_type": "individual",
+        "currency": "USD",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<USD-W1 bank_code>",
+        "network": "polygon",
+        "label": "Ada USD",
+        "data": {
+          "root": {
+            "first_name": "Ada",
+            "last_name": "Okafor",
+            "date_of_birth": "1991-03-14",
+            "email": "ada.okafor@example.com",
+            "phone_daytime": "+447700900123",
+            "gender": "female",
+            "citizenship_country": "GB",
+            "tax_residence_country": "GB",
+            "permanent_address": {
+              "address_line": "12 Crown Street",
+              "city": "London",
+              "state": "GB-LND",
+              "postal_code": "EC1A 1BB",
+              "country": "GB"
+            }
+          },
+          "documents": [
+            {
+              "document_type": "passport",
+              "issuing_country": "GB",
+              "number": "533401372",
+              "issued_date": "2022-01-31",
+              "expiration_date": "2032-01-30",
+              "filename": "passport.jpg",
+              "content": "<base64 of the passport photo page>"
+            },
+            {
+              "document_type": "proof_of_address",
+              "issuing_country": "GB",
+              "filename": "utility-bill.pdf",
+              "content": "<base64 of a recent utility bill>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-02.5",
+      "scenario": "S-ACC2-02",
+      "method": "GET",
+      "path": "/v2/accounts/{account_id}"
+    },
+    {
+      "id": "S-ACC2-02.6",
+      "scenario": "S-ACC2-02",
+      "method": "POST",
+      "path": "/v1/wallets",
+      "body": {
+        "customer_id": "...",
+        "network": "polygon"
+      }
+    },
+    {
+      "id": "S-ACC2-03.1",
+      "scenario": "S-ACC2-03",
+      "method": "GET",
+      "path": "/v1/customers/{customer_id}"
+    },
+    {
+      "id": "S-ACC2-03.2",
+      "scenario": "S-ACC2-03",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "9a1e4c77-2f3b-4d8e-b6a0-5c3e8f9d1b22",
+        "customer_type": "business",
+        "currency": "USD",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<USD-W1 bank_code>",
+        "network": "base",
+        "label": "Acme USD",
+        "data": {
+          "root": {
+            "legal_name": "Acme Exports Ltd",
+            "business_type": "private limited company",
+            "industry": "wholesale_trade",
+            "registration_number": "12345678",
+            "incorporation_country": "GB",
+            "incorporation_date": "2015-03-01",
+            "tax_id_type": "ein",
+            "tax_id_number": "981234567",
+            "business_description": "Exports industrial pumps to buyers in North America",
+            "business_address": {
+              "address_line": "1 Finsbury Avenue",
+              "city": "London",
+              "state": "GB-LND",
+              "postal_code": "EC2M 2PF",
+              "country": "GB"
+            }
+          },
+          "parties": [
+            {
+              "id": "c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f",
+              "phone_daytime": "+447700900456",
+              "citizenship_country": "GB",
+              "has_ownership": true,
+              "ownership_percentage": 60,
+              "has_control": true,
+              "is_signer": true,
+              "residential_address": {
+                "address_line": "14 Deansgate",
+                "city": "Manchester",
+                "state": "GB-MAN",
+                "postal_code": "M3 2BW",
+                "country": "GB"
+              },
+              "documents": [
+                {
+                  "document_type": "passport",
+                  "issuing_country": "GB",
+                  "number": "548102937",
+                  "issued_date": "2021-07-01",
+                  "expiration_date": "2031-06-30",
+                  "filename": "owner-passport.jpg",
+                  "content": "<base64>"
+                },
+                {
+                  "document_type": "proof_of_address",
+                  "issuing_country": "GB",
+                  "filename": "owner-bill.pdf",
+                  "content": "<base64>"
+                }
+              ]
+            }
+          ],
+          "documents": [
+            {
+              "document_type": "articles_of_incorporation",
+              "issuing_country": "GB",
+              "filename": "articles.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "ownership_document",
+              "issuing_country": "GB",
+              "filename": "shareholders.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "proof_of_address",
+              "issuing_country": "GB",
+              "filename": "company-bill.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "control_structure",
+              "issuing_country": "GB",
+              "filename": "org-chart.pdf",
+              "content": "<base64>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-03.3",
+      "scenario": "S-ACC2-03",
+      "method": "GET",
+      "path": "/v2/accounts/{account_id}"
+    },
+    {
+      "id": "S-ACC2-04.1",
+      "scenario": "S-ACC2-04",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "4b7d1e2a-9c3f-4a5b-8d6e-0f1a2b3c4d5e",
+        "customer_type": "business",
+        "currency": "USD",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<US-F1 bank_code>",
+        "label": "Rocky Mountain Bakery USD",
+        "data": {
+          "root": {
+            "legal_name": "Rocky Mountain Bakery LLC",
+            "email": "accounts@rockymountainbakery.example",
+            "registration_number": "20151234567",
+            "incorporation_country": "US",
+            "incorporation_date": "2015-06-01",
+            "tax_id_type": "ein",
+            "tax_id_number": "841234567",
+            "industry": "manufacturing",
+            "business_status": "operating",
+            "business_entity_type": "llc",
+            "llc_taxed_as": "partnership",
+            "business_address": {
+              "address_line": "1600 Pearl Street",
+              "city": "Denver",
+              "state": "US-CO",
+              "postal_code": "80202",
+              "country": "US"
+            },
+            "expected_activity": {
+              "expected_avg_daily_balance": 25000,
+              "ach_in": {
+                "monthly_count": 40,
+                "monthly_amount": 60000
+              }
+            }
+          },
+          "parties": [
+            {
+              "id": "e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b",
+              "party_role": "primary",
+              "date_of_birth": "1984-11-02",
+              "citizenship_country": "US",
+              "has_ownership": true,
+              "ownership_percentage": 100,
+              "tax_id_type": "ssn",
+              "tax_id_number": "123456780",
+              "permanent_address": {
+                "address_line": "88 Elm Avenue",
+                "city": "Denver",
+                "state": "US-CO",
+                "postal_code": "80203",
+                "country": "US"
+              },
+              "mailing_address": {
+                "address_line": "88 Elm Avenue",
+                "city": "Denver",
+                "state": "US-CO",
+                "postal_code": "80203",
+                "country": "US"
+              },
+              "documents": [
+                {
+                  "document_type": "drivers_license",
+                  "document_type_side": "front",
+                  "issuing_country": "US",
+                  "number": "D1234567",
+                  "issued_date": "2022-04-10",
+                  "expiration_date": "2030-04-10",
+                  "filename": "dl-front.jpg",
+                  "content": "<base64>"
+                }
+              ]
+            }
+          ],
+          "documents": [
+            {
+              "document_type": "articles_of_incorporation",
+              "issuing_country": "US",
+              "filename": "articles.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "ownership_document",
+              "issuing_country": "US",
+              "filename": "operating-agreement.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "proof_of_address",
+              "issuing_country": "US",
+              "filename": "lease.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "control_structure",
+              "issuing_country": "US",
+              "filename": "control.pdf",
+              "content": "<base64>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-04.2",
+      "scenario": "S-ACC2-04",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-05.1",
+      "scenario": "S-ACC2-05",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f",
+        "customer_type": "individual",
+        "currency": "EUR",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<MULTI-W2 bank_code>",
+        "network": "polygon",
+        "label": "Lucas EUR",
+        "data": {
+          "root": {
+            "first_name": "Lucas",
+            "last_name": "Ferreira",
+            "date_of_birth": "1993-08-21",
+            "email": "lucas.ferreira@example.com",
+            "citizenship_country": "PT",
+            "tax_residence_country": "PT",
+            "immigration_status": "non_resident",
+            "permanent_address": {
+              "address_line": "Rua Augusta 100",
+              "city": "Lisboa",
+              "state": "PT-11",
+              "postal_code": "1100-053",
+              "country": "PT"
+            },
+            "international_supplement": {
+              "has_us_bank_account": false,
+              "has_denied_bank_account": false,
+              "has_regulatory_action": false,
+              "is_politically_exposed": false
+            },
+            "expected_activity": {
+              "expected_avg_daily_balance": 3000,
+              "ach_in": {
+                "monthly_count": 0,
+                "monthly_amount": 0
+              }
+            }
+          },
+          "documents": [
+            {
+              "document_type": "national_id",
+              "document_type_side": "front",
+              "issuing_country": "PT",
+              "number": "123456789ZZ1",
+              "issued_date": "2021-02-01",
+              "expiration_date": "2031-02-01",
+              "filename": "cc-front.jpg",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "proof_of_address",
+              "issuing_country": "PT",
+              "filename": "bill.pdf",
+              "content": "<base64>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-05.2",
+      "scenario": "S-ACC2-05",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-06.1",
+      "scenario": "S-ACC2-06",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+        "customer_type": "business",
+        "currency": "EUR",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<IBAN-F2 bank_code>",
+        "label": "Northwind EUR",
+        "data": {
+          "root": {
+            "legal_name": "Northwind Design Ltd",
+            "registration_number": "09876543",
+            "incorporation_country": "GB",
+            "incorporation_date": "2016-09-12",
+            "business_description": "Brand and packaging design studio",
+            "website": "https://northwind-design.example",
+            "business_address": {
+              "address_line": "20 Quay Street",
+              "city": "Manchester",
+              "postal_code": "M3 3HN",
+              "country": "GB"
+            }
+          },
+          "parties": [
+            {
+              "id": "f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b",
+              "party_role": "primary",
+              "has_ownership": true,
+              "ownership_percentage": 100,
+              "has_control": true,
+              "is_signer": true,
+              "is_director": true,
+              "date_of_birth": "1987-05-09",
+              "citizenship_country": "GB",
+              "documents": [
+                {
+                  "document_type": "passport",
+                  "issuing_country": "GB",
+                  "number": "530112874",
+                  "issued_date": "2020-03-01",
+                  "expiration_date": "2030-03-01",
+                  "filename": "passport.jpg",
+                  "content": "<base64>"
+                }
+              ]
+            }
+          ],
+          "documents": [
+            {
+              "document_type": "articles_of_incorporation",
+              "issuing_country": "GB",
+              "filename": "articles.pdf",
+              "content": "<base64>"
+            },
+            {
+              "document_type": "proof_of_address",
+              "issuing_country": "GB",
+              "filename": "company-bill.pdf",
+              "content": "<base64>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-06.2",
+      "scenario": "S-ACC2-06",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-07.1",
+      "scenario": "S-ACC2-07",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42",
+        "customer_type": "individual",
+        "currency": "NGN",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<NG-F3 bank_code>",
+        "label": "Chidi NGN",
+        "data": {
+          "root": {
+            "first_name": "Chidi",
+            "middle_name": "Emeka",
+            "last_name": "Okafor",
+            "phone": "+2348031234567",
+            "bank_verification_number": "22123456789"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-07.2",
+      "scenario": "S-ACC2-07",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-08.1",
+      "scenario": "S-ACC2-08",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b",
+        "customer_type": "business",
+        "currency": "KES",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<KE-F4 bank_code>",
+        "label": "Savanna KES",
+        "data": {
+          "root": {
+            "legal_name": "Savanna Traders Ltd",
+            "incorporation_country": "KE"
+          }
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-08.2",
+      "scenario": "S-ACC2-08",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-09.1",
+      "scenario": "S-ACC2-09",
+      "method": "GET",
+      "path": "/v2/accounts/{account_id}"
+    },
+    {
+      "id": "S-ACC2-09.2",
+      "scenario": "S-ACC2-09",
+      "method": "GET",
+      "path": "/v2/accounts/applications/{application_id}"
+    },
+    {
+      "id": "S-ACC2-09.3",
+      "scenario": "S-ACC2-09",
+      "method": "GET",
+      "path": "/v2/accounts/applications?customer_id=<id>&status=blocked"
+    },
+    {
+      "id": "S-ACC2-09.4",
+      "scenario": "S-ACC2-09",
+      "method": "PATCH",
+      "path": "/v2/accounts/applications/{application_id}",
+      "body": {
+        "documents": [
+          {
+            "document_type": "proof_of_address",
+            "issuing_country": "GB",
+            "filename": "council-tax-2026.pdf",
+            "content": "<base64>"
+          }
+        ]
+      }
+    },
+    {
+      "id": "S-ACC2-09.5",
+      "scenario": "S-ACC2-09",
+      "method": "PATCH",
+      "path": "/v2/accounts/applications/{application_id}",
+      "body": {
+        "metadata": {
+          "tax_id_number": "123456789"
+        }
+      }
+    },
+    {
+      "id": "S-ACC2-10.1",
+      "scenario": "S-ACC2-10",
+      "method": "GET",
+      "path": "/v2/accounts?customer_id=<id>"
+    },
+    {
+      "id": "S-ACC2-10.2",
+      "scenario": "S-ACC2-10",
+      "method": "GET",
+      "path": "/v1/accounts/capabilities?customer_id=<id>&currency=..."
+    },
+    {
+      "id": "S-ACC2-10.3",
+      "scenario": "S-ACC2-10",
+      "method": "GET",
+      "path": "/v2/accounts/requirements?...&customer_id=<id>&bank_code=..."
+    },
+    {
+      "id": "S-ACC2-10.4",
+      "scenario": "S-ACC2-10",
+      "method": "GET",
+      "path": "/v2/accounts?customer_id=..."
+    },
+    {
+      "id": "S-ACC2-10.5",
+      "scenario": "S-ACC2-10",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "3a4b5c6d-7e8f-4a9b-8c0d-1e2f3a4b5c6d",
+        "customer_type": "business",
+        "currency": "GBP",
+        "account_type": "operating",
+        "category": "sub_account",
+        "bank_code": "<MULTI-W2 bank_code>",
+        "network": "polygon",
+        "label": "Brightleaf GBP"
+      }
+    },
+    {
+      "id": "S-ACC2-11.1",
+      "scenario": "S-ACC2-11",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-11.2",
+      "scenario": "S-ACC2-11",
+      "method": "GET",
+      "path": "/v2/accounts"
+    },
+    {
+      "id": "S-ACC2-12.1",
+      "scenario": "S-ACC2-12",
+      "method": "GET",
+      "path": "/v2/accounts/{id}"
+    },
+    {
+      "id": "S-ACC2-12.2",
+      "scenario": "S-ACC2-12",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11",
+        "amount": "250.00",
+        "rail": "wire"
+      }
+    }
+  ]
+}
