@@ -42,7 +42,8 @@
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "scenarios": "node --experimental-strip-types scripts/scenarios.ts",
-    "docs-links": "node --experimental-strip-types scripts/docs-links.ts"
+    "docs-links": "node --experimental-strip-types scripts/docs-links.ts",
+    "sandbox-replay": "node --experimental-strip-types scripts/sandbox-replay.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
