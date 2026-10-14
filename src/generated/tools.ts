@@ -2794,7 +2794,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/orders",
-    "description": "Create order — Creates an OTC order. The order is created in `waiting_approval` and doesn't execute until a second user approves it. A `market` order executes at the current rate once approved. A `limit` order waits until the rate reaches `target_rate`, then executes once approved. Set `destination_type` to control where the converted funds settle: an internal `account`, a crypto `wallet`, or a saved settlement instruction (`ssi`). The `Idempotency-Key` header is required; requests without it are rejected.\n\nOrders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "description": "Create order — Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is debited at once: there is no approval step and no second user (`waiting_approval` is only for orders placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and `metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes from an older spec and still asks for some of them, so any value passes. The amount is the quote's. The `Idempotency-Key` header is required; this server sends one.\n\nPREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2919,7 +2919,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "description": "Transfer — Initiate a transfer between internal accounts, external accounts, or crypto wallets.\n\nPREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3794,7 +3794,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/quote",
-    "description": "Create an FX quote — Returns a foreign exchange rate quote for a given currency pair and amount. The quote includes a `quote_id` and an expiry time. Use the `quote_id` when submitting a transfer to lock in the quoted rate. The `Idempotency-Key` header is required; requests without it are rejected.\n\nQuotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "description": "Create an FX quote — The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and `amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this server sends one.\n\nQuotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3810,12 +3810,12 @@ export const TOOLS: GeneratedTool[] = [
         },
         "amount": {
           "type": "number",
-          "description": "Amount in the source currency to convert. Must be greater than zero.",
+          "description": "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON number is rejected with `invalid request encoding`.",
           "example": 10
         },
         "direction": {
           "type": "string",
-          "description": "Direction of the trade.",
+          "description": "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair (for example USD_XAF) instead.",
           "enum": [
             "BUY",
             "SELL"
@@ -4721,7 +4721,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/pending-approvals",
-    "description": "List pending approvals — Lists the orders in `waiting_approval` that are waiting on an approve or reject decision.",
+    "description": "List pending approvals — Lists the orders in `waiting_approval` that are waiting on an approve or reject decision.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
     "inputSchema": {
       "type": "object",
       "properties": {

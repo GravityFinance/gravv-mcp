@@ -338,7 +338,42 @@ export interface DescriptionOverride {
   params?: Record<string, string>;
 }
 
-export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {};
+export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
+  // ---- fx ------------------------------------------------------------------
+  // The fx spec predates the current API: its request fields and the approval and
+  // rate-lock claims are all out of date. The schemas stay as generated until the spec
+  // is fixed, so the descriptions say which fields the API actually reads.
+  getFxQuote: {
+    whileSpecSays: "lock in the quoted rate",
+    description:
+      "The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and " +
+      "`amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is " +
+      "sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The " +
+      "response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with " +
+      "createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this " +
+      "server sends one.",
+    params: {
+      amount:
+        "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON " +
+        "number is rejected with `invalid request encoding`.",
+      direction:
+        "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair " +
+        "(for example USD_XAF) instead.",
+    },
+  },
+  createFxOrder: {
+    whileSpecSays: "doesn't execute until a second user approves it",
+    description:
+      "Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is " +
+      "debited at once: there is no approval step and no second user (`waiting_approval` is only for orders " +
+      "placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: " +
+      "internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement " +
+      "instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and " +
+      "`metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes " +
+      "from an older spec and still asks for some of them, so any value passes. The amount is the quote's. " +
+      "The `Idempotency-Key` header is required; this server sends one.",
+  },
+};
 
 /**
  * Names a model is likely to reach for that map to blocked operations.
@@ -433,7 +468,7 @@ export const PREREQUISITES: Record<string, string> = {
     "RETURNS 202: the recipient is not immediately usable. This returns status `pending` while the payment rail sets the recipient up. Poll getExternalAccount until status is `active` before calling createTransfer — transferring to a `pending` recipient fails. Terminal states are `active` and `failed`.",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). If you locked a rate with getFxQuote, pass its quote_id. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). MOVES MONEY: requires confirm: true.",
 
   submitAccountApplication:
     "ORDERING: applications flow DRAFT -> SUBMITTED -> PROCESSING -> CREATING_ACCOUNT -> APPROVED or REJECTED. Submitting only advances to SUBMITTED; call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
@@ -448,10 +483,13 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: wallet provisioning happens through the custody provider and may not be complete when this returns. Poll getWallet until the wallet reports an address.",
 
   getFxQuote:
-    "Quotes expire. The response carries a quote_id and an expiry — pass quote_id to createTransfer to lock the rate. Re-quote if it has expired rather than transferring at an unlocked rate.",
+    "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
 
   createFxOrder:
-    "Orders are created in `waiting_approval` and do NOT execute until a second user approves them in the dashboard. Approval is not available over the API — API-key callers are blocked from the approve/reject endpoints. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
+
+  listFxPendingApprovals:
+    "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
   withdrawFromCard: "MOVES MONEY: moves funds off a card balance. Requires confirm: true.",
 
