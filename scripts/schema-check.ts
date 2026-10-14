@@ -58,6 +58,15 @@ const FORMATS: Record<string, (v: unknown) => boolean> = {
   ipv4: (v) =>
     typeof v === "string" && /^(\d{1,3})(\.\d{1,3}){3}$/.test(v) && v.split(".").every((p) => Number(p) <= 255),
   int32: (v) => typeof v === "number" && Number.isInteger(v) && v >= -(2 ** 31) && v < 2 ** 31,
+  int64: (v) => typeof v === "number" && Number.isInteger(v),
+  uri: (v) => {
+    if (typeof v !== "string") return false;
+    try {
+      return new URL(v).protocol.length > 1;
+    } catch {
+      return false;
+    }
+  },
   byte: (v) => typeof v === "string" && v.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(v),
 };
 

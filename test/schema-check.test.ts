@@ -46,6 +46,8 @@ describe("checkSchema", () => {
     assert.deepEqual(checkSchema(payee, { ...ok, customer_id: "abc" }), ["customer_id: not a valid uuid"]);
     assert.deepEqual(checkSchema({ type: "string", format: "date" }, "2026-13-40"), ["(arguments): not a valid date"]);
     assert.deepEqual(checkSchema({ type: "string", format: "date-time" }, "2026-10-13T09:15:22.481Z"), []);
+    assert.deepEqual(checkSchema({ type: "string", format: "uri" }, "https://example.com/done"), []);
+    assert.deepEqual(checkSchema({ type: "string", format: "uri" }, "example.com"), ["(arguments): not a valid uri"]);
   });
 
   test("type lists, exclusive bounds and item counts", () => {
@@ -134,13 +136,13 @@ describe("tool schemas", () => {
     assert.deepEqual(found, []);
   });
 
-  test("only the known pattern is outside ECMAScript", () => {
-    // JSON Schema patterns are ECMAScript regular expressions. The KYC upload spec writes
-    // an inline (?i) flag, which a validating client cannot compile. It is pinned here so
-    // a fix in the spec, or a new pattern like it, shows up as a failing test.
+  test("every pattern is an ECMAScript regular expression", () => {
+    // JSON Schema patterns are ECMAScript regular expressions; a validating client cannot
+    // compile one written for another dialect, such as an inline (?i) flag. The KYC upload
+    // spec carried one until docs Phase 3 dropped the pattern (the content decides the type).
     const found = [...TOOLS, ...MANUAL_TOOLS].flatMap((tool) =>
       invalidPatterns(tool.inputSchema).map((p) => `${tool.name} ${p}`),
     );
-    assert.deepEqual(found, ["uploadCustomerKycDocument filename: (?i)\\.(jpe?g|png|pdf)$"]);
+    assert.deepEqual(found, []);
   });
 });

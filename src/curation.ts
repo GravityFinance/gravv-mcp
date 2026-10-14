@@ -253,9 +253,9 @@ export const NAMES: Record<string, Op> = {
  *    gives the model two plausible paths for the same job and it will sometimes pick
  *    the deprecated one.
  *
- *  - Retired. Payment links are no longer part of the Gravv API. Their specification is
- *    still vendored until the next spec sync removes it, so the routes must be listed
- *    here or the generator reports them as unmapped.
+ *  - Retired. Payment links are no longer part of the Gravv API, and the docs Phase 3
+ *    sync removed their specification. The entries stay as the written record, so a
+ *    caller who asks for them is told why they are gone.
  *
  *  - Broken until the specification is fixed. The vendored spec omits a request body the
  *    API requires, so a generated tool would fail on every call. These return when the
@@ -351,104 +351,9 @@ export interface DescriptionOverride {
 }
 
 export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
-  // ---- customers -----------------------------------------------------------
-  updateCustomer: {
-    whileSpecSays: "Cosmetic path parameter",
-    description:
-      "Update details of a customer. The customer is taken from the path customer_id; a customer_id in the " +
-      "body is overwritten by the path value. Only provided fields are updated.",
-    params: { customer_id: "Customer to update. Taken from the path; any body value is overwritten." },
-  },
-
-  // ---- external accounts ---------------------------------------------------
-  createExternalAccount: {
-    whileSpecSays: "is idempotent and returns the existing",
-    description:
-      "Adds an external account (a payee) for transfers to accounts outside Gravv. swift, sepa, ach_wire and " +
-      "fps payees return HTTP 202 with status `pending` while setup runs in the background; bank_account and " +
-      "mobile_money payees return HTTP 200 with status `active`. Track a pending payee with " +
-      "getExternalAccount or the external_account.active and external_account.setup_failed webhooks. A " +
-      "duplicate is not idempotent: it returns 400 ERROR_CODE_DUPLICATE_PAYEE with the existing id in " +
-      "data.payee_id.",
-  },
-  getExternalAccount: {
-    whileSpecSays: "calling it until the status changes to",
-    description:
-      "Retrieve details of an external account. After a 202 from createExternalAccount, poll until status is " +
-      "`active` (usable) or `setup_failed` (terminal: read error_message). A missing id returns HTTP 400 with " +
-      "code ERROR_CODE_NOT_FOUND.",
-  },
-
-  // ---- transactions --------------------------------------------------------
-  exportTransactions: {
-    whileSpecSays: "Maximum 50,000 records per export",
-    description:
-      "Exports matching transactions as a downloadable file, in CSV or JSON. Today it returns at most the 10 " +
-      "newest matching rows (a known bug).",
-  },
-
-  // ---- collections ---------------------------------------------------------
-  createCollection: {
-    whileSpecSays: "(card, bank transfer, and mobile money)",
-    description:
-      "Initiates a bank-transfer collection. The response carries the payment instructions for the payer.",
-  },
-  getCollection: {
-    whileSpecSays: "no API key is required",
-    description:
-      "Returns the status and details of a collection. It needs an API key like every other call. Pass the " +
-      "transaction_id from createCollection, chargeSavedCard or a webhook, not the `id` field of an earlier " +
-      "getCollection. transaction_status is pending, completed, failed, refunded, refund_pending or disputed.",
-  },
-  createCardPaymentIntent: {
-    whileSpecSays: "token you got from the webhook",
-    params: {
-      card_token: "Saved card token from listSavedCards. When set, the card is charged at once.",
-    },
-  },
-
-  // ---- cards ---------------------------------------------------------------
-  updateCardStatus: {
-    whileSpecSays: "Optional spending limit",
-    params: {
-      limit: "Daily limit in whole USD. Always send it: leaving it out sets the daily limit to 0.",
-    },
-  },
-
-  // ---- fx ------------------------------------------------------------------
-  // The fx spec predates the current API: its request fields and the approval and
-  // rate-lock claims are all out of date. The schemas stay as generated until the spec
-  // is fixed, so the descriptions say which fields the API actually reads.
-  getFxQuote: {
-    whileSpecSays: "lock in the quoted rate",
-    description:
-      "The API reads `currency_pair` (FROM_TO, the currency you sell first, for example `USD_XAF`) and " +
-      "`amount` (the sell amount in major units, sent as a string such as \"1000\"). When currency_pair is " +
-      "sent, from_currency, to_currency and direction are ignored, so any value passes the schema. The " +
-      "response carries a `quote_id` and an `expires_at` about 5 minutes ahead. Use the quote_id only with " +
-      "createFxOrder: it does not lock a rate for transfers. The `Idempotency-Key` header is required; this " +
-      "server sends one.",
-    params: {
-      amount:
-        "The sell amount in major units of the FROM currency, sent as a STRING (for example \"1000\"). A JSON " +
-        "number is rejected with `invalid request encoding`.",
-      direction:
-        "Ignored when currency_pair is sent. BUY and SELL are not values the API accepts; send currency_pair " +
-        "(for example USD_XAF) instead.",
-    },
-  },
-  createFxOrder: {
-    whileSpecSays: "doesn't execute until a second user approves it",
-    description:
-      "Creates an OTC order from a quote. Over an API key the order is created `pending` and the source is " +
-      "debited at once: there is no approval step and no second user (`waiting_approval` is only for orders " +
-      "placed in the Dashboard). The API reads `quote_id` (from getFxQuote), `source` {type: " +
-      "internal_account | internal_crypto_wallet, id} and `destination` {type: external_account (a settlement " +
-      "instruction id) | internal_account | internal_crypto_wallet, id}, plus optional `client_reference` and " +
-      "`metadata`. It ignores order_type, side, pair, target_rate, amount and customer_id: the schema comes " +
-      "from an older spec and still asks for some of them, so any value passes. The amount is the quote's. " +
-      "The `Idempotency-Key` header is required; this server sends one.",
-  },
+  // The ten overrides for the pre-Phase 3 specs (customers, external accounts,
+  // transactions, collections, cards and fx) were deleted when the specs were fixed at
+  // source and synced; generation reported each as stale.
 };
 
 /**

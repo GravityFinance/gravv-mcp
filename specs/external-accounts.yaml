@@ -18,523 +18,284 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: A unique key to prevent duplicate requests.
+      description: >-
+        1 to 255 printable ASCII characters. A retry with the same key within 24
+        hours returns the first response, including a 400. After you correct a
+        request, send a new key.
       schema:
         type: string
-      example: order_789_attempt_1
-    EventIdPath:
-      name: event_id
+        minLength: 1
+        maxLength: 255
+      example: add-payee-jane-doe-1
+    ExternalAccountIdPath:
+      name: external_account_id
       in: path
       required: true
-      description: UUID of the webhook event
+      description: ID of the external account
       schema:
         type: string
         format: uuid
-      example: 550e8400-e29b-41d4-a716-446655440000
+      example: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
   schemas:
-    SwiftRecipientAddress:
-      type: object
-      required:
-        - address_line1
-        - city
-        - postal_code
-        - country
-      properties:
-        address_line1:
-          type: string
-          example: 1800 N Pole St
-        house_building_number:
-          type: string
-          example: 1B
-        address_line2:
-          type: string
-          example: Suite 202
-        city:
-          type: string
-          example: Orlando
-        postal_code:
-          type: string
-          example: '32801'
-        state:
-          type: string
-          example: US-FL
-        country:
-          type: string
-          example: US
-    ExtRecipientAddress:
-      type: object
-      required:
-        - address_line1
-        - city
-        - postal_code
-        - country
-      properties:
-        address_line1:
-          type: string
-          example: 1800 N Pole St
-        address_line2:
-          type: string
-          example: Suite 202
-        city:
-          type: string
-          example: Orlando
-        postal_code:
-          type: string
-          example: '32801'
-        state:
-          type: string
-          example: US-FL
-        country:
-          type: string
-          example: US
-    BaseExternalAccountRecipient:
-      type: object
-      required:
-        - account_name
-        - customer_id
-      properties:
-        account_name:
-          type: string
-          description: Name of the account holder.
-          maxLength: 100
-          example: Amina Bello
-        customer_id:
-          type: string
-          format: uuid
-          description: ID of the customer who owns the external account.
-          example: 373556ec-74e5-4cde-909c-b94d864915db
-    USBanksRecipient:
-      type: object
-      title: US Bank Account Recipient
-      required:
-        - payee_type
-        - account_number
-        - routing_number
-        - account_owner_type
-        - account_type
-        - currency
-        - address
-      properties:
-        payee_type:
-          type: string
-          description: Type of payee
-          enum:
-            - ach_wire
-          example: ach_wire
-        account_number:
-          type: string
-          description: Bank account number
-          example: '4401682860'
-          maxLength: 50
-        bank_name:
-          type: string
-          description: Name of the bank
-          example: Example Community Bank
-          maxLength: 100
-        routing_number:
-          type: string
-          description: 9-digit ABA routing number
-          example: '101019644'
-          maxLength: 20
-        account_owner_type:
-          type: string
-          description: Type of account owner
-          enum:
-            - individual
-            - business
-          example: individual
-        account_type:
-          type: string
-          description: Type of bank account
-          enum:
-            - savings
-            - checking
-          example: savings
-        currency:
-          type: string
-          description: Currency code
-          enum:
-            - USD
-          example: USD
-        address:
-          $ref: '#/components/schemas/ExtRecipientAddress'
-    GlobalBankRecipient:
-      type: object
-      title: Global Bank Recipient
-      required:
-        - payee_type
-        - currency
-        - institution_id
-      properties:
-        payee_type:
-          type: string
-          description: Type of payee
-          enum:
-            - bank_account
-          example: bank_account
-        account_number:
-          type: string
-          description: Account number or phone number
-          example: '4401682860'
-          maxLength: 50
-        bank_name:
-          type: string
-          description: Name of the bank
-          example: Access Bank
-          maxLength: 100
-        iban:
-          type: string
-          description: International Bank Account Number
-          example: GB33BUKB20201555555555
-        institution_id:
-          type: string
-          format: uuid
-          description: Institution ID
-          example: 4b595668-98dc-4cbc-9ac6-1343b6127a58
-        currency:
-          type: string
-          description: Currency code for the account
-          example: NGN
-          enum:
-            - NGN
-            - GHS
-            - KES
-            - UGX
-            - ZMW
-            - XOF
-            - BWP
-            - CDF
-            - XAF
-            - MWK
-            - RWF
-            - ZAR
-            - TZS
-            - BDT
-            - BIF
-            - CNY
-            - COP
-            - DOP
-            - EGP
-            - ETB
-            - GMD
-            - GTQ
-            - GNF
-            - INR
-            - ILS
-            - JOD
-            - LRD
-            - MRU
-            - MXN
-            - MAD
-            - MZN
-            - PKR
-            - PHP
-            - PLN
-            - AED
-            - SOS
-            - SLL
-            - TND
-            - TRY
-            - USD
-            - ZWL
-    SepaRecipient:
-      type: object
-      title: Sepa Recipient
-      description: Sepa recipient
-      required:
-        - payee_type
-        - account_owner_type
-        - iban
-        - account_name
-        - currency
-        - customer_id
-        - address
-      properties:
-        payee_type:
-          type: string
-          description: Type of payee
-          enum:
-            - sepa
-          example: sepa
-        account_owner_type:
-          type: string
-          description: Type of account owner
-          enum:
-            - individual
-            - business
-          example: individual
-        iban:
-          type: string
-          description: International Bank Account Number
-          example: DE89370400440532013000
-          maxLength: 50
-        account_name:
-          type: string
-          description: Name of the account holder
-          example: Amina Bello
-          maxLength: 100
-        bank_name:
-          type: string
-          description: Bank name
-          example: Deutsche Bank
-        currency:
-          type: string
-          description: Currency code for the account
-          example: EUR
-          enum:
-            - EUR
-        customer_id:
-          type: string
-          format: uuid
-          description: ID of the customer who owns this recipient
-          example: 373556ec-74e5-4cde-909c-b94d864915db
-        address:
-          $ref: '#/components/schemas/ExtRecipientAddress'
-    SwiftRecipient:
-      type: object
-      title: Swift Recipient
-      allOf:
-        - required:
-            - payee_type
-            - account_owner_type
-            - bic
-            - currency
-            - address
-          properties:
-            payee_type:
-              type: string
-              description: Type of payee
-              enum:
-                - swift
-              example: swift
-            account_owner_type:
-              type: string
-              enum:
-                - individual
-                - business
-            bank_name:
-              type: string
-              example: Guaranty Trust Bank (GTBank)
-            account_number:
-              type: string
-              description: Bank account number
-              example: '1245909283'
-            iban:
-              type: string
-              description: International Bank Account Number
-              example: GB33BUKB20201555555555
-              maxLength: 34
-            bic:
-              type: string
-              example: NG2893A
-            currency:
-              type: string
-              enum:
-                - USD
-            address:
-              $ref: '#/components/schemas/SwiftRecipientAddress'
-        - oneOf:
-            - title: With account number
-              required:
-                - account_number
-            - title: With IBAN
-              required:
-                - iban
-    GlobalMobileMoneyRecipient:
-      type: object
-      title: Global Mobile Money Recipient
-      required:
-        - payee_type
-        - phone_number
-        - currency
-        - institution_id
-      properties:
-        payee_type:
-          type: string
-          description: Type of payee
-          enum:
-            - mobile_money
-          example: mobile_money
-        phone_number:
-          type: string
-          description: Mobile money account number or phone number
-          example: '+233241234567'
-        institution_id:
-          type: string
-          format: uuid
-          description: Institution ID
-          example: 4b595668-98dc-4cbc-9ac6-1343b6127a58
-        currency:
-          type: string
-          description: Currency code for the account
-          example: NGN
-          enum:
-            - NGN
-            - GHS
-            - KES
-            - UGX
-            - ZMW
-            - XOF
-            - BWP
-            - CDF
-            - XAF
-            - MWK
-            - RWF
-            - ZAR
-            - TZS
-            - BDT
-            - BIF
-            - CNY
-            - COP
-            - DOP
-            - EGP
-            - ETB
-            - GMD
-            - GTQ
-            - GNF
-            - INR
-            - ILS
-            - JOD
-            - LRD
-            - MRU
-            - MXN
-            - MAD
-            - MZN
-            - PKR
-            - PHP
-            - PLN
-            - AED
-            - SOS
-            - SLL
-            - TND
-            - TRY
-            - USD
-            - ZWL
-    AddRecipientRequest:
-      allOf:
-        - $ref: '#/components/schemas/BaseExternalAccountRecipient'
-        - type: object
-          properties:
-            payment_rail:
-              type:
-                - string
-                - 'null'
-              description: >-
-                Optional. US payment rail to use when `payee_type` is `ach_wire`.
-                Accepted values: `ach` (ACH transfer) or `wire` (domestic wire).
-                Defaults to `wire` when omitted.
-              enum:
-                - ach
-                - wire
-              example: ach
-        - oneOf:
-            - $ref: '#/components/schemas/USBanksRecipient'
-            - $ref: '#/components/schemas/SepaRecipient'
-            - $ref: '#/components/schemas/SwiftRecipient'
-            - $ref: '#/components/schemas/GlobalBankRecipient'
-            - $ref: '#/components/schemas/GlobalMobileMoneyRecipient'
-    PayeeInstitutionItem:
-      type: object
-      required:
-        - id
-        - name
-        - country_iso_code
-        - currency
-        - account_number_type
-        - min_amount
-        - max_amount
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Institution identifier.
-          example: c4788635-764d-43d3-9ffb-966b0fe29ff9
-        name:
-          type: string
-          description: Human-readable institution name.
-          example: Keystone Bank PLC
-        country_iso_code:
-          type: string
-          description: ISO 3166-1 alpha-2 country code.
-          example: NG
-        currency:
-          type: string
-          description: Settlement currency for this institution.
-          example: NGN
-        account_number_type:
-          type: string
-          description: Identifier type accepted by this institution.
-          enum:
-            - bank_account_number
-            - iban
-            - phone_number
-            - clabe
-          example: bank_account_number
-        min_amount:
-          type: integer
-          description: Minimum transfer amount in the institution's currency minor units.
-          example: 1
-        max_amount:
-          type: integer
-          description: Maximum transfer amount in the institution's currency minor units.
-          example: 10000
-        logo_url:
-          type:
-            - string
-            - 'null'
-          description: URL to the institution's logo image, when available.
-          example: https://assets.gravv.xyz/logos/keystone-bank.png
-        institution_type:
-          type:
-            - string
-            - 'null'
-          description: Category of financial institution.
-          enum:
-            - bank
-            - mobile_money
-          example: bank
+    PayeeType:
+      type: string
+      description: >-
+        How the account is paid. `bank_account` and `mobile_money` are active at
+        once. `swift`, `sepa`, `ach_wire` and `fps` need a setup step and start
+        as `pending`.
+      enum:
+        - bank_account
+        - mobile_money
+        - swift
+        - sepa
+        - ach_wire
+        - fps
+      example: bank_account
     ExternalAccountStatus:
       type: string
+      description: >-
+        `pending` while setup runs, then `active` (ready for transfers) or
+        `setup_failed` (read `error_message`, then correct it with PATCH).
       enum:
-        - active
         - pending
-      description: >
-        `active`: The external account is fully registered with our payment partners and is ready to use.
-        `pending`: Registration is still in progress. To learn when it changes to `active`, either check the status by calling `GET /v1/external-accounts/{external_account_id}` until it is `active`, or subscribe to the external account webhook events.
-    ExternalAccountResponse:
+        - active
+        - setup_failed
+        - archived
+        - deleted
+      example: active
+    Address:
       type: object
-      required:
-        - id
-        - customer_id
-        - payee_type
-        - currency
-        - status
-        - date_created
+      description: >-
+        The account holder's address. Required for `swift`, `sepa`, `ach_wire`
+        and `fps`, and for some banks and payout corridors.
       properties:
-        id:
+        address_line1:
           type: string
-          format: uuid
-          description: External account identifier; use this to fetch or initiate transfers.
-          example: 9f8b2c4d-3e1a-4b5c-6d7e-8f9a0b1c2d3e
+          minLength: 4
+          maxLength: 34
+          example: 350 Fifth Avenue
+        address_line2:
+          type: string
+          maxLength: 35
+        house_building_number:
+          type: string
+          maxLength: 35
+        city:
+          type: string
+          maxLength: 35
+          example: New York
+        state:
+          type: string
+          maxLength: 35
+          example: NY
+        postal_code:
+          type: string
+          description: Checked against the country's postal code format
+          example: '10118'
+        country:
+          type: string
+          description: Alpha-2 code
+          example: US
+    AddExternalAccountRequest:
+      type: object
+      description: >-
+        The fields each `payee_type` needs:
+
+
+        - `bank_account`: `account_number`. Send `institution_id` to name the
+        bank.
+
+        - `mobile_money`: `phone_number` with the country code, and
+        `institution_id` for the operator.
+
+        - `ach_wire` (USD only): `routing_number`, `account_number`,
+        `payment_rail`, `account_owner_type`, `bank_name` and `address`.
+
+        - `swift` (USD only): `bic`, `account_number` (even with an IBAN),
+        `account_owner_type`, `address` with `city`, `state` and `country`,
+        and the bank address fields.
+
+        - `sepa` (EUR only): `iban`, `account_owner_type`, `bank_name` and
+        `address`.
+
+        - `fps` (GBP only): `routing_number` (the sort code), `account_number`,
+        `account_owner_type`, `bank_name` and `address`.
+
+
+        Unknown fields are ignored. Only the first problem found is reported.
+      required:
+        - customer_id
+        - currency
+        - account_name
+      properties:
         customer_id:
           type: string
           format: uuid
-          example: 373556ec-74e5-4cde-909c-b94d864915db
+          description: The customer who owns this external account
+          example: 3130ca8b-8b32-4843-8623-bf83e766b86a
+        currency:
+          type: string
+          description: Three-letter ISO 4217 code of the currency paid out
+          example: USD
+        account_name:
+          type: string
+          description: >-
+            Account holder's name. Unaccented letters, spaces and `' - . , & /
+            ( )` only, starting with a letter, with no digits. It comes back in
+            upper case, and may be replaced by the name the bank holds.
+          example: Jane Doe
         payee_type:
+          description: >-
+            Leave it out to detect the type from the fields you send. Send it
+            for a Mexican CLABE paid in MXN, which is otherwise read as
+            `ach_wire`.
+          allOf:
+            - $ref: '#/components/schemas/PayeeType'
+        account_number:
+          type: string
+          description: >-
+            4 to 34 letters and digits, with no spaces. Some countries have
+            their own rule: 10 digits in Nigeria, 10 to 16 digits in Ghana, and
+            8 to 20 characters in Kenya.
+          example: '000123456789'
+        iban:
+          type: string
+          description: IBAN, checked with mod 97. Required for `sepa`.
+          example: DE89370400440532013000
+        bic:
+          type: string
+          description: >-
+            BIC of 8 or 11 characters. Required for `swift`. The bank must be in
+            the SWIFT directory; its `institution_id` and `bank_name` are filled
+            in for you.
+          example: DEUTDEFF
+        routing_number:
+          type: string
+          description: >-
+            For `ach_wire`, a 9-digit ABA routing number. For `fps`, the sort
+            code. For India, the IFSC.
+          example: '021000021'
+        payment_rail:
+          type: string
+          description: >-
+            Required for `ach_wire`; there is no default. `wire` needs a
+            routing number that takes wires, and `rtp` one that takes instant
+            payments.
+          enum:
+            - ach
+            - wire
+            - rtp
+          example: wire
+        bank_account_type:
           type: string
           enum:
-            - ach_wire
-            - sepa
-            - swift
-            - bank_account
-            - mobile_money
-            - fps
-          example: ach_wire
+            - checking
+            - savings
+        phone_number:
+          type: string
+          description: Mobile money number with the country code. Required for `mobile_money`.
+          example: '+256772123456'
+        institution_id:
+          type: string
+          format: uuid
+          description: >-
+            An `id` from `GET /v1/external-accounts/institutions`. Required for
+            MAD payouts and filled in from `bic` for `swift`.
+        institution_country_iso_code:
+          type: string
+          description: >-
+            Bank country as an alpha-2 code. It picks the account number rule.
+            Defaults to the institution's country.
+          example: NG
+        account_owner_type:
+          type: string
+          description: Required for `swift`, `sepa`, `ach_wire` and `fps`
+          enum:
+            - individual
+            - business
+        bank_name:
+          type: string
+          description: Required for `sepa`, `ach_wire` and `fps`
+          example: Example Bank
+        bank_address_line_1:
+          type: string
+          description: Required for `swift`
+        bank_city:
+          type: string
+          description: Required for `swift`
+        bank_state:
+          type: string
+          description: Required for `swift`
+        bank_postal_code:
+          type: string
+          description: Required for `swift`. Checked against `bank_country`.
+        bank_country:
+          type: string
+          description: Required for `swift`
+        intermediary_financial_institution:
+          type: string
+          description: >-
+            Optional intermediary bank for `swift`. Send all the intermediary
+            fields or none; only `intermediary_bank_address2` is optional.
+        intermediary_bank_routing_number:
+          type: string
+        intermediary_bank_address1:
+          type: string
+        intermediary_bank_address2:
+          type: string
+        intermediary_bank_city:
+          type: string
+        intermediary_bank_state:
+          type: string
+        intermediary_bank_zip_code:
+          type: string
+        intermediary_bank_country:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        internal_account_id:
+          type: string
+          format: uuid
+          description: Your account that pays this external account
+        national_id:
+          type: string
+          maxLength: 64
+          description: >-
+            The holder's national ID. Send it with `national_id_type`. Some
+            payout corridors need it, such as CURP or RFC for Mexico and CPF or
+            CNPJ for Brazil.
+        national_id_type:
+          type: string
+          enum:
+            - CURP
+            - RFC
+            - CPF
+            - CNPJ
+            - NIT
+            - CC
+            - PAN
+            - BVN
+            - NIN
+            - OTHER
+        pix_key:
+          type: string
+          minLength: 1
+          maxLength: 77
+          description: PIX key, for payouts to Brazil
+    UpdateExternalAccountRequest:
+      type: object
+      description: >-
+        Send only what changes. A missing field keeps its value and `null`
+        clears it. `phone_number`, `currency`, `payee_type`, `customer_id` and
+        `internal_account_id` cannot change; unknown fields are ignored.
+      properties:
+        account_name:
+          type: string
+          description: Cannot be cleared
         account_number:
           type:
             - string
             - 'null'
-          example: '4401682860'
         iban:
           type:
             - string
@@ -547,10 +308,7 @@ components:
           type:
             - string
             - 'null'
-        account_name:
-          type: string
-          example: Amina Bello
-        institution_name:
+        bank_name:
           type:
             - string
             - 'null'
@@ -558,274 +316,284 @@ components:
           type:
             - string
             - 'null'
-          format: uuid
-        institution_type:
+        account_owner_type:
           type:
             - string
             - 'null'
-          description: Category of financial institution linked to this account.
           enum:
-            - bank
-            - mobile_money
-          example: bank
+            - individual
+            - business
+            - null
         institution_country_iso_code:
           type:
             - string
             - 'null'
-          description: ISO 3166-1 alpha-2 country code of the linked institution.
-          example: NG
-        currency:
-          type: string
-          example: USD
-        phone_number:
+        payment_rail:
+          type:
+            - string
+            - 'null'
+          enum:
+            - ach
+            - wire
+            - rtp
+            - null
+        bank_account_type:
+          type:
+            - string
+            - 'null'
+          enum:
+            - checking
+            - savings
+            - null
+        bank_address_line_1:
+          type:
+            - string
+            - 'null'
+        bank_city:
+          type:
+            - string
+            - 'null'
+        bank_state:
+          type:
+            - string
+            - 'null'
+        bank_postal_code:
+          type:
+            - string
+            - 'null'
+        bank_country:
+          type:
+            - string
+            - 'null'
+        intermediary_financial_institution:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_routing_number:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_address1:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_address2:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_city:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_state:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_zip_code:
+          type:
+            - string
+            - 'null'
+        intermediary_bank_country:
           type:
             - string
             - 'null'
         address:
-          $ref: '#/components/schemas/ExtRecipientAddress'
+          description: >-
+            A new address needs `address_line1`, `city` and `country`. It cannot
+            be cleared.
+          allOf:
+            - $ref: '#/components/schemas/Address'
+        national_id:
+          type:
+            - string
+            - 'null'
+        national_id_type:
+          type:
+            - string
+            - 'null'
+        pix_key:
+          type:
+            - string
+            - 'null'
+    ExternalAccount:
+      type: object
+      description: An external account. Empty fields are left out.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Use it as the transfer destination
+          example: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+        institution_id:
+          type: string
+          format: uuid
+        payee_type:
+          $ref: '#/components/schemas/PayeeType'
+        account_number:
+          type: string
+          example: '000123456789'
+        institution_type:
+          type: string
+          enum:
+            - bank
+            - mobile_money
+            - swift
+            - swift_intermediary
+        institution_name:
+          type: string
+          example: Example Bank
+        account_name:
+          type: string
+          description: In upper case. It may be the name the bank holds.
+          example: JANE DOE
+        iban:
+          type: string
+        bic:
+          type: string
+        customer_id:
+          type: string
+          format: uuid
+          example: 3130ca8b-8b32-4843-8623-bf83e766b86a
+        currency:
+          type: string
+          example: USD
+        institution_country_iso_code:
+          type: string
+          example: US
+        address:
+          $ref: '#/components/schemas/Address'
+        account_owner_type:
+          type: string
+          enum:
+            - individual
+            - business
+        routing_number:
+          type: string
         status:
           $ref: '#/components/schemas/ExternalAccountStatus'
         date_created:
           type: string
           format: date-time
-    ExternalAccountList:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExternalAccountResponse'
-        page:
-          type: integer
-        items_per_page:
-          type: integer
-        total_pages:
-          type: integer
-    VerifyExternalAccountRequest:
-      type: object
-      description: >-
-        Supply at least one of: account_number, iban, phone, clabe, or
-        routing_number. You can also include bic, country_code, and
-        account_owner_type to narrow the lookup to the right institution
-        and flow.
-      properties:
-        account_number:
+          example: '2026-10-12T09:15:22.481Z'
+        phone_number:
           type: string
-          nullable: true
-          description: Bank account number.
-          example: '1776218486'
-        institution_id:
+        error_message:
+          type: string
+          description: Why setup failed
+          example: these account details could not be accepted
+        national_id_type:
+          type: string
+        national_id_masked:
+          type: string
+          description: The national ID with only the last 4 characters shown
+    ExternalAccountEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ExternalAccount'
+        error:
+          type: 'null'
+    Institution:
+      type: object
+      properties:
+        id:
           type: string
           format: uuid
-          nullable: true
-          description: >-
-            Institution UUID from GET /v1/external-accounts/institutions. Speeds
-            up and disambiguates resolution.
-          example: c0cb83fa-8116-4744-8bc8-0c1cba405400
-        phone:
+          description: Use it as `institution_id`
+          example: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+        name:
           type: string
-          nullable: true
-          description: Mobile money number in international format.
-          example: '+233241234567'
-        iban:
+          example: Example Bank
+        country_iso_code:
           type: string
-          nullable: true
-        bic:
+          example: KE
+        currency:
           type: string
-          nullable: true
-        clabe:
+          example: KES
+        min_amount:
+          type: integer
+          description: For reference only, in major units. It is not enforced.
+        max_amount:
+          type: integer
+          description: For reference only, in major units. It is not enforced.
+        account_number_type:
           type: string
-          nullable: true
-          description: Mexican CLABE account number.
-        routing_number:
-          type: string
-          nullable: true
-        country_code:
-          type: string
-          nullable: true
-          description: ISO 3166-1 alpha-2 country code.
-          example: NG
-        account_owner_type:
-          type: string
-          nullable: true
           enum:
-            - individual
-            - business
-          description: >-
-            Beneficiary owner type. Lets the institution pick the right flow for
-            business versus individual recipients.
-    VerifyExternalAccountResponse:
-      type: object
-      required:
-        - account_number
-        - is_verified
-      properties:
-        is_verified:
-          type: boolean
-          description: True when the account resolved with the institution.
-          example: true
-        account_name:
+            - bank_account_number
+            - iban
+            - phone_number
+            - clabe
+        swift_code:
           type: string
-          nullable: true
-          description: Resolved account holder name. Present when is_verified is true.
-          example: Amina Bello
-        account_number:
-          type: string
-          example: '1776218486'
-        account_status:
-          type: string
-          nullable: true
-          enum:
-            - active
-            - inactive
-            - blocked
-        account_type:
-          type: string
-          nullable: true
-          example: bank_account
-        bank_name:
-          type: string
-          nullable: true
-          example: Access Bank
-        bank_code:
-          type: string
-          nullable: true
+          description: SWIFT banks only
         address:
-          allOf:
-            - $ref: '#/components/schemas/ExtRecipientAddress'
-          nullable: true
-        institutions:
-          type:
-            - array
-            - 'null'
+          type: object
+          description: The bank's address. SWIFT banks only.
+          additionalProperties: true
+        prefill:
+          type: object
           description: >-
-            Candidate institutions that matched the identifier. Returned when
-            is_verified is false so the caller can disambiguate and retry.
-          items:
-            $ref: '#/components/schemas/PayeeInstitutionItem'
-    WebhookEventEnvelopeCompleted:
+            Bank fields to copy into a `swift` external account, such as
+            `bank_address_line_1` and `bank_city`. SWIFT banks only.
+          additionalProperties: true
+    ErrorResponse:
       type: object
-      required:
-        - event_type
-        - payee_id
-        - tenant_id
-        - occurred_at
-      properties:
-        event_type:
-          type: string
-          enum: [completed]
-        payee_id:
-          type: string
-          format: uuid
-        tenant_id:
-          type: string
-          format: uuid
-        occurred_at:
-          type: string
-          format: date-time
-    WebhookEventEnvelopeRetryOrFail:
-      type: object
-      required:
-        - event_type
-        - payee_id
-        - tenant_id
-        - attempts
-        - reason_code
-        - client_message
-        - occurred_at
-      properties:
-        event_type:
-          type: string
-          enum: [retrying, failed]
-        payee_id:
-          type: string
-          format: uuid
-        tenant_id:
-          type: string
-          format: uuid
-        attempts:
-          type: integer
-          minimum: 1
-          example: 3
-        reason_code:
-          type: string
-          enum:
-            - temporary_unavailable
-            - max_retries_exceeded
-          description: >
-            A stable, predefined value you can use in your code to decide how
-            to handle the event. It never includes a payment partner's name or
-            the original error message returned by that partner.
-        client_message:
-          type: string
-          description: A user-facing message you can show to your users exactly as written.
-          example: We're having trouble setting up this external account. We'll keep trying automatically.
-        occurred_at:
-          type: string
-          format: date-time
-    Error:
-      type: object
-      required:
-        - error
       properties:
         data:
-          type: 'null'
+          type:
+            - object
+            - 'null'
+          description: Null, except for a duplicate, which returns the existing `payee_id`
         error:
           type: string
-          example: routing_number required but missing
-    NotFound:
-      type: object
-      required:
-        - error
-      properties:
-        data:
-          type: 'null'
-        error:
+          description: What went wrong
+        code:
           type: string
-          example: external account not found
+          description: Error code such as `ERROR_CODE_DUPLICATE_PAYEE`, when one is sent
+        details:
+          type: object
+          additionalProperties: true
   responses:
     BadRequest:
-      description: Input validation failed.
+      description: >-
+        Invalid request, an unknown ID or a failure. Read `error`; not-found is
+        a 400 here, not a 404.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
-    NotFound:
-      description: Resource not found.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/NotFound'
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: 'payee 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60: resource not found'
+            code: ERROR_CODE_NOT_FOUND
 security:
   - ApiKeyAuth: []
 tags:
   - name: External accounts
-    description: Manage external recipients
+    description: Add and manage the bank accounts and mobile wallets your customers pay out to
 paths:
   /v1/external-accounts:
     post:
       tags:
         - External accounts
       summary: Add an external account
-      description: |
-        Adds a new external account for transfers to accounts that are not created with Gravv.
+      operationId: createExternalAccount
+      description: >-
+        Adds a bank account or mobile wallet that a customer pays out to. Use
+        `GET /v1/external-accounts/institutions` for `institution_id`, and
+        `POST /v1/external-accounts/verify` to check the holder's name first.
 
-        ## Async setup contract
 
-        Registering an external account with our payment partners runs asynchronously. The response status code tells you the outcome:
+        `bank_account` and `mobile_money` return 200 with status `active`.
+        `swift`, `sepa`, `ach_wire` and `fps` return 202 with status `pending`
+        while setup runs. Get the account until it is `active` or
+        `setup_failed`, or wait for the `external_account.active` or
+        `external_account.setup_failed` webhook.
 
-        - **`200 OK`:** The external account is fully registered with at least one
-          partner. The `status` field is `active`. You can initiate transfers immediately.
-        - **`202 Accepted`:** the external account record is created and a background
-          worker calls our partners. The `status` field is `pending`.
-          To learn when it changes to `active`, either check the status by calling
-          `GET /v1/external-accounts/{external_account_id}` until it is `active`, or
-          subscribe to the `payee.setup.*` webhook events.
-        - **`400 Bad Request`:** Input validation failed. Fix the input and retry.
 
-        A duplicate POST with the same `account_number` (or `iban`), `currency`, and
-        `payee_type` for the same customer is idempotent and returns the existing
-        record.
+        A duplicate (same customer, holder name, and account and bank) is a
+        400 with code `ERROR_CODE_DUPLICATE_PAYEE` and the existing
+        `payee_id`. Deleted and failed accounts count as duplicates.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -833,155 +601,246 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AddRecipientRequest'
+              $ref: '#/components/schemas/AddExternalAccountRequest'
             examples:
-              USBankAccount:
-                summary: US Bank Account
-                value:
-                  payee_type: ach_wire
-                  account_number: '4401682860'
-                  account_name: Amina Bello
-                  bank_name: Example Community Bank
-                  currency: USD
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
-                  routing_number: '101019644'
-                  account_owner_type: individual
-                  account_type: savings
-                  address:
-                    address_line1: 1800 N Pole St, Orlando, FL 32801
-                    state: US-FL
-                    country: US
-                    postal_code: '32801'
-                    city: Orlando
-              GlobalBankAccountRecipient:
-                summary: Global Bank Account Recipient
+              BankAccount:
+                summary: Bank account
                 value:
                   payee_type: bank_account
-                  account_number: '1776218486'
-                  account_name: Amina Bello
-                  bank_name: Access Bank
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
                   currency: NGN
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
-                  institution_id: c0cb83fa-8116-4744-8bc8-0c1cba405400
-              GlobalMobileMoneyRecipient:
-                summary: Global Mobile Money Recipient
+                  account_name: Ada Okafor
+                  account_number: '0123456789'
+                  institution_id: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+              MobileMoney:
+                summary: Mobile money wallet
                 value:
                   payee_type: mobile_money
-                  phone_number: '+233241234567'
-                  account_name: Kwame Mensah
-                  bank_name: MTN Mobile Money
-                  currency: GHS
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: UGX
+                  account_name: Grace Nakato
+                  phone_number: '+256772123456'
                   institution_id: 5c8d94fb-a927-5fed-b19d-1454c8f142a9
-              SepaRecipient:
-                summary: SEPA Recipient
+              AchWire:
+                summary: US bank account by wire
+                value:
+                  payee_type: ach_wire
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: USD
+                  account_name: Jane Doe
+                  account_number: '000123456789'
+                  routing_number: '021000021'
+                  payment_rail: wire
+                  account_owner_type: individual
+                  bank_name: Example Bank
+                  address:
+                    address_line1: 350 Fifth Avenue
+                    city: New York
+                    state: NY
+                    postal_code: '10118'
+                    country: US
+              Sepa:
+                summary: SEPA account
                 value:
                   payee_type: sepa
-                  account_owner_type: individual
-                  iban: DE89370400440532013000
-                  account_name: Anna Schmidt
-                  bank_name: Deutsche Bank
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
                   currency: EUR
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
+                  account_name: Anna Schmidt
+                  iban: DE89370400440532013000
+                  account_owner_type: individual
+                  bank_name: Example Bank
                   address:
                     address_line1: Unter den Linden 13
                     city: Berlin
-                    state: Berlin
                     postal_code: '10117'
                     country: DE
-              SwiftRecipientAccountNumber:
-                summary: SWIFT recipient with account number
+              Swift:
+                summary: SWIFT account
                 value:
                   payee_type: swift
-                  account_owner_type: individual
-                  account_number: '1245909283'
-                  account_name: Amina Bello
-                  bank_name: Guaranty Trust Bank (GTBank)
-                  bic: NG2893A
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
                   currency: USD
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
+                  account_name: Acme Trading Ltd
+                  account_number: '12345678'
+                  bic: MIDLGB22
+                  account_owner_type: business
+                  bank_address_line_1: 8 Canada Square
+                  bank_city: London
+                  bank_state: London
+                  bank_postal_code: E14 5HQ
+                  bank_country: GB
                   address:
-                    address_line1: 15 Admiralty Way, Lekki Phase 1
-                    house_building_number: 1 B
-                    address_line2: Suite 202
-                    city: Lekki
-                    postal_code: '105102'
-                    state: Lagos
-                    country: NG
-              SwiftRecipientIban:
-                summary: SWIFT recipient with IBAN
+                    address_line1: 1 King Street
+                    city: London
+                    state: London
+                    postal_code: EC2V 8AU
+                    country: GB
+              Fps:
+                summary: UK account by Faster Payments
                 value:
-                  payee_type: swift
+                  payee_type: fps
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: GBP
+                  account_name: Tom Brown
+                  account_number: '31926819'
+                  routing_number: '601613'
                   account_owner_type: individual
-                  iban: GB33BUKB20201555555555
-                  account_name: Amina Bello
-                  bank_name: Guaranty Trust Bank (GTBank)
-                  bic: NG2893A
-                  currency: USD
-                  customer_id: 373556ec-74e5-4cde-909c-b94d864915db
+                  bank_name: Example Bank
                   address:
-                    address_line1: 15 Admiralty Way, Lekki Phase 1
-                    house_building_number: 1 B
-                    address_line2: Suite 202
-                    city: Lekki
-                    postal_code: '105102'
-                    state: Lagos
-                    country: NG
+                    address_line1: 1 King Street
+                    city: London
+                    postal_code: EC2V 8AU
+                    country: GB
       responses:
         '200':
-          description: The external account is fully registered with our payment partners. The `status` field is `active`.
+          description: Added and `active`
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/ExternalAccountResponse'
-                  error:
-                    nullable: true
+                $ref: '#/components/schemas/ExternalAccountEnvelope'
+              example:
+                data:
+                  id: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+                  payee_type: bank_account
+                  account_number: '0123456789'
+                  institution_id: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+                  institution_type: bank
+                  institution_name: Example Bank
+                  account_name: ADA OKAFOR
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: NGN
+                  institution_country_iso_code: NG
+                  status: active
+                  date_created: '2026-10-12T09:15:22.481Z'
+                error: null
         '202':
-          description: |
-            The external account record is created and registration with our
-            payment partners is still in progress. The `status` field is
-            `pending`. To learn when it changes to `active`, either check the
-            status by calling `GET /v1/external-accounts/{external_account_id}`
-            until it is `active`, or subscribe to the `payee.setup.*` webhook
-            events.
+          description: Added and `pending` while setup runs
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/ExternalAccountResponse'
-                  error:
-                    nullable: true
+                $ref: '#/components/schemas/ExternalAccountEnvelope'
+              example:
+                data:
+                  id: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+                  payee_type: ach_wire
+                  account_number: '000123456789'
+                  account_name: JANE DOE
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: USD
+                  address:
+                    address_line1: 350 Fifth Avenue
+                    city: New York
+                    state: NY
+                    postal_code: '10118'
+                    country: US
+                  account_owner_type: individual
+                  routing_number: '021000021'
+                  status: pending
+                  date_created: '2026-10-12T09:15:22.481Z'
+                error: null
         '400':
-          description: Validation failed.
+          description: >-
+            Invalid or missing field, a duplicate, or a failed bank check.
+            Correct it and send a new Idempotency-Key.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    nullable: true
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Duplicate:
+                  summary: The external account already exists
+                  value:
+                    data:
+                      payee_id: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+                    error: a recipient with the same account name, account number and bank already exists
+                    code: ERROR_CODE_DUPLICATE_PAYEE
+                    details:
+                      payee_id: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+                MissingRail:
+                  summary: An ach_wire account without payment_rail
+                  value:
+                    data: null
+                    error: >-
+                      payment rail required but missing for ach/wire payee (expected
+                      ach, wire, or rtp): invalid input
+                AccountNumber:
+                  summary: A Nigerian account number of the wrong length
+                  value:
+                    data: null
+                    error: 'nigerian account numbers must be exactly 10 digits (NUBAN): invalid input'
     get:
       tags:
         - External accounts
-      summary: Get multiple external accounts
-      description: Retrieve a list of external accounts with optional pagination.
+      summary: List external accounts
+      operationId: listExternalAccounts
+      description: >-
+        Lists your external accounts, newest first, in every status including
+        `deleted`. There is no status filter. Filters match exactly and are
+        case-sensitive, so send currencies in upper case. `total_items` is an
+        estimate; stop when a page has fewer items than `items_per_page`.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            default: 10
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: The full customer ID
+        - in: query
+          name: payee_type
+          schema:
+            $ref: '#/components/schemas/PayeeType'
+        - in: query
+          name: currency
+          schema:
+            type: string
+          example: USD
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Matches part of the holder name, account number or phone number
+        - in: query
+          name: internal_account_id
+          schema:
+            type: string
+            format: uuid
+          description: Your account that pays the external accounts
       responses:
         '200':
-          description: List of external accounts.
+          description: A page of external accounts
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   data:
-                    $ref: '#/components/schemas/ExternalAccountList'
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ExternalAccount'
+                      total_items:
+                        type: integer
+                        description: An estimate, except on the last page
                   error:
                     type: 'null'
         '400':
@@ -991,142 +850,51 @@ paths:
       tags:
         - External accounts
       summary: Verify an external account
-      description: |
-        Resolves and verifies a recipient's account with the destination
-        institution before you add them as an external account. Use it to
-        confirm the account holder's name and that the account is reachable, so
-        you can show the resolved name and avoid failed transfers.
+      operationId: verifyExternalAccount
+      description: >-
+        Checks account details before you add the external account, and returns
+        the holder's name when the bank can look it up. Send `account_number`
+        with `institution_id`; only that pair reaches the bank.
 
-        Pass at least one identifier: `account_number`, `iban`, `phone`, or
-        `clabe`. The service detects the account type, validates its format,
-        then resolves the name with the institution.
 
-        - **`is_verified: true`** — the account resolved. `account_name` holds
-          the confirmed holder name.
-        - **`is_verified: false`** — the account could not be resolved. Any
-          institutions that matched the identifier are returned in
-          `institutions` so the user can pick one and retry.
-
-        Verification is supported for bank accounts and mobile money today.
-        Other types (IBAN, SWIFT) return `is_verified: false`.
+        `verified: true` with `verification_source: local` means only the
+        format was checked. Trust the name only when `verification_source` is
+        `provider`. An IBAN, phone or CLABE alone is checked locally. This
+        route needs no Idempotency-Key.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyExternalAccountRequest'
-            examples:
-              GlobalBankAccount:
-                summary: Bank account
-                value:
-                  account_number: '1776218486'
-                  institution_id: c0cb83fa-8116-4744-8bc8-0c1cba405400
-                  country_code: NG
-              MobileMoney:
-                summary: Mobile money
-                value:
-                  phone: '+233241234567'
-                  institution_id: 5c8d94fb-a927-5fed-b19d-1454c8f142a9
-                  country_code: GH
+              type: object
+              description: Send at least one of `account_number`, `iban`, `phone` or `clabe`.
+              properties:
+                account_number:
+                  type: string
+                  description: The only identifier that the bank looks up
+                  example: '0123456789'
+                institution_id:
+                  type: string
+                  format: uuid
+                  description: The bank to ask. Without it the lookup is not scoped to a bank.
+                  example: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+                iban:
+                  type: string
+                  description: Checked with mod 97 only
+                bic:
+                  type: string
+                phone:
+                  type: string
+                  description: Accepted, but not verified
+                clabe:
+                  type: string
+                  description: Accepted, but not verified
+            example:
+              account_number: '0123456789'
+              institution_id: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
       responses:
         '200':
-          description: Verification result. Check `is_verified` for the outcome.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/VerifyExternalAccountResponse'
-                  error:
-                    nullable: true
-        '400':
-          description: >-
-            No account identifier supplied, or the identifier failed format
-            validation.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    nullable: true
-                  error:
-                    type: string
-  /v1/external-accounts/{external_account_id}:
-    get:
-      tags:
-        - External accounts
-      summary: Get a single external account
-      description: >
-        Retrieve details of a specific external account. Use this endpoint
-        to check the `status` after a `202 Accepted` from
-        `POST /v1/external-accounts`, calling it until the status changes to
-        `active`.
-      parameters:
-        - in: path
-          name: external_account_id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: External account details.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/ExternalAccountResponse'
-                  error:
-                    type: 'null'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-  /v1/external-accounts/institutions:
-    get:
-      tags:
-        - External accounts
-      summary: Get external account institutions
-      description: >-
-        Retrieve a list of supported financial institutions for external
-        accounts.
-      parameters:
-        - in: query
-          name: page
-          schema:
-            type: integer
-            minimum: 1
-          description: Page number for pagination
-          example: 1
-        - in: query
-          name: items_per_page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-          description: Number of institutions per page
-          example: 10
-        - in: query
-          name: country_iso_code
-          schema:
-            type: string
-          description: country ISO 2 code
-          example: NG
-        - in: query
-          name: institution_type
-          schema:
-            type: string
-            enum:
-              - bank
-              - mobile_money
-          description: Filters institutions by type.
-          example: bank
-      responses:
-        '200':
-          description: List of external account institutions
+          description: The result. `verified` is false when a local check failed.
           content:
             application/json:
               schema:
@@ -1135,48 +903,269 @@ paths:
                   data:
                     type: object
                     properties:
-                      items:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/PayeeInstitutionItem'
-                      page:
-                        type: integer
-                        example: 1
-                      items_per_page:
-                        type: integer
-                        example: 10
-                      total_pages:
-                        type: integer
-                        example: 6
+                      verified:
+                        type: boolean
+                      account_holder_name:
+                        type: string
+                        description: In upper case. Only when the bank confirmed the account.
+                      account_holder_name_masked:
+                        type: boolean
+                        description: True when the bank masked the name
+                      message:
+                        type: string
+                        description: Why `verified` is false
+                      min_amount:
+                        type: string
+                        description: For reference only, in major units
+                      max_amount:
+                        type: string
+                        description: For reference only, in major units
+                      verification_source:
+                        type: string
+                        enum:
+                          - provider
+                          - local
+                        description: '`provider` when a bank confirmed it; `local` for format checks only'
                   error:
                     type: 'null'
               example:
                 data:
-                  items:
-                    - account_number_type: bank_account_number
-                      country_iso_code: NG
-                      currency: NGN
-                      id: c4788635-764d-43d3-9ffb-966b0fe29ff9
-                      max_amount: 10000
-                      min_amount: 1
-                      name: Keystone Bank PLC
-                    - account_number_type: bank_account_number
-                      country_iso_code: NG
-                      currency: NGN
-                      id: 202b48a4-6d18-4ca3-8996-69a83b0e7d0a
-                      max_amount: 10000
-                      min_amount: 1
-                      name: First City Monument Bank PLC
-                    - account_number_type: bank_account_number
-                      country_iso_code: NG
-                      currency: NGN
-                      id: f91e1b0c-8c98-4917-8c7b-6370a50a2d4f
-                      max_amount: 10000
-                      min_amount: 1
-                      name: United Bank For Africa PLC
-                  items_per_page: 10
+                  verified: true
+                  account_holder_name: ADA OKAFOR
+                  verification_source: provider
+                error: null
+        '400':
+          description: No identifier, or an invalid institution ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: 'at least one account identifier required: account_number, iban, phone, or clabe'
+  /v1/external-accounts/{external_account_id}:
+    get:
+      tags:
+        - External accounts
+      summary: Get an external account
+      operationId: getExternalAccount
+      description: >-
+        Returns one external account. After a 202, poll every 30 to 60 seconds
+        until `status` is `active` (ready for transfers) or `setup_failed`
+        (read `error_message`, then correct the account with PATCH). Not-found
+        is a 400.
+      parameters:
+        - $ref: '#/components/parameters/ExternalAccountIdPath'
+      responses:
+        '200':
+          description: The external account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalAccountEnvelope'
+              example:
+                data:
+                  id: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+                  payee_type: swift
+                  account_number: '12345678'
+                  institution_id: 1f2e3d4c-5b6a-4978-8a9b-0c1d2e3f4a5b
+                  institution_type: swift
+                  institution_name: Example Bank
+                  account_name: ACME TRADING LTD
+                  bic: MIDLGB22
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: USD
+                  institution_country_iso_code: GB
+                  account_owner_type: business
+                  status: setup_failed
+                  date_created: '2026-10-12T09:15:22.481Z'
+                  error_message: these account details could not be accepted
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    patch:
+      tags:
+        - External accounts
+      summary: Update an external account
+      operationId: updateExternalAccount
+      description: >-
+        Corrects an external account. Use it to fix the bank details of a
+        `setup_failed` account, which runs setup again, or to add the national
+        ID, PIX key or address that a payout corridor asks for. An empty body
+        on a failed account retries setup.
+
+
+        It always returns 202; get the account until it is `active` or
+        `setup_failed`. A 409 means the account cannot change in its state;
+        add a new one instead. This route needs no Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/ExternalAccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExternalAccountRequest'
+            example:
+              account_number: '87654321'
+              bank_postal_code: E14 5HQ
+      responses:
+        '202':
+          description: Updated. Setup runs again after a bank details change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalAccountEnvelope'
+        '400':
+          description: Invalid field or ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: 'account name cannot be cleared: invalid input'
+        '404':
+          description: No such external account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: 'payee 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60: resource not found'
+                code: ERROR_CODE_NOT_FOUND
+        '409':
+          description: >-
+            The account cannot change in its state, its address is already
+            registered, the change makes a duplicate, or another request changed
+            it first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: >-
+                  payee 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60 is not correctable in
+                  its current state (active): invalid state transition
+                code: ERROR_CODE_PAYEE_INVALID_STATE
+        '500':
+          description: The update failed. Retry later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: We couldn't update this payee. Please try again later.
+                code: ERROR_CODE_INTERNAL_ERROR
+  /v1/external-accounts/institutions:
+    get:
+      tags:
+        - External accounts
+      summary: List institutions
+      operationId: listExternalAccountInstitutions
+      description: >-
+        Lists the banks and mobile money operators an external account can
+        name in `institution_id`. SWIFT banks appear only when you send
+        `institution_type=swift`, `swift_code` or `search`. Filters match
+        exactly, so send codes in upper case.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: items_per_page
+          schema:
+            type: integer
+            minimum: 1
+            default: 10
+        - in: query
+          name: country_iso_code
+          schema:
+            type: string
+          description: Alpha-2 country code
+          example: KE
+        - in: query
+          name: institution_type
+          schema:
+            type: string
+            enum:
+              - bank
+              - mobile_money
+              - swift
+              - swift_intermediary
+          description: Defaults to every type except `swift_intermediary`
+        - in: query
+          name: account_number_type
+          schema:
+            type: string
+            enum:
+              - bank_account_number
+              - iban
+              - phone_number
+              - clabe
+        - in: query
+          name: currency
+          schema:
+            type: string
+          example: KES
+        - in: query
+          name: swift_code
+          schema:
+            type: string
+            pattern: ^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$
+          description: Find a SWIFT bank by its 8 or 11 character BIC
+          example: MIDLGB22
+        - in: query
+          name: search
+          schema:
+            type: string
+            minLength: 3
+          description: Find SWIFT banks by name or BIC, at least 3 characters
+      responses:
+        '200':
+          description: A page of institutions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Institution'
+                      total_items:
+                        type: integer
+                  error:
+                    type: 'null'
+              example:
+                data:
                   page: 1
-                  total_pages: 6
+                  items_per_page: 10
+                  total_pages: 1
+                  items:
+                    - id: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+                      name: Example Mobile Money
+                      country_iso_code: KE
+                      currency: KES
+                      min_amount: 1
+                      max_amount: 10000
+                      account_number_type: phone_number
+                  total_items: 1
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'

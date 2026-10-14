@@ -19,11 +19,15 @@ components:
       in: header
       required: true
       description: >-
-        Required for POST requests. Reuse the key only when retrying the same
-        operation with an identical payload.
+        Required for POST requests. 1 to 255 printable ASCII characters. A
+        retry with the same key and body within 24 hours returns the first
+        response, including a 400. After you fix a failed request, send a new
+        key.
       schema:
         type: string
-      example: order_789_attempt_1
+        minLength: 1
+        maxLength: 255
+      example: create-account-ops-1
     EventIdPath:
       name: event_id
       in: path
@@ -36,8 +40,8 @@ components:
   responses:
     BadRequest:
       description: >-
-        Request failed. All gateway errors are returned as HTTP 400 with this
-        envelope.
+        Request failed. These account routes return every error, including not
+        found, as HTTP 400. Read the message.
       content:
         application/json:
           schema:
@@ -68,7 +72,10 @@ components:
         code:
           type: string
           description: Machine-readable error code for the validation failure.
-          example: field_required
+          enum:
+            - REQUIRED
+            - INVALID
+          example: REQUIRED
         suggestion:
           type: string
           description: Suggested fix for the validation error.
@@ -79,14 +86,22 @@ components:
         stage:
           type: string
           description: Processing stage where the error occurred.
-          example: provider_account_creation
+          enum:
+            - wallet_creation
+            - provider_processing
+            - account_creation
+          example: provider_processing
         message:
           type: string
           description: Human-readable explanation of the processing error.
-          example: provider rejected the application
+          example: the bank rejected the application
         code:
           type: string
           description: Machine-readable error code.
+          enum:
+            - wallet_error
+            - provider_error
+            - database_error
           example: provider_error
         suggestion:
           type: string
@@ -120,6 +135,9 @@ components:
           format: date-time
     Account:
       type: object
+      description: >-
+        An internal account. Empty fields are left out. Accounts opened with
+        `/v2/accounts` are returned here too, without their v2-only fields.
       properties:
         id:
           type: string
@@ -141,6 +159,14 @@ components:
         type:
           type: string
           description: Account kind.
+          enum:
+            - regular
+            - savings
+            - card
+            - auto_sweep
+            - collection
+            - default
+            - non_custodial
           example: regular
         customer_id:
           type: string
@@ -148,8 +174,15 @@ components:
           example: d12ded01-9081-4a3c-a76c-70654f0a0175
         capabilities:
           type: array
+          description: What the account can do. It depends on the account type.
           items:
             type: string
+            enum:
+              - transfer
+              - receive
+              - remittance
+              - card_payment
+              - sweep_collection
           example:
             - transfer
             - receive
@@ -163,7 +196,7 @@ components:
           example: 73cea894-bca7-43e2-b278-02bd6d991e2e
         tenant_name:
           type: string
-          example: Dahmoh
+          example: Acme Payments
         tenant_id:
           type: string
           example: cd90c45c-fa78-4624-a80a-642be301c812
@@ -172,23 +205,57 @@ components:
           example: ''
         status:
           type: string
+          description: >-
+            `pending` while the bank sets the account up, then `active`.
+            `frozen` means suspended or set-up failed, `manual_review` means
+            held for review, and `deleted` is closed and final. `reason`
+            explains a status other than `active`.
           enum:
             - active
-            - frozen
-            - deleted
             - pending
+            - frozen
+            - manual_review
+            - deleted
           example: active
+        reason:
+          type: string
+          description: Why the account is not active. Omitted for active accounts.
         category:
           type: string
-          example: main
+          description: '`main` for your own accounts, `sub_account` for your customers'' accounts.'
+          enum:
+            - main
+            - sub_account
+          example: sub_account
         balance:
           type: string
+          description: >-
+            Balance as a decimal string in major units. For USD it is the USDC
+            balance; for EUR it is that balance converted to EUR; for NGN it is
+            the token balance. For other currencies it is the USDC amount, not
+            converted. Omitted when it cannot be read, so treat a missing value
+            as unknown, not zero.
           example: '0.00'
         is_tokenized:
           type: boolean
+          description: True for NGN accounts
           example: false
         inflow_behavior:
           type: string
+          description: NGN accounts only
+          enum:
+            - settle
+            - auto_onramp
+        polygon_wallet:
+          type: object
+          description: The token wallet of an NGN account
+          properties:
+            address:
+              type: string
+            network:
+              type: string
+            token_balance:
+              type: string
         virtual_account_bank_name:
           type: string
           example: Bank of Nowhere
@@ -199,14 +266,21 @@ components:
           type: string
         virtual_account_bank_beneficiary_name:
           type: string
+          example: Jane Doe
         virtual_account_bank_account_number:
           type: string
+          description: >-
+            Deposit account number. The US account number for USD, the IBAN for
+            EUR, the account number for GBP, the CLABE for MXN and the BR code
+            for BRL. Bank details appear only once the account is `active`.
           example: '900300758080'
         virtual_account_bank_routing_number:
           type: string
+          description: The ABA routing number for USD, the BIC for EUR and the sort code for GBP.
           example: '101019644'
         assets:
           type: array
+          description: Balance per token
           items:
             type: object
             properties:
@@ -215,13 +289,10 @@ components:
                 example: '0'
               decimals:
                 type: integer
-                example: 0
+                example: 6
               symbol:
                 type: string
                 example: USDC
-        metadata:
-          type: object
-          additionalProperties: true
     ApplicationEnvelope:
       type: object
       required:
@@ -267,7 +338,10 @@ components:
           type: object
           properties:
             applications:
-              type: array
+              type:
+                - array
+                - 'null'
+              description: Up to 10 applications. Null when there are none.
               items:
                 $ref: '#/components/schemas/Application'
             count:
@@ -384,10 +458,20 @@ components:
           properties:
             valid:
               type: boolean
+              description: >-
+                Whether the data passes the checks of the bank this application
+                would be sent to. It checks only the data you send, so fields
+                that create fills from the customer record can show as missing.
             validation_errors:
-              type: array
+              type:
+                - array
+                - 'null'
               items:
                 $ref: '#/components/schemas/ValidationError'
+            requirements:
+              type: object
+              description: The fields that bank asks for, per application type.
+              additionalProperties: true
         error:
           type: 'null'
           example: null
@@ -419,8 +503,10 @@ components:
               type: integer
             items_per_page:
               type: integer
+              description: The number of items on this page, not the page size you asked for.
             total_pages:
               type: integer
+              description: Omitted when there are no matching accounts.
             total_items:
               type: integer
         error:
@@ -955,10 +1041,14 @@ components:
           example: 10000_TO_50000
     UnifiedApplicationData:
       type: object
+      description: >-
+        Application data. Unknown keys are dropped. On create, empty fields are
+        filled from the customer record. The bank the application is routed to
+        decides which other fields are required, and reports what is missing in
+        `validation_errors`.
       required:
         - account_type
         - currency
-        - blockchain_network
       properties:
         individual:
           $ref: '#/components/schemas/UnifiedIndividualData'
@@ -969,10 +1059,13 @@ components:
           enum:
             - regular
             - savings
+            - card
+            - auto_sweep
+            - collection
           description: >-
-            Kind of account to open (for example, regular or savings). This is
-            the account type, not the customer type. Use the top-level
-            application_type field for individual vs business.
+            Kind of account to open. This is the account type, not the customer
+            type; use `application_type` for individual or business. A customer
+            can have one `card` account.
           example: regular
         currency:
           type: string
@@ -981,17 +1074,22 @@ components:
         blockchain_network:
           type: string
           description: >-
-            Blockchain network to back the account (for example, polygon or
-            stellar).
+            Network of the account's wallet, in lower case. Required by every
+            bank that issues a wallet, which is most of them. Use `polygon` for
+            sandbox testing.
           example: polygon
         wallet_address:
           type: string
-          description: Blockchain wallet address to associate with the account.
+          description: >-
+            Address of an existing wallet of yours on `blockchain_network`.
+            Send it together with `wallet_id`, or send neither.
           example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
         wallet_id:
           type: string
           format: uuid
-          description: UUID of an existing Gravv wallet to link to the account.
+          description: >-
+            ID of an existing wallet of yours. Send it together with
+            `wallet_address`, or send neither.
           example: 123e4567-e89b-12d3-a456-426614174000
         label:
           type: string
@@ -999,11 +1097,16 @@ components:
           example: ops
         agreement_id:
           type: string
-          description: ID of the provider agreement associated with this application.
+          description: >-
+            ID of the signed terms of service agreement. Set it while the
+            application is `draft` or `rejected`, or use the terms of service
+            route while it is `draft`.
           example: agr_123
         tos_link:
           type: string
-          description: URL to the terms of service the applicant must accept.
+          description: >-
+            Set by Gravv on create when the end customer must accept the bank's
+            terms of service. Show it to them before you submit.
           example: https://example.com/tos
         metadata:
           type: object
@@ -1093,10 +1196,13 @@ components:
             - rejected
             - expired
           description: >-
-            Current status of the application. `creating_account` is a
-            deprecated transitional value and should not be treated as a
-            required lifecycle step. `manual_review` means a human decision is
-            required.
+            Current status, in lower case. `draft` can be updated, submitted or
+            deleted. `submitted` waits for process. `processing` means the bank
+            is setting the account up. `approved` has the account ID in
+            `metadata.internal_account_id`. `rejected` can be updated and
+            submitted again. `manual_review` is resolved by Gravv, not by the
+            API. `creating_account` is brief and deprecated, and `expired` is
+            not used.
           example: draft
         data:
           $ref: '#/components/schemas/UnifiedApplicationData'
@@ -1153,20 +1259,43 @@ components:
       properties:
         currency:
           type: string
-          description: Currency code for the account
+          description: >-
+            Currency code. Each bank supports fewer currencies than this list:
+            `lead_bank` USD, EUR, GBP, MXN and BRL; `cross_river_bank` USD;
+            `nigerian_bank` NGN. Call `GET /v1/accounts/capabilities` first.
           example: USD
           enum:
             - USD
-            - EUR
+            - CAD
             - MXN
+            - EUR
+            - GBP
+            - CHF
             - NGN
+            - KES
+            - ZAR
+            - GHS
+            - UGX
+            - TZS
+            - EGP
+            - XOF
+            - XAF
+            - BRL
         type:
           type: string
-          description: Type of account
+          description: >-
+            Type of account. `card`, `auto_sweep` and `default` are only for
+            your own accounts; open a customer's card account with an account
+            application.
           example: regular
           enum:
             - regular
             - savings
+            - collection
+            - non_custodial
+            - card
+            - auto_sweep
+            - default
         label:
           type: string
           description: Label for the account
@@ -1179,18 +1308,191 @@ components:
           example: 550e8400-e29b-41d4-a716-446655440178
         blockchain_network:
           type: string
-          description: Blockchain network for the account
+          description: >-
+            Network of the account's wallet, in lower case. `lead_bank` takes
+            arbitrum, avalanche_c_chain, base, celo, ethereum, optimism,
+            polygon, solana, stellar, tempo and tron. `cross_river_bank` takes
+            polygon, ethereum, solana, base, bsc, flow_evm, canton and tron.
+            NGN accounts always use polygon. Only polygon, ethereum, base,
+            solana and stellar work end to end today, so prefer those.
           example: polygon
           enum:
             - polygon
-            - stellar
             - ethereum
+            - base
             - solana
-            - avalanche
+            - stellar
+            - arbitrum
+            - avalanche_c_chain
+            - celo
+            - optimism
+            - tempo
+            - tron
+            - bsc
+            - flow_evm
+            - canton
+        bank:
+          type: string
+          description: >-
+            Bank to open the account with. Leave it out to let Gravv choose the
+            first bank that supports the currency, network and type.
+          enum:
+            - lead_bank
+            - cross_river_bank
+            - nigerian_bank
+          example: lead_bank
         wallet_address:
           type: string
-          description: Blockchain wallet address to associate with the account.
+          description: >-
+            An existing wallet of yours on `blockchain_network`. Leave it out to
+            create a new wallet.
           example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+    CapabilitiesResponse:
+      type: object
+      required:
+        - data
+        - error
+      properties:
+        data:
+          type: object
+          properties:
+            country:
+              type: string
+              description: The alpha-2 residence country used
+              example: US
+            subdivision:
+              type: string
+              description: The ISO 3166-2 subdivision used, or empty
+              example: US-CA
+            customer_type:
+              type: string
+              description: The `customer_type` filter you sent
+              example: individual
+            options:
+              type: array
+              description: One entry per bank and currency
+              items:
+                $ref: '#/components/schemas/CapabilityOption'
+            suggestion:
+              type: string
+              description: Present when you did not send `customer_id`
+        error:
+          type: 'null'
+          example: null
+    CapabilityOption:
+      type: object
+      properties:
+        bank_name:
+          type: string
+          description: Display name of the bank
+          example: Example Bank
+        bank_code:
+          type: string
+          description: Bank code, such as `lead_bank`
+          example: lead_bank
+        currency:
+          type: string
+          example: USD
+        customer_type:
+          type: string
+          description: Omitted when you filtered by `customer_type`
+          enum:
+            - individual
+            - business
+        account_types:
+          type: array
+          description: >-
+            Account types in the v2 names (`operating`, `yield`, `revenue`).
+            These are not the v1 `type` values.
+          items:
+            type: string
+            enum:
+              - operating
+              - yield
+              - revenue
+        categories:
+          type: array
+          items:
+            type: string
+            enum:
+              - main
+              - sub_account
+              - virtual
+              - multi_currency
+        features:
+          type: object
+          description: What accounts of this option support
+          properties:
+            collections:
+              type: boolean
+            fx_conversion:
+              type: boolean
+            internal_transfers:
+              type: boolean
+            balance_lookup:
+              type: boolean
+            negative_balance:
+              type: boolean
+            fbo_account:
+              type: boolean
+        token_wallets:
+          type: array
+          description: Wallets opened with the account
+          items:
+            type: object
+            properties:
+              network:
+                type: string
+                example: polygon
+              asset:
+                type: string
+                example: USDC
+        max_accounts_per_customer:
+          type:
+            - integer
+            - 'null'
+          description: Most accounts one customer can open. Null means no limit.
+        requires_customer_record:
+          type: boolean
+          description: True when the customer must first be registered with the bank
+        rails:
+          type: array
+          description: Ways to move money in and out
+          items:
+            type: object
+            properties:
+              rail:
+                type: string
+                example: ach
+              title:
+                type: string
+                example: ACH
+              description:
+                type: string
+              currency:
+                type: string
+              settlement_time:
+                type: string
+                example: 1-3 business days
+              cost:
+                type: string
+                enum:
+                  - low
+                  - medium
+                  - high
+              details:
+                type: object
+                additionalProperties: true
+        excluded_countries:
+          type: array
+          description: Residence countries this bank does not serve
+          items:
+            type: string
+        excluded_subdivisions:
+          type: array
+          description: Residence subdivisions this bank does not serve
+          items:
+            type: string
     AddRecipientRequest:
       allOf:
         - $ref: '#/components/schemas/BaseExternalAccountRecipient'
@@ -1584,6 +1886,132 @@ tags:
   - name: Accounts
     description: Manage internal accounts
 paths:
+  /v1/accounts/capabilities:
+    get:
+      tags:
+        - Accounts
+      summary: Get account capabilities
+      operationId: getAccountCapabilities
+      description: >-
+        Lists the accounts a customer can open from their country: bank,
+        currency, account types, token wallets, rails and the per-customer
+        limit. Call it before you create an account or an application. Send
+        `customer_id`, or `country` with `customer_type`. Send `customer_type`
+        with `customer_id` too, or options for both types come back.
+
+
+        The answer uses the v2 account rules. A v1 create picks a bank with its
+        own rules, so an option here does not promise that the same v1 create
+        succeeds. Unknown query parameters are rejected.
+      parameters:
+        - in: query
+          name: customer_id
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Customer to check. Their profile address gives the country when you
+            do not send `country`.
+          example: 550e8400-e29b-41d4-a716-446655440178
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: Residence country as an ISO 3166-1 alpha-2 or alpha-3 code
+          example: US
+        - in: query
+          name: subdivision
+          schema:
+            type: string
+          description: Residence state, such as `US-NY` or `NY`
+          example: US-CA
+        - in: query
+          name: customer_type
+          schema:
+            type: string
+            enum:
+              - individual
+              - business
+          description: Customer type to list options for
+          example: individual
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Three-letter ISO 4217 code to filter by
+          example: USD
+      responses:
+        '200':
+          description: Account options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+              example:
+                data:
+                  country: US
+                  subdivision: US-CA
+                  customer_type: individual
+                  options:
+                    - bank_name: Example Bank
+                      bank_code: lead_bank
+                      currency: USD
+                      account_types:
+                        - operating
+                      categories:
+                        - main
+                        - sub_account
+                      features:
+                        collections: true
+                        fx_conversion: true
+                        internal_transfers: true
+                        balance_lookup: true
+                        negative_balance: false
+                        fbo_account: false
+                      token_wallets:
+                        - network: polygon
+                          asset: USDC
+                      max_accounts_per_customer: null
+                      requires_customer_record: true
+                      rails:
+                        - rail: ach
+                          title: ACH
+                          description: US bank transfer
+                          currency: USD
+                          settlement_time: 1-3 business days
+                          cost: low
+                      excluded_countries:
+                        - CU
+                        - IR
+                        - KP
+                        - SY
+                      excluded_subdivisions: []
+                error: null
+        '400':
+          description: Invalid filter, unknown parameter, or no country to use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: 'null'
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  details:
+                    type: object
+                    additionalProperties: true
+              example:
+                data: null
+                error: >-
+                  a customer country is required: supply country (ISO-3166
+                  alpha-2) or a customer_id whose profile has an address
+        '503':
+          description: The customer profile could not be read. Retry.
+        '504':
+          description: The request took more than 10 seconds. Retry.
   /v1/accounts/applications:
     post:
       tags:
@@ -1822,10 +2250,21 @@ paths:
           name: status
           schema:
             type: string
+            enum:
+              - draft
+              - submitted
+              - processing
+              - approved
+              - manual_review
+              - rejected
+          description: Filter by status, in lower case
         - in: query
           name: application_type
           schema:
             type: string
+            enum:
+              - individual
+              - business
       responses:
         '200':
           description: List of applications
@@ -1840,14 +2279,11 @@ paths:
       tags:
         - Accounts
       summary: Get pending applications
-      description: Retrieve a list of pending applications.
-      parameters:
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 10
-          description: Maximum number of pending applications to return.
+      description: >-
+        Returns up to 10 applications in status `submitted`, oldest first.
+        These are submitted applications that were never processed;
+        `processing` applications are not included. The route takes no
+        parameters; a `limit` parameter makes it fail.
       responses:
         '200':
           description: List of pending applications
@@ -2225,8 +2661,11 @@ paths:
         - Accounts
       summary: Validate application data
       description: >-
-        Validates an application payload against provider specific rules without
-        saving.
+        Checks application data against the bank it would be sent to, and
+        returns that bank's requirements, without saving anything. It checks
+        only the data you send: there is no fill from the customer record and
+        no KYC or duplicate check. Fix every `validation_errors` entry before
+        you create or submit.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2250,11 +2689,20 @@ paths:
         - Accounts
       summary: Create an account
       description: >-
-        Create a new internal account for a customer.
+        Opens an internal account for a customer whose KYC is completed. Call
+        `GET /v1/accounts/capabilities` first to choose the bank, currency and
+        network. Business customers and customer card accounts use the account
+        application flow instead.
 
 
-        For sandbox and testing integrations, we recommend using `polygon` as
-        the `blockchain_network`.
+        USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the
+        bank sets them up. Wait for the `account.activated` webhook, or get the
+        account until it is `active`, before you share deposit details. NGN
+        and `non_custodial` accounts are `active` at once.
+
+
+        Every error is HTTP 400, including not found and duplicates. Use
+        `polygon` for sandbox testing.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2288,6 +2736,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountEnvelope'
+              example:
+                data:
+                  id: 6f1c2b8e-9a43-4f0e-8d35-2b7f0f6c1a90
+                  label: ops
+                  date_created: '2026-10-13T09:12:44Z'
+                  wallet_address: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+                  blockchain_network: polygon
+                  type: regular
+                  customer_id: 550e8400-e29b-41d4-a716-446655440178
+                  capabilities:
+                    - transfer
+                    - receive
+                    - remittance
+                  currency: USD
+                  tenant_name: Acme Payments
+                  tenant_id: b8b2f7f4-3c2a-4f3e-9d61-0c5a7d1e2f33
+                  status: pending
+                  category: sub_account
+                error: null
         '400':
           $ref: '#/components/responses/BadRequest'
     get:
@@ -2295,46 +2762,81 @@ paths:
         - Accounts
       summary: Get accounts
       description: >-
-        Retrieve a list of internal accounts with optional filters and
-        pagination.
+        Lists your internal accounts, newest first, with balances. Accounts
+        opened with `/v2/accounts` are included. Filters combine with AND, and
+        a filter that matches nothing returns an empty list.
       parameters:
         - in: query
           name: items_per_page
           schema:
-            type: string
-          description: Number of items per page (pagination limit)
-          example: '10'
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of items per page, up to 100
+          example: 10
         - in: query
           name: page
           schema:
-            type: string
-          description: Page number for pagination
-          example: '1'
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number, from 1
+          example: 1
         - in: query
           name: customer_id
           schema:
             type: string
             format: uuid
-          description: Filter accounts by customer ID
+          description: Filter by customer
           example: 550e8400-e29b-41d4-a716-446655440178
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - active
+              - pending
+              - frozen
+              - deleted
+              - manual_review
+          description: Filter by status
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Filter by currency code
+          example: USD
+        - in: query
+          name: account_type
+          schema:
+            type: string
+          description: Filter by account type, such as `regular` or `card`
         - in: query
           name: blockchain_network
           schema:
             type: string
-            enum:
-              - polygon
-              - stellar
-              - ethereum
-              - solana
-              - avalanche
-          description: Filter accounts by blockchain network
+          description: Filter by network, such as `polygon`
           example: polygon
         - in: query
-          name: label
+          name: wallet_address
           schema:
             type: string
-          description: Filter accounts by their label
+          description: Filter by exact wallet address
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: >-
+            Case-insensitive text search across label, currency, status, type
+            and wallet address. Use it to find an account by label.
           example: ops
+        - in: query
+          name: excluded_customer_id
+          schema:
+            type: string
+            format: uuid
+          description: Leave out this customer's accounts
       responses:
         '200':
           description: List of accounts
@@ -2349,13 +2851,18 @@ paths:
       tags:
         - Accounts
       summary: Get a single account
-      description: Retrieve details of a specific internal account by `account_id`.
+      description: >-
+        Returns one account with its deposit details, balance and assets. Poll
+        it after you create an account until `status` is `active`; deposit
+        details appear only then. An unknown ID is a 400 with `internal account
+        not found`.
       parameters:
         - in: path
           name: account_id
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         '200':
           description: Account details
@@ -2371,19 +2878,23 @@ paths:
         - Accounts
       summary: Update account status
       description: >-
-        Change an account's status. Set `frozen` to suspend an account,
-        `active` to reactivate it, or `deleted` to close it.
+        Changes an account's status. Set `frozen` to suspend an account,
+        `active` to reactivate it, `manual_review` to hold it, or `deleted` to
+        close it. Each change sends an account webhook. Setting the current
+        status again changes nothing and sends no webhook.
 
 
-        Deleting requires the account's wallet balance to be zero. A deleted
-        account can't be changed again, and system-managed accounts can't have
-        their status updated.
+        Deleting needs a zero balance and cannot be undone. `auto_sweep` and
+        `default` accounts cannot change status. Do not use `active` to move a
+        `pending` account forward; that skips the bank set-up. An unknown ID
+        returns the generic error message.
       parameters:
         - in: path
           name: account_id
           required: true
           schema:
             type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -2398,8 +2909,9 @@ paths:
                   enum:
                     - active
                     - frozen
+                    - manual_review
                     - deleted
-                  description: The new account status.
+                  description: The new account status, in lower case.
             examples:
               Freeze:
                 summary: Freeze an account

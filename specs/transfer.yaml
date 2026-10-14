@@ -8,21 +8,6 @@ info:
 servers:
   - url: https://api.gravv.xyz
 components:
-  responses:
-    BadRequest:
-      description: Bad request
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              data:
-                type: 'null'
-              error:
-                type: string
-          example:
-            data: null
-            error: invalid request payload
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
@@ -34,21 +19,253 @@ components:
       in: header
       required: true
       description: >-
-        Required for POST requests. Reuse the key only when retrying the same
-        operation with an identical payload.
+        1 to 255 printable ASCII characters. A retry with the same key within 24
+        hours returns the first response, including a 400. After you correct a
+        request, send a new key.
       schema:
         type: string
-      example: order_789_attempt_1
-    EventIdPath:
-      name: event_id
+        minLength: 1
+        maxLength: 255
+      example: payout-inv-114-1
+    TransferIdPath:
+      name: id
       in: path
       required: true
-      description: UUID of the webhook event
+      description: The transfer `reference` from `POST /v1/transfer`
       schema:
         type: string
         format: uuid
-      example: 550e8400-e29b-41d4-a716-446655440000
+      example: c1a2b3c4-d5e6-4f70-8a91-b2c3d4e5f607
   schemas:
+    RemitterVerification:
+      type: object
+      description: >-
+        Your record of how you verified the sender. When your limits policy
+        uses attested tiers, the transfer counts against this remitter instead
+        of the customer.
+      properties:
+        remitter_id:
+          type: string
+          description: Your ID for the sender
+          example: rem_8842
+        level:
+          type: string
+          example: enhanced
+        provider:
+          type: string
+          description: Who verified the sender
+        provider_reference:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        screening:
+          type: object
+          description: Each value must be `clear`
+          properties:
+            sanctions:
+              type: string
+              example: clear
+            pep:
+              type: string
+              example: clear
+            adverse_media:
+              type: string
+              example: clear
+    AdditionalInformation:
+      type: object
+      description: >-
+        Sender details. Some payout routes need them; without them the transfer
+        pauses with `sender_details_required`.
+      properties:
+        remitter_full_name:
+          type: string
+          example: John Doe
+        remitter_country:
+          type: string
+          description: Alpha-2 code
+          example: US
+        remitter_document_number:
+          type: string
+          example: A123456789
+        remitter_document_issue_date:
+          type: string
+          description: YYYY-MM-DD
+          example: '2020-01-15'
+        remitter_document_expiry_date:
+          type: string
+          description: YYYY-MM-DD
+          example: '2030-01-15'
+        remitter_date_of_birth:
+          type: string
+          description: YYYY-MM-DD, not in the future
+          example: '1990-06-25'
+        remitter_nationality:
+          type: string
+          description: Alpha-2 code
+          example: US
+        remitter_address:
+          type: object
+          properties:
+            address_line1:
+              type: string
+              example: 123 Main Street
+            city:
+              type: string
+              example: New York
+            state:
+              type: string
+              example: NY
+            postal_code:
+              type: string
+              example: '10001'
+            country:
+              type: string
+              example: US
+        remitter_verification:
+          $ref: '#/components/schemas/RemitterVerification'
+    TransferSource:
+      type: object
+      required:
+        - source_type
+        - id
+      properties:
+        source_type:
+          type: string
+          description: A `card` source can only be withdrawn to its own card account.
+          enum:
+            - internal_account
+            - internal_crypto_wallet
+            - card
+        id:
+          type: string
+          format: uuid
+          description: ID of the account, crypto wallet or card (UUID version 4)
+          example: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
+        currency:
+          type: string
+          description: Accepted, but the source's own currency is used
+          enum:
+            - USD
+            - EUR
+            - GBP
+        crypto_asset:
+          type: string
+          description: Asset sent, such as `USDC` or `USDT`. Defaults to the network's usual asset.
+          example: USDC
+    ExternalAccountDestination:
+      title: External account
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - external_account
+        id:
+          type: string
+          format: uuid
+          description: An `active` external account
+        rail:
+          type: string
+          description: >-
+            Payout rail. `ach`, `wire` and `rtp` are US domestic rails; `wire`
+            is not an international wire. Leave it out, or send `globalbank`,
+            for local bank and mobile money payouts.
+          enum:
+            - ach
+            - wire
+            - rtp
+            - sepa
+            - swift
+            - fps
+            - globalbank
+          example: ach
+    InternalAccountDestination:
+      title: Internal account
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - internal_account
+        id:
+          type: string
+          format: uuid
+          description: An active account. For a `card` source, its own card account.
+    InternalCryptoWalletDestination:
+      title: Internal crypto wallet
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - internal_crypto_wallet
+        id:
+          type: string
+          format: uuid
+        crypto_asset:
+          type: string
+          description: >-
+            Asset received. Between two wallets of the same customer, `USDT` to
+            `USDC` or back converts the asset.
+          enum:
+            - USDC
+            - USDT
+    CryptoWalletDestination:
+      title: Crypto address
+      type: object
+      required:
+        - destination_type
+        - wallet_address
+        - blockchain_network
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - crypto_wallet
+        wallet_address:
+          type: string
+          example: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+        blockchain_network:
+          type: string
+          description: Must match the source's network, except for USDC moved between networks
+          enum:
+            - avalanche
+            - ethereum
+            - polygon
+            - solana
+            - stellar
+            - tron
+            - sui
+            - base
+          example: polygon
+        blockchain_memo:
+          type: string
+          description: Memo for addresses that need one, such as some stellar exchange addresses
+    CardDestination:
+      title: Card
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - card
+        id:
+          type: string
+          format: uuid
+          description: ID of the card to fund
     TransferRequest:
       type: object
       required:
@@ -56,429 +273,386 @@ components:
         - destination
         - amount
         - customer_id
-        - description
-        - client_reference
+      description: Unknown fields are ignored, so check the spelling.
       properties:
         source:
-          type: object
-          description: Source of the transfer
-          required:
-            - source_type
-            - id
-          properties:
-            source_type:
-              type: string
-              enum:
-                - internal_account
-                - internal_crypto_wallet
-              description: source can be `internal_account` or `internal_crypto_wallet`
-            crypto_asset:
-              type: string
-              description: Optional crypto asset type
-              example: USDC
-            id:
-              type: string
-              format: uuid
-              description: Use internal account ID or wallet ID
+          $ref: '#/components/schemas/TransferSource'
         destination:
           oneOf:
             - $ref: '#/components/schemas/ExternalAccountDestination'
             - $ref: '#/components/schemas/InternalAccountDestination'
+            - $ref: '#/components/schemas/InternalCryptoWalletDestination'
             - $ref: '#/components/schemas/CryptoWalletDestination'
             - $ref: '#/components/schemas/CardDestination'
         amount:
-          type: number
-          description: Transfer amount
-          example: 100.5
-        additional_information:
-          type: object
-          description: >-
-            Additional remitter information required for external bank account
-            and mobile money beneficiaries
-          properties:
-            remitter_full_name:
-              type: string
-              description: Full name of the person sending the transfer
-              example: John Doe
-            remitter_country:
-              type: string
-              description: Country code of the remitter (ISO 3166-1 alpha-2)
-              example: US
-            remitter_document_number:
-              type: string
-              description: Document/ID number of the remitter
-              example: A123456789
-            remitter_document_issue_date:
-              type: string
-              format: date
-              description: Date when the remitter's document was issued
-              example: '2020-01-15'
-            remitter_document_expiry_date:
-              type: string
-              format: date
-              description: Date when the remitter's document expires
-              example: '2030-01-15'
-            remitter_date_of_birth:
-              type: string
-              format: date
-              description: Date of birth of the remitter
-              example: '1990-06-25'
-            remitter_address:
-              type: object
-              description: Physical address of the remitter
-              properties:
-                address_line1:
-                  type: string
-                  description: Primary address line
-                  example: 123 Main Street
-                city:
-                  type: string
-                  description: City name
-                  example: New York
-                state:
-                  type: string
-                  description: State or province code
-                  example: NY
-                postal_code:
-                  type: string
-                  description: Postal or ZIP code
-                  example: '10001'
-                country:
-                  type: string
-                  description: Country code (ISO 3166-1 alpha-2)
-                  example: US
-            remitter_nationality:
-              type: string
-              description: Nationality of the remitter (ISO 3166-1 alpha-2 country code)
-              example: US
-        description:
           type: string
-          description: Transfer description
-          example: Transfer Testing
+          description: >-
+            Positive amount in major units of the source currency, with at most
+            2 decimal places. Send it as a string; a number is accepted but can
+            lose precision.
+          example: '250.00'
         customer_id:
           type: string
           format: uuid
-          description: Customer initiating the transfer
+          description: The customer sending the transfer (UUID version 4)
+          example: bb6c6022-f1d8-492f-80f0-7547134bb42f
+        description:
+          type: string
+          description: Optional note for your records
+          example: Invoice 114
         client_reference:
           type: string
-          description: Optional client reference for reconciliation
-    ExternalAccountDestination:
-      title: External Account Destination
+          minLength: 1
+          maxLength: 100
+          description: >-
+            Your unique reference. On tenants whose limits are enforced, a reused
+            reference returns the first transfer, or a 409 when the request
+            differs. Send it so retries are not paid twice.
+          example: inv-114
+        client_metadata:
+          type: string
+          maxLength: 4096
+          description: Your data, often JSON text, returned on the transaction
+        payment_rail_reference:
+          type: string
+          maxLength: 140
+          description: >-
+            Note the receiving bank shows the payee. Plain ASCII, at most 140
+            characters. ACH allows 10 letters, digits or spaces. A US wire allows
+            35 letters, digits, spaces and / - ? : ( ) . , ' +. Other rails
+            ignore it.
+          example: INV 114
+        supporting_document_ids:
+          type: array
+          maxItems: 5
+          description: >-
+            Up to 5 IDs from `POST /v1/transfer/documents` for this customer,
+            each unused. Needed when a payout requires a document; otherwise
+            the transfer pauses for one.
+          items:
+            type: string
+            format: uuid
+        additional_information:
+          $ref: '#/components/schemas/AdditionalInformation'
+    Requirement:
       type: object
-      required:
-        - id
-        - destination_type
       properties:
-        id:
+        type:
           type: string
-          format: uuid
-          description: External account ID
-        destination_type:
+          description: >-
+            What to send on resume: `remitter_verification`, `screening_clear`,
+            `supporting_document`, a sender detail such as `remitter_full_name`,
+            or `customer_email` (update the customer, then resume).
+            `admin_review` means only Gravv can release it.
+          example: remitter_verification
+        tier:
           type: string
-          description: The transfer destination type
-          enum:
-            - external_account
-          example: external_account
-        rail:
+        levels:
+          type: array
+          items:
+            type: string
+        description:
           type: string
-          description: The transfer rail type
-          enum:
-            - ach
-            - wire
-            - sepa
-            - swift
-            - fps
-            - globalbank
-          example: ach
-    InternalAccountDestination:
-      title: Internal Account Destination
+    PauseFields:
       type: object
-      required:
-        - id
-        - destination_type
       properties:
-        id:
+        pause_reason:
           type: string
-          format: uuid
-          description: Internal account ID
-        destination_type:
+          description: Why the transfer paused
+          enum:
+            - per_transfer
+            - daily
+            - weekly
+            - monthly
+            - annual
+            - annual_requires_approval
+            - screening
+            - sender_details_required
+            - supporting_document_required
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Requirement'
+        breached_window:
           type: string
           enum:
-            - internal_account
-          example: internal_account
-    CryptoWalletDestination:
-      title: Crypto Wallet Destination
-      type: object
-      required:
-        - blockchain_network
-        - wallet_address
-        - destination_type
-      properties:
-        blockchain_network:
+            - per_transfer
+            - daily
+            - weekly
+            - monthly
+            - annual
+        remaining_usd:
           type: string
-          description: Blockchain network (e.g., polygon, ethereum)
-          enum:
-            - polygon
-            - ethereum
-            - avalanche
-            - stellar
-            - solana
-            - sui
-            - tron
-          example: polygon
-        wallet_address:
+          description: Allowance left in that window, in USD
+        expires_at:
           type: string
-          description: Crypto wallet address
-          example: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
-        destination_type:
-          type: string
-          enum:
-            - crypto_wallet
-          example: crypto_wallet
-        blockchain_memo:
-          type: string
-          description: Required for only stellar network
-          example: x1we2e2348r3r34r3
-    CardDestination:
-      title: Card Destination
-      type: object
-      required:
-        - id
-        - destination_type
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Recipient card ID
-        destination_type:
-          type: string
-          description: The transfer destination type
-          enum:
-            - card
-          example: card
+          format: date-time
+          description: When the pause expires, 72 hours by default. The transfer then fails.
     TransferResult:
       type: object
-      description: Response body for a successful transfer initiation.
       properties:
         data:
-          type: object
-          properties:
-            amount:
-              type: string
-              format: decimal
-              description: Transfer amount as a decimal string.
-              example: '100.5'
-            reference:
-              type: string
-              format: uuid
-              description: Unique transfer reference.
-              example: 550e8400-e29b-41d4-a716-446655440000
-            date_created:
-              type: string
-              format: date-time
-              description: ISO 8601 timestamp when the transfer was created.
-              example: '2024-01-15T10:30:00Z'
-            transfer_status:
-              type: string
-              enum:
-                - pending
-                - failed
-                - completed
-              description: Current status of the transfer.
-              example: pending
-            transaction_id:
-              type: string
-              format: uuid
-              description: ID of the associated transaction record.
-              example: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
-            local_amount:
-              type:
-                - string
-                - 'null'
-              format: decimal
-              description: Equivalent amount in the recipient's local currency, if applicable.
-              example: '150000.00'
-            local_currency:
-              type:
-                - string
-                - 'null'
-              description: Three-letter ISO 4217 code for the recipient's local currency, if applicable.
-              example: NGN
+          allOf:
+            - type: object
+              properties:
+                amount:
+                  type: string
+                  description: The amount, in `amount_currency`
+                  example: '250'
+                amount_currency:
+                  type:
+                    - string
+                    - 'null'
+                  example: USD
+                reference:
+                  type: string
+                  format: uuid
+                  description: >-
+                    Transfer ID. Use it to resume, and to match webhooks
+                    (`event_group_id`).
+                date_created:
+                  type: string
+                  format: date-time
+                transfer_status:
+                  type: string
+                  description: >-
+                    `pending` once recorded; the transfer then runs in the
+                    background. `paused` means it needs something from you: read
+                    `requirements`, then resume it.
+                  enum:
+                    - pending
+                    - paused
+                    - waiting_approval
+                    - completed
+                    - failed
+                transaction_id:
+                  type: string
+                  format: uuid
+                  description: Use it with `GET /v1/transactions/{transaction_id}`
+                local_amount:
+                  type:
+                    - string
+                    - 'null'
+                  description: What the recipient receives, when there is a currency exchange
+                local_currency:
+                  type:
+                    - string
+                    - 'null'
+                fee:
+                  type: string
+                  example: '1.5'
+                fee_currency:
+                  type:
+                    - string
+                    - 'null'
+                requires_approval:
+                  type: boolean
+                  description: Always false with an API key
+                approval_id:
+                  type: string
+                  format: uuid
+                receive_amount:
+                  type: string
+                  description: USDT and USDC conversions only. Expected amount received.
+                min_receive_amount:
+                  type: string
+                  description: USDT and USDC conversions only. Least amount accepted.
+                receive_asset:
+                  type: string
+                status:
+                  type: string
+                  description: Paused transfers only
+                  enum:
+                    - awaiting_remitter_information
+                    - awaiting_supporting_document
+                park_reason:
+                  type: string
+                  enum:
+                    - remitter_information
+                    - supporting_document
+            - $ref: '#/components/schemas/PauseFields'
         error:
-          type:
-            - string
-            - 'null'
-          example: null
-    TransferCurrency:
-      type: object
-      properties:
-        code:
-          type: string
-          description: Three-letter ISO 4217 currency code.
-          example: NGN
-        name:
-          type: string
-          description: Full name of the currency.
-          example: Nigerian Naira
-    TransferSupportedCurrenciesResponse:
+          type: 'null'
+    LimitErrorResponse:
       type: object
       properties:
         data:
-          type: object
-          properties:
-            currencies:
-              type: array
-              description: Array of supported transfer currencies.
-              items:
-                $ref: '#/components/schemas/TransferCurrency'
+          type: 'null'
         error:
           type: string
-          nullable: true
-          example: null
-    TransferCountryState:
-      type: object
-      properties:
         code:
           type: string
-          description: State or region code.
-          example: NG-LA
-        name:
+          description: Such as `ERROR_CODE_DUPLICATE_TRANSACTION`
+        transfer_status:
           type: string
-          description: State or region name.
-          example: Lagos
-    TransferCountry:
+        window:
+          type: string
+    ErrorResponse:
       type: object
       properties:
-        iso_code:
+        data:
+          type: 'null'
+        error:
           type: string
-          description: Two-letter ISO 3166-1 alpha-2 country code.
-          example: NG
-        name:
+          description: What went wrong
+    UploadTransferDocumentRequest:
+      type: object
+      required:
+        - customer_id
+        - document_type
+        - file_name
+        - content_type
+        - content
+      properties:
+        customer_id:
           type: string
-          description: Full country name.
-          example: Nigeria
-        states:
+          format: uuid
+          example: bb6c6022-f1d8-492f-80f0-7547134bb42f
+        document_type:
+          type: string
+          enum:
+            - invoice
+            - proforma_invoice
+            - purchase_order
+            - contract
+            - receipt
+            - bill_of_lading
+            - customs_declaration
+            - bank_statement
+            - proof_of_income
+            - tax_document
+            - other
+          example: invoice
+        description:
+          type: string
+          maxLength: 140
+          description: Required when `document_type` is `other`
+        file_name:
+          type: string
+          example: inv-2026-114.pdf
+        content_type:
+          type: string
+          description: Must match the file itself
+          enum:
+            - application/pdf
+            - image/png
+            - image/jpeg
+        content:
+          type: string
+          description: The file as standard base64, at most 700 KB decoded
+          example: <base64>
+    ResumeTransferRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Send what `requirements` asked for. A transfer paused for a document
+        takes only `supporting_document_ids`. Unknown fields are rejected.
+      properties:
+        transfer_id:
+          type: string
+          format: uuid
+          description: Optional. It must match the path.
+        remitter_verification:
+          $ref: '#/components/schemas/RemitterVerification'
+        additional_information:
+          $ref: '#/components/schemas/AdditionalInformation'
+        supporting_document_ids:
           type: array
-          description: >-
-            Administrative divisions of the country. Returns an empty array for
-            countries without divisions.
+          maxItems: 5
           items:
-            $ref: '#/components/schemas/TransferCountryState'
-    TransferSupportedCountriesResponse:
+            type: string
+            format: uuid
+    RateItem:
       type: object
       properties:
-        data:
-          type: object
-          properties:
-            countries:
-              type: array
-              description: Array of supported countries.
-              items:
-                $ref: '#/components/schemas/TransferCountry'
-        error:
+        currency_pair:
           type: string
-          nullable: true
-          example: null
-    TransferCountryItem:
-      type: object
-      properties:
-        currency_code:
+          description: Four-part pair key, such as `USD_US_NGN_NG`. `USDT_USDC` for a conversion price.
+          example: USD_US_NGN_NG
+        direction:
           type: string
-          nullable: true
-          description: >-
-            Three-letter ISO 4217 currency code for the country's local
-            currency. Returns `null` for countries where a local currency code
-            is not available.
+          example: USD_NGN
+        pair_type:
+          type: string
+          example: fiat
+        from_currency:
+          type: string
+          example: USD
+        from_currency_name:
+          type: string
+          example: US Dollar
+        to_currency:
+          type: string
           example: NGN
-        iso3_code:
+        to_currency_name:
           type: string
-          description: Three-letter ISO 3166-1 alpha-3 country code.
-          example: NGA
-        iso_code:
-          type: string
-          description: Two-letter ISO 3166-1 alpha-2 country code.
-          example: NG
-        name:
-          type: string
-          description: Full country name.
-          example: Nigeria
-    TransferCountriesResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          properties:
-            countries:
-              type: array
-              description: Array of supported countries.
-              items:
-                $ref: '#/components/schemas/TransferCountryItem'
-        error:
-          type: string
-          nullable: true
-          example: null
-    TransferRate:
-      type: object
-      description: Exchange rate for a single country and currency pair.
-      properties:
-        country_iso_code:
-          type: string
-          description: Two-letter ISO 3166-1 alpha-2 country code.
-          example: NG
-        currency:
-          type: string
-          description: Three-letter ISO 4217 currency code.
           example: NGN
-        eur_rate:
-          type: number
-          description: Exchange rate against EUR.
-          example: 1411.641026432
-        usd_rate:
-          type: number
-          description: Exchange rate against USD.
-          example: 1260.3937736
-    TransferRateListResponse:
-      type: object
-      properties:
-        data:
-          type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/TransferRate'
-            items_per_page:
-              type: integer
-              description: Number of items returned per page.
-              example: 1
-            page:
-              type: integer
-              description: Current page number.
-              example: 1
-            total_pages:
-              type:
-                - integer
-                - 'null'
-              description: Total number of pages. Null when the total count is unavailable.
-              example: 1
-        error:
+        rate:
           type: string
-          nullable: true
-          example: null
+          example: '1368.27'
+        timestamp:
+          type: string
+          format: date-time
+          description: When the rate was set. Check it, as a row can be old.
+        send_amount:
+          type: string
+          description: Conversion price only
+        fee:
+          type: string
+          description: Conversion price only
+        fee_currency:
+          type: string
+          description: Conversion price only
+        receive_amount:
+          type: string
+          description: Conversion price only
+        min_receive_amount:
+          type: string
+          description: Conversion price only
+        source_network:
+          type: string
+          description: Conversion price only
+        destination_network:
+          type: string
+          description: Conversion price only
+        expires_at:
+          type: string
+          format: date-time
+          description: Conversion price only
+  responses:
+    BadRequest:
+      description: The request failed. Read `error`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: internal server error
 security:
   - ApiKeyAuth: []
 tags:
   - name: Transfer
-    description: Transfer funds between accounts
+    description: Send money and look up rates and supported countries
 paths:
   /v1/transfer:
     post:
       tags:
         - Transfer
-      summary: Transfer
+      summary: Create a transfer
+      operationId: createTransfer
       description: >-
-        Initiate a transfer between internal accounts, external accounts, or
-        crypto wallets.
+        Sends money from a customer's account, crypto wallet or card to an
+        account, crypto wallet, crypto address, card or external account. The
+        call returns once the transfer is recorded; it then runs in the
+        background. Follow it with `GET /v1/transactions/{transaction_id}` or
+        the `transfer.status.*` webhooks.
+
+
+        A 200 can still be `transfer_status: paused`. Read `requirements`,
+        upload documents with `POST /v1/transfer/documents` if asked, then call
+        `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send
+        at most 2 decimal places. Most errors are a 400 with no code.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -488,22 +662,22 @@ paths:
             schema:
               $ref: '#/components/schemas/TransferRequest'
             examples:
-              GlobalRemittance:
-                summary: Global Remittance / US Bank Transfer
+              BankPayout:
+                summary: Payout to an external account
                 value:
                   source:
                     source_type: internal_account
                     id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
                   destination:
-                    id: 70c337ad-e3e8-4a90-9de7-7f3e6bc2aac8
                     destination_type: external_account
-                  amount: 1.5
+                    id: 70c337ad-e3e8-4a90-9de7-7f3e6bc2aac8
+                  amount: '250.00'
+                  customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+                  client_reference: inv-114
+                  description: Invoice 114
                   additional_information:
                     remitter_full_name: John Doe
                     remitter_country: US
-                    remitter_document_number: A123456789
-                    remitter_document_issue_date: '2020-01-15'
-                    remitter_document_expiry_date: '2030-01-15'
                     remitter_date_of_birth: '1990-06-25'
                     remitter_address:
                       address_line1: 123 Main Street
@@ -511,142 +685,464 @@ paths:
                       state: NY
                       postal_code: '10001'
                       country: US
-                    remitter_nationality: US
-                  client_reference: 099283849s
-                  description: Transfer Testing
+              UsWire:
+                summary: US wire with a note for the payee's bank
+                value:
+                  source:
+                    source_type: internal_account
+                    id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
+                  destination:
+                    destination_type: external_account
+                    id: 70c337ad-e3e8-4a90-9de7-7f3e6bc2aac8
+                    rail: wire
+                  amount: '1200.00'
                   customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+                  client_reference: inv-115
+                  payment_rail_reference: INV 115
               InternalTransfer:
-                summary: Internal Transfer
+                summary: Between two accounts
                 value:
                   source:
                     source_type: internal_account
                     id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
                   destination:
-                    id: 915a6953-49a1-4a78-b29d-56d401d9f22a
                     destination_type: internal_account
-                  amount: 1
-                  additional_information:
-                    remitter_full_name: John Doe
-                    remitter_country: US
-                    remitter_document_number: A123456789
-                    remitter_document_issue_date: '2020-01-15'
-                    remitter_document_expiry_date: '2030-01-15'
-                    remitter_date_of_birth: '1990-06-25'
-                    remitter_address:
-                      address_line1: 123 Main Street
-                      city: New York
-                      state: NY
-                      postal_code: '10001'
-                      country: US
-                    remitter_nationality: US
-                  description: Transfer Testing
+                    id: 915a6953-49a1-4a78-b29d-56d401d9f22a
+                  amount: '10.00'
                   customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
-                  client_reference: hellowe2
+                  client_reference: move-0042
               CryptoTransfer:
-                summary: Crypto Wallet Transfer
+                summary: To a crypto address
                 value:
                   source:
                     source_type: internal_account
                     id: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
                   destination:
-                    blockchain_network: polygon
                     destination_type: crypto_wallet
+                    blockchain_network: polygon
                     wallet_address: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
-                  amount: 2
-                  description: Transfer Testing
+                  amount: '2.00'
                   customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
-                  client_reference: '2893843'
-              CryptoToCardTransfer:
-                summary: Crypto to Card Transfer
+                  client_reference: send-0043
+              CardFunding:
+                summary: Fund a card from a crypto wallet
                 value:
                   source:
-                    source_type: crypto_wallet
+                    source_type: internal_crypto_wallet
                     id: 67e169c0-547f-410d-8e18-f616b6822d70
                   destination:
                     destination_type: card
                     id: 3397bab8-0f2b-4721-b15b-8c71860f01f9
-                  amount: 3
-                  description: card funding
+                  amount: '30.00'
                   customer_id: 04dfb2e5-1274-4214-b5fd-3415fde7dc18
-                  client_reference: cardtransfer1234
+                  client_reference: card-fund-1234
       responses:
         '200':
-          description: Transfer successful
+          description: The transfer is recorded, or paused
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransferResult'
+              examples:
+                Pending:
+                  summary: Recorded
+                  value:
+                    data:
+                      amount: '250'
+                      amount_currency: USD
+                      reference: 3f0c6a8e-6b1d-4c1e-9a55-0d2f7b9e4a11
+                      date_created: '2026-10-13T09:15:22.481Z'
+                      transfer_status: pending
+                      transaction_id: 8d4e2b6c-1f3a-4e7b-b0c9-5a6d7e8f9a01
+                      local_amount: '382500'
+                      local_currency: NGN
+                      fee: '1.5'
+                      fee_currency: USD
+                      requires_approval: false
+                    error: null
+                Paused:
+                  summary: Paused by a limit
+                  value:
+                    data:
+                      amount: '5000'
+                      amount_currency: USD
+                      reference: c1a2b3c4-d5e6-4f70-8a91-b2c3d4e5f607
+                      date_created: '2026-10-13T09:15:22.481Z'
+                      transfer_status: paused
+                      transaction_id: 0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a4b
+                      local_amount: null
+                      local_currency: null
+                      fee: '0'
+                      fee_currency: USD
+                      requires_approval: false
+                      status: awaiting_remitter_information
+                      park_reason: remitter_information
+                      pause_reason: daily
+                      requirements:
+                        - type: remitter_verification
+                          tier: T2
+                          levels:
+                            - enhanced
+                          description: resume with remitter_verification at one of these levels
+                      breached_window: daily
+                      remaining_usd: '1200.00'
+                      expires_at: '2026-10-16T09:15:22Z'
+                    error: null
+        '400':
+          description: >-
+            Invalid request, insufficient balance, or a source, destination or
+            external account problem
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Balance:
+                  summary: The source holds too little
+                  value:
+                    data: null
+                    error: insufficient balance
+                Payee:
+                  summary: The external account is not active
+                  value:
+                    data: null
+                    error: 'payee 70c337ad-e3e8-4a90-9de7-7f3e6bc2aac8 is not active: pending'
+        '409':
+          description: >-
+            `client_reference` was used for a different transfer, or the same one
+            is still being set up (retry after 1 second)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: >-
+                  client_reference has already been used for a different transfer
+                  (the amount, currency, source, destination or remitter differ);
+                  use a new client_reference for a new transfer
+                code: ERROR_CODE_DUPLICATE_TRANSACTION
+        '422':
+          description: >-
+            The sender is blocked, a supporting document is required, or the
+            Idempotency-Key was used with a different body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: transfers are not permitted for this sender
+                code: ERROR_CODE_SUBJECT_BLOCKED
+        '503':
+          description: Limits cannot be checked right now. Retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: transfer limits are temporarily unavailable, please retry
+                code: ERROR_CODE_LIMITS_UNAVAILABLE
+  /v1/transfer/documents:
+    post:
+      tags:
+        - Transfer
+      summary: Upload a supporting document
+      operationId: uploadTransferDocument
+      description: >-
+        Uploads a document, such as an invoice, for a payout that needs one.
+        Pass the returned `id` in `supporting_document_ids` on
+        `POST /v1/transfer` or on resume. A document can be used by one
+        transfer only, and an unused one is deleted after 7 days. The file must
+        be PDF, PNG or JPEG, at most 700 KB.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadTransferDocumentRequest'
+            example:
+              customer_id: bb6c6022-f1d8-492f-80f0-7547134bb42f
+              document_type: invoice
+              file_name: inv-2026-114.pdf
+              content_type: application/pdf
+              content: <base64>
+      responses:
+        '200':
+          description: The stored document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      document_type:
+                        type: string
+                      description:
+                        type: string
+                      file_name:
+                        type: string
+                      content_type:
+                        type: string
+                      size_bytes:
+                        type: integer
+                      created_at:
+                        type: string
+                        format: date-time
+                  error:
+                    type: 'null'
               example:
                 data:
-                  amount: '1.5'
-                  reference: 550e8400-e29b-41d4-a716-446655440000
-                  date_created: '2024-01-15T10:30:00Z'
-                  transfer_status: pending
-                  transaction_id: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
-                  local_amount: null
-                  local_currency: null
+                  id: 5b0d8f3e-2a71-4c4f-9e0b-7d6c1a2b3c4d
+                  document_type: invoice
+                  file_name: inv-2026-114.pdf
+                  content_type: application/pdf
+                  size_bytes: 184233
+                  created_at: '2026-10-13T09:10:02Z'
                 error: null
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: A field or the file is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: 'content: the file is not a application/pdf'
+                code: ERROR_CODE_SUPPORTING_DOCUMENT_INVALID
+        '404':
+          description: The customer is not one of yours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: The request or file is too large
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: 'null'
+                  error: {}
+        '503':
+          description: Storage is unavailable. Retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: document storage is unavailable; retry shortly
+  /v1/transfer/{id}/resume:
+    post:
+      tags:
+        - Transfer
+      summary: Resume a paused transfer
+      operationId: resumeTransfer
+      description: >-
+        Continues a transfer that returned `transfer_status: paused`, with what
+        its `requirements` asked for. When the transfer can go ahead,
+        `resumed` is true and the `transfer.resumed` webhook is sent. When it
+        still cannot, `resumed` is false and the response lists the new
+        requirements. The fee is not charged again.
+
+
+        Use a new Idempotency-Key for each attempt with new information, as a
+        retry with the same key returns the first answer. A 410 means the pause
+        expired or was cancelled; start a new transfer.
+      parameters:
+        - $ref: '#/components/parameters/TransferIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeTransferRequest'
+            example:
+              supporting_document_ids:
+                - 5b0d8f3e-2a71-4c4f-9e0b-7d6c1a2b3c4d
+      responses:
+        '200':
+          description: The result of the resume
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - type: object
+                        properties:
+                          transfer_id:
+                            type: string
+                            format: uuid
+                          status:
+                            type: string
+                            description: Internal step, such as `approved_awaiting_execution`
+                          transfer_status:
+                            type: string
+                            enum:
+                              - pending
+                              - paused
+                          resumed:
+                            type: boolean
+                          local_amount:
+                            type: string
+                          local_currency:
+                            type: string
+                      - $ref: '#/components/schemas/PauseFields'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  transfer_id: c1a2b3c4-d5e6-4f70-8a91-b2c3d4e5f607
+                  status: approved_awaiting_execution
+                  transfer_status: pending
+                  resumed: true
+                  local_amount: '7650000'
+                  local_currency: NGN
+                error: null
+        '400':
+          description: The transfer is not paused, or the body is wrong
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: this transfer is not paused
+                transfer_status: completed
+        '404':
+          description: No such transfer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                data: null
+                error: transfer workflow not found
+        '409':
+          description: The transfer changed while the request ran. Retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+        '410':
+          description: The pause expired or was cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+              example:
+                data: null
+                error: >-
+                  this paused transfer has expired and can no longer be resumed;
+                  please initiate a new transfer
+                code: ERROR_CODE_TRANSFER_PAUSE_EXPIRED
+        '422':
+          description: The sender is blocked, or a supporting document is still missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
+        '503':
+          description: Limits cannot be checked right now. Retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitErrorResponse'
   /v1/transfer/rates:
     get:
       tags:
         - Transfer
-      summary: Get rates
+      summary: Get transfer rates
+      operationId: getTransferRates
       description: >-
-        Retrieve current exchange rates for transfers between different
-        currencies.
+        Without `source_wallet_id`, returns indicative exchange rates, which you
+        can filter by `currency`. With `source_wallet_id`,
+        `destination_wallet_id`, `receive_asset` and `amount`, it prices a USDT
+        and USDC conversion between two wallets of one customer. Neither is a
+        locked price; the transfer is priced again when you create it.
       parameters:
-        - in: query
-          name: page
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-          description: Page number for pagination
-          example: 1
-        - in: query
-          name: items_per_page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-          description: Number of transactions per page
-          example: 10
-        - in: query
-          name: country_iso_code
-          schema:
-            type: string
-            minLength: 2
-            maxLength: 2
-          description: Use two-letter ISO country code to filter transfer rates
-          example: NG
         - in: query
           name: currency
           schema:
             type: string
-            minLength: 3
-            maxLength: 3
-          description: Use three-letter ISO currency code to filter transfer rates
+          description: The currency received. Not case-sensitive.
           example: NGN
+        - in: query
+          name: source_wallet_id
+          schema:
+            type: string
+            format: uuid
+          description: Prices a conversion from this crypto wallet
+        - in: query
+          name: destination_wallet_id
+          schema:
+            type: string
+            format: uuid
+          description: Conversion price only. A wallet of the same customer.
+        - in: query
+          name: receive_asset
+          schema:
+            type: string
+            enum:
+              - USDT
+              - USDC
+          description: Conversion price only. It must differ from the asset sent.
+        - in: query
+          name: send_asset
+          schema:
+            type: string
+            enum:
+              - USDT
+              - USDC
+          description: Conversion price only. Defaults to the wallet's asset.
+        - in: query
+          name: amount
+          schema:
+            type: string
+          description: Conversion price only. Positive, with at most 2 decimal places.
       responses:
         '200':
-          description: Exchange rates retrieved successfully
+          description: The rates, in one list with no paging
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransferRateListResponse'
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RateItem'
+                  error:
+                    type: 'null'
               example:
                 data:
                   items:
-                    - country_iso_code: NG
-                      currency: NGN
-                      eur_rate: 1411.641026432
-                      usd_rate: 1260.3937736
-                  items_per_page: 1
-                  page: 1
-                  total_pages: 1
+                    - currency_pair: USD_US_NGN_NG
+                      direction: USD_NGN
+                      from_currency: USD
+                      from_currency_name: US Dollar
+                      pair_type: fiat
+                      rate: '1368.27'
+                      timestamp: '2026-10-13T22:20:08.941956Z'
+                      to_currency: NGN
+                      to_currency_name: NGN
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -654,61 +1150,45 @@ paths:
     get:
       tags:
         - Transfer
-      summary: Get supported currencies
-      description: Retrieve the list of fiat currencies supported for transfers.
-      parameters:
-        - in: query
-          name: code
-          schema:
-            type: string
-          description: Filter by three-letter ISO 4217 currency code (case-insensitive).
-          example: NGN
-        - in: query
-          name: name
-          schema:
-            type: string
-          description: Filter by currency name (case-insensitive partial match).
-          example: Nigerian
+      summary: List supported currency pairs
+      operationId: listTransferSupportedCurrencies
+      description: Lists the currency pairs you can pay out in. It takes no filters.
       responses:
         '200':
-          description: List of supported transfer currencies
+          description: The currency pairs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransferSupportedCurrenciesResponse'
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            currency_pair:
+                              type: string
+                            from_currency:
+                              type: string
+                            from_currency_name:
+                              type: string
+                            to_currency:
+                              type: string
+                            to_currency_name:
+                              type: string
+                  error:
+                    type: 'null'
               example:
                 data:
-                  currencies:
-                    - code: NGN
-                      name: Nigerian Naira
-                    - code: EUR
-                      name: Euro
-                    - code: GHS
-                      name: Ghanaian Cedi
-                    - code: KES
-                      name: Kenyan Shilling
-                    - code: UGX
-                      name: Ugandan Shilling
-                    - code: ZMW
-                      name: Zambian Kwacha
-                    - code: XOF
-                      name: West African CFA Franc
-                    - code: BWP
-                      name: Botswana Pula
-                    - code: CDF
-                      name: Congolese Franc
-                    - code: XAF
-                      name: Central African CFA Franc
-                    - code: MWK
-                      name: Malawian Kwacha
-                    - code: RWF
-                      name: Rwandan Franc
-                    - code: ZAR
-                      name: South African Rand
-                    - code: TZS
-                      name: Tanzanian Shilling
-                    - code: USD
-                      name: US Dollar
+                  items:
+                    - currency_pair: USD_NGN
+                      from_currency: USD
+                      from_currency_name: US Dollar
+                      to_currency: NGN
+                      to_currency_name: Nigerian Naira
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -716,110 +1196,116 @@ paths:
     get:
       tags:
         - Transfer
-      summary: Get supported countries
+      summary: List supported countries
+      operationId: listTransferSupportedCountries
       description: >-
-        Retrieve the list of countries supported for transfers. Each country
-        includes its two-letter and three-letter ISO codes and its local
-        currency code where available.
+        Lists countries with their alpha-3 code and local currency. A listed
+        country may still have no payout route open; the transfer then says so.
       parameters:
         - in: query
           name: iso_code
           schema:
             type: string
-          description: Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive).
+          description: >-
+            Part of an alpha-2 code, not case-sensitive. `N` matches every code
+            that contains N.
           example: NG
       responses:
         '200':
-          description: List of supported transfer countries
+          description: The countries
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransferCountriesResponse'
-              example:
-                data:
-                  countries:
-                    - currency_code: NGN
-                      iso3_code: NGA
-                      iso_code: NG
-                      name: Nigeria
-                    - currency_code: GHS
-                      iso3_code: GHA
-                      iso_code: GH
-                      name: Ghana
-                    - currency_code: KES
-                      iso3_code: KEN
-                      iso_code: KE
-                      name: Kenya
-                    - currency_code: USD
-                      iso3_code: USA
-                      iso_code: US
-                      name: United States
-                    - currency_code: null
-                      iso3_code: JPN
-                      iso_code: JP
-                      name: Japan
-                error: null
-        '400':
-          $ref: '#/components/responses/BadRequest'
-  /v1/transfer/supported-countries-for-address:
-    get:
-      tags:
-        - Transfer
-      summary: Get supported countries for address
-      description: >-
-        Retrieve the list of countries supported for recipient addresses in
-        international transfers. Countries with administrative divisions include
-        a `states` array; countries without return an empty array.
-      parameters:
-        - in: query
-          name: iso_code
-          schema:
-            type: string
-          description: Filter by two-letter ISO 3166-1 alpha-2 country code (case-insensitive).
-          example: NG
-        - in: query
-          name: name
-          schema:
-            type: string
-          description: Filter by country name (case-insensitive partial match).
-          example: Nigeria
-      responses:
-        '200':
-          description: List of supported countries
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransferSupportedCountriesResponse'
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      countries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            iso_code:
+                              type: string
+                            name:
+                              type: string
+                            iso3_code:
+                              type:
+                                - string
+                                - 'null'
+                            currency_code:
+                              type:
+                                - string
+                                - 'null'
+                  error:
+                    type: 'null'
               example:
                 data:
                   countries:
                     - iso_code: NG
                       name: Nigeria
-                      states:
-                        - code: NG-LA
-                          name: Lagos
-                        - code: NG-FC
-                          name: Federal Capital Territory
+                      iso3_code: NGA
+                      currency_code: NGN
+                error: null
+  /v1/transfer/supported-countries-for-address:
+    get:
+      tags:
+        - Transfer
+      summary: List countries and states for addresses
+      operationId: listTransferSupportedCountriesForAddress
+      description: >-
+        Lists countries with their states or regions, for address forms. Both
+        filters match part of the value and are not case-sensitive.
+      parameters:
+        - in: query
+          name: iso_code
+          schema:
+            type: string
+          example: GH
+        - in: query
+          name: name
+          schema:
+            type: string
+          example: Ghana
+      responses:
+        '200':
+          description: The countries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      countries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            iso_code:
+                              type: string
+                            name:
+                              type: string
+                            states:
+                              type: array
+                              description: Empty when the country has none
+                              items:
+                                type: object
+                                properties:
+                                  code:
+                                    type: string
+                                  name:
+                                    type: string
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  countries:
                     - iso_code: GH
                       name: Ghana
                       states:
                         - code: GH-AA
                           name: Greater Accra
-                        - code: GH-AH
-                          name: Ashanti
-                    - iso_code: US
-                      name: United States
-                      states:
-                        - code: US-NY
-                          name: New York
-                        - code: US-CA
-                          name: California
-                    - iso_code: CI
-                      name: Côte d'Ivoire
-                      states: []
-                    - iso_code: JP
-                      name: Japan
-                      states: []
                 error: null
-        '400':
-          $ref: '#/components/responses/BadRequest'

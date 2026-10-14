@@ -142,7 +142,7 @@ export const STEPS: ReplayStep[] = [
       customer_id: BUSINESS,
       source: { source_type: "internal_account", id: "ff560281-8e0f-4af4-93d0-92d4780cc961" },
       destination: { destination_type: "internal_account", id: "9d20a87e-cffa-43b3-a60b-8b612fe5b88e" },
-      amount: 1,
+      amount: "1",
       description: "{run} book transfer",
       client_reference: "{run}-book",
     },
