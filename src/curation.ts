@@ -408,8 +408,9 @@ export interface DescriptionOverride {
 
 export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
   // The ten overrides for the pre-Phase 3 specs (customers, external accounts,
-  // transactions, collections, cards and fx) were deleted when the specs were fixed at
-  // source and synced; generation reported each as stale.
+  // transactions, collections, cards and fx), and the activateFeature card account one
+  // (fixed in docs Phase 6a), were deleted when the specs were fixed at source and synced;
+  // generation reported each as stale.
 
   // ---- retry advice --------------------------------------------------------
   // Three Phase 3 descriptions say to retry a failed call with the same key. A 4xx is
@@ -439,18 +440,6 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
       "Moves money from an `active` card back to its card account. Some cards, including every new sandbox " +
       "card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card " +
       "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
-  },
-
-  // ---- cards ---------------------------------------------------------------
-  // The card account is the business's own, one for every cardholder, and leaving it out
-  // fails with an internal error (gap-check card-account-trace.md §3).
-  activateFeature: {
-    whileSpecSays: "Leave it out to use the customer's card account.",
-    params: {
-      "provider_data.account_id":
-        "Your business's active card account, the same for every cardholder: listAccounts with account_type card " +
-        "and status active. Always send it.",
-    },
   },
 
   // ---- collections ---------------------------------------------------------
@@ -604,7 +593,7 @@ export const IDEMPOTENCY_EXEMPT_PREFIXES = ["/v1/external-accounts/verify", "/v1
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account is your business's own, one for all its cards: type card, currency USD, under the business's own customer id; it is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
+    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
 
   updateAccountStatus:
     "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
@@ -691,7 +680,7 @@ export const PREREQUISITES: Record<string, string> = {
     "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
 
   activateFeature:
-    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account) as well as annual_remuneration and estimated_monthly_limit as JSON numbers: without account_id the call fails with `cards service: internal server error`. Requires confirm: true.",
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
 
   startCardholderKyc:
     "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",

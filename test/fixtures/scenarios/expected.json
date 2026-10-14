@@ -564,45 +564,27 @@
     "tool": "getAccount"
   },
   "S-ACC1-05.1": {
-    "outcome": "mismatch",
-    "tool": "createAccount",
-    "problems": [
-      "currency: \"USDC\" is not one of USD, CAD, MXN, EUR, GBP, CHF, NGN, KES, ZAR, GHS, UGX, TZS, EGP, XOF, XAF, BRL"
-    ]
+    "outcome": "ok",
+    "tool": "createAccount"
   },
   "S-ACC1-05.2": {
     "outcome": "ok",
     "tool": "getAccount"
   },
   "S-ACC1-06.1": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "validateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.business.email: is not declared",
-      "data.business.phone: is not declared",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.2": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "createAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.business.email: is not declared",
-      "data.business.phone: is not declared",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.3": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required",
-      "data.business.tax_id_type: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-06.4": {
     "outcome": "ok",
@@ -624,17 +606,9 @@
     "optIn": true
   },
   "S-ACC1-07.2": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required",
-      "data.individual.tax_id_type: is not declared",
-      "data.individual.nationalities: is not declared",
-      "data.individual.place_of_birth: is not declared",
-      "data.individual.account_purpose: is not declared"
-    ]
+    "optIn": true
   },
   "S-ACC1-07.3": {
     "outcome": "ok",
@@ -666,13 +640,9 @@
     "optIn": true
   },
   "S-ACC1-08.6": {
-    "outcome": "mismatch",
+    "outcome": "ok",
     "tool": "updateAccountApplication",
-    "optIn": true,
-    "problems": [
-      "data.account_type: is required",
-      "data.currency: is required"
-    ]
+    "optIn": true
   },
   "S-ACC1-08.7": {
     "outcome": "ok",

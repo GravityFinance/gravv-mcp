@@ -60,6 +60,13 @@ documented endpoint now has a tool or a stated reason it has none.
   email already exists", is no longer flagged `outcome_unknown`.
 - The `activateFeature` note for `provider_data.account_id` says to always send the
   business's card account; the spec said it could be left out.
+- `createAccount` takes any non-empty currency label for a `non_custodial` (wallet-only)
+  account, such as `USDC`, and says the business opens its one card account there with
+  its own customer id.
+- The v1 application tools take the fields the bank checks (`tax_id_type`,
+  `nationalities`, `place_of_birth`, `account_purpose`, a business `email` and `phone`),
+  no longer require every address part, and `updateAccountApplication` requires no field
+  in `data`: send only what changes.
 
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
@@ -97,9 +104,10 @@ documented endpoint now has a tool or a stated reason it has none.
 - A coverage test checks that every documented endpoint has a tool or a reason.
 - `npm run sync-specs` deletes specs removed upstream.
 - `yaml` moved to devDependencies; it is used only by the generator and tests.
-- The specs are synced from the client-docs branch for the spec alignment (74e23af), which
-  has not merged. The nightly drift check compares against client-docs main, so it reports
-  drift until that work merges.
+- The specs are synced from the top of the client-docs docs stack, the webhooks catalogue
+  branch (8917a0c), which has not merged. The nightly drift check compares against
+  client-docs main, so it reports drift until that work merges.
+- The scenario and replay schema check reads `anyOf`: a value fits when any shape fits.
 - 0.3.2 is still unreleased. If it is not published on its own, its changes ship in this
   release.
 

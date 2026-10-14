@@ -48,7 +48,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
-    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account) as well as annual_remuneration and estimated_monthly_limit as JSON numbers: without account_id the call fails with `cards service: internal server error`. Requires confirm: true.",
+    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`: give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -60,7 +60,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "feature_id": {
           "type": "string",
-          "description": "`virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout).",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -89,13 +89,13 @@ export const TOOLS: GeneratedTool[] = [
             "estimated_monthly_limit": {
               "type": "number",
               "minimum": 1,
-              "description": "Expected monthly card spend. Required for `virtual_cards`. It also becomes the card's spending limit.",
+              "description": "Expected monthly card spend. Required for `virtual_cards`. When a card is issued during activation, it also becomes that card's daily limit.",
               "example": 200
             },
             "account_id": {
               "type": "string",
               "format": "uuid",
-              "description": "Your business's active card account, the same for every cardholder: listAccounts with account_type card and status active. Always send it.",
+              "description": "Always send it for `virtual_cards`: the id of your business's card account (type `card`, status `active`). The same card account backs every cardholder. Leaving it out fails with `cards service: internal server error`.",
               "example": "5d9e677f-f071-4881-a861-7cdcebacd9d5"
             },
             "funding": {
@@ -321,7 +321,7 @@ export const TOOLS: GeneratedTool[] = [
       "properties": {
         "feature_id": {
           "type": "string",
-          "description": "`virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout).",
+          "description": "The catalogue lists six features: `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account` (accounts), `crypto_wallet` (Wallet) and `international_transfers` (Payout). These routes serve cards: send `virtual_cards`. Open accounts, wallets and payouts with their own APIs.",
           "enum": [
             "crypto_wallet",
             "virtual_cards",
@@ -421,36 +421,45 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers and customer card accounts use the account application flow instead. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account is your business's own, one for all its cards: type card, currency USD, under the business's own customer id; it is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
+    "description": "Create an account — Opens an internal account for a customer whose KYC is completed. Call `GET /v1/accounts/capabilities` first to choose the bank, currency and network. Business customers use the account application flow instead. Your business opens its one card account here, with its own customer id; it starts `pending`. USD, EUR, GBP, MXN and BRL accounts return `status: pending` while the bank sets them up. Wait for the `account.activated` webhook, or get the account until it is `active`, before you share deposit details. NGN and `non_custodial` accounts are `active` at once. Every error is HTTP 400, including not found and duplicates. Use `polygon` for sandbox testing.\n\nPREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "currency": {
-          "type": "string",
-          "description": "Currency code. Each bank supports fewer currencies than this list: `lead_bank` USD, EUR, GBP, MXN and BRL; `cross_river_bank` USD; `nigerian_bank` NGN. Call `GET /v1/accounts/capabilities` first.",
+          "description": "Currency code. Each bank supports fewer currencies than this list: `lead_bank` USD, EUR, GBP, MXN and BRL; `cross_river_bank` USD; `nigerian_bank` NGN. Call `GET /v1/accounts/capabilities` first. For a `non_custodial` (wallet-only) account any non-empty label, such as `USDC`, is accepted and stored as written.",
           "example": "USD",
-          "enum": [
-            "USD",
-            "CAD",
-            "MXN",
-            "EUR",
-            "GBP",
-            "CHF",
-            "NGN",
-            "KES",
-            "ZAR",
-            "GHS",
-            "UGX",
-            "TZS",
-            "EGP",
-            "XOF",
-            "XAF",
-            "BRL"
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "USD",
+                "CAD",
+                "MXN",
+                "EUR",
+                "GBP",
+                "CHF",
+                "NGN",
+                "KES",
+                "ZAR",
+                "GHS",
+                "UGX",
+                "TZS",
+                "EGP",
+                "XOF",
+                "XAF",
+                "BRL"
+              ]
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Any label, for `type` `non_custodial` only"
+            }
           ]
         },
         "type": {
           "type": "string",
-          "description": "Type of account. `card`, `auto_sweep` and `default` are only for your own accounts; open a customer's card account with an account application.",
+          "description": "Type of account. `card`, `auto_sweep` and `default` are only for your business's own accounts: send your own customer id (the `customer_id` on an account whose `category` is `main`). An end customer's id is refused. One `card` account backs every card you issue, and a business can hold only one.",
           "example": "regular",
           "enum": [
             "regular",
@@ -676,6 +685,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -707,14 +717,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -796,6 +799,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -864,6 +913,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -895,17 +945,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -937,17 +981,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -979,14 +1017,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -1085,6 +1116,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -1116,14 +1148,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -1205,6 +1230,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -1293,6 +1364,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -1324,14 +1396,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -1502,6 +1567,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },
@@ -7295,11 +7380,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "data": {
           "type": "object",
-          "description": "Application data. Unknown keys are dropped. On create, empty fields are filled from the customer record. The bank the application is routed to decides which other fields are required, and reports what is missing in `validation_errors`.",
-          "required": [
-            "account_type",
-            "currency"
-          ],
+          "description": "The parts of an application's `data` to change. The fields and types are those of UnifiedApplicationData, and none is required: send only what changes. The update merges into the stored data, so an empty value never clears a field and `true` cannot be set back to `false`.",
           "properties": {
             "individual": {
               "type": "object",
@@ -7398,6 +7479,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7429,14 +7511,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -7518,6 +7593,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -7586,6 +7707,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7617,17 +7739,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7659,17 +7775,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -7701,14 +7811,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -7807,6 +7910,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -7838,14 +7942,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -7927,6 +8024,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -8015,6 +8158,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -8046,14 +8190,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -8224,6 +8361,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },
@@ -9745,6 +9902,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -9776,14 +9934,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "id_document_front": {
                   "type": "string",
@@ -9865,6 +10016,52 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                  "example": "tin"
+                },
+                "nationalities": {
+                  "type": "array",
+                  "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "NGA"
+                  ]
+                },
+                "place_of_birth": {
+                  "type": "object",
+                  "description": "Where the individual was born.",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Country of birth, as an ISO 3166 code.",
+                      "example": "NGA"
+                    },
+                    "city": {
+                      "type": "string",
+                      "description": "City of birth.",
+                      "example": "Lagos"
+                    }
+                  }
+                },
+                "account_purpose": {
+                  "type": "string",
+                  "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                  "example": "receive_salary"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
+                },
+                "identification_issue_date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                  "example": "2020-01-15"
                 }
               }
             },
@@ -9933,6 +10130,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "registered_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -9964,17 +10162,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "physical_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -10006,17 +10198,11 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "mailing_address": {
                   "type": "object",
+                  "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                   "properties": {
                     "street_line_1": {
                       "type": "string",
@@ -10048,14 +10234,7 @@ export const TOOLS: GeneratedTool[] = [
                       "description": "Country (ISO 3166-1 alpha-2)",
                       "example": "US"
                     }
-                  },
-                  "required": [
-                    "street_line_1",
-                    "city",
-                    "state",
-                    "postal_code",
-                    "country"
-                  ]
+                  }
                 },
                 "primary_contact": {
                   "type": "object",
@@ -10154,6 +10333,7 @@ export const TOOLS: GeneratedTool[] = [
                     },
                     "address": {
                       "type": "object",
+                      "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                       "properties": {
                         "street_line_1": {
                           "type": "string",
@@ -10185,14 +10365,7 @@ export const TOOLS: GeneratedTool[] = [
                           "description": "Country (ISO 3166-1 alpha-2)",
                           "example": "US"
                         }
-                      },
-                      "required": [
-                        "street_line_1",
-                        "city",
-                        "state",
-                        "postal_code",
-                        "country"
-                      ]
+                      }
                     },
                     "id_document_front": {
                       "type": "string",
@@ -10274,6 +10447,52 @@ export const TOOLS: GeneratedTool[] = [
                       "type": "string",
                       "description": "Expected monthly volume of crypto transactions.",
                       "example": "10000_TO_50000"
+                    },
+                    "tax_id_type": {
+                      "type": "string",
+                      "description": "Kind of tax number sent in `tin`, such as `ssn`, `itin` or `tin`. The bank checks that it was issued by the country of the individual's address.",
+                      "example": "tin"
+                    },
+                    "nationalities": {
+                      "type": "array",
+                      "description": "Every nationality the individual holds, as ISO 3166 codes.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "NGA"
+                      ]
+                    },
+                    "place_of_birth": {
+                      "type": "object",
+                      "description": "Where the individual was born.",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country of birth, as an ISO 3166 code.",
+                          "example": "NGA"
+                        },
+                        "city": {
+                          "type": "string",
+                          "description": "City of birth.",
+                          "example": "Lagos"
+                        }
+                      }
+                    },
+                    "account_purpose": {
+                      "type": "string",
+                      "description": "Main purpose of the account, such as `personal_or_living_expenses` or `receive_salary`. `other` needs `account_purpose_other`.",
+                      "example": "receive_salary"
+                    },
+                    "account_purpose_other": {
+                      "type": "string",
+                      "description": "The purpose in words, when `account_purpose` is `other`."
+                    },
+                    "identification_issue_date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Issue date of the identity document, in YYYY-MM-DD format.",
+                      "example": "2020-01-15"
                     }
                   }
                 },
@@ -10362,6 +10581,7 @@ export const TOOLS: GeneratedTool[] = [
                       },
                       "address": {
                         "type": "object",
+                        "description": "An address. The bank the application goes to decides which parts it needs, such as a state for a US address, and lists a missing or invalid one in `validation_errors`.",
                         "properties": {
                           "street_line_1": {
                             "type": "string",
@@ -10393,14 +10613,7 @@ export const TOOLS: GeneratedTool[] = [
                             "description": "Country (ISO 3166-1 alpha-2)",
                             "example": "US"
                           }
-                        },
-                        "required": [
-                          "street_line_1",
-                          "city",
-                          "state",
-                          "postal_code",
-                          "country"
-                        ]
+                        }
                       },
                       "identification_type": {
                         "type": "string",
@@ -10571,6 +10784,26 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Expected monthly volume of crypto transactions.",
                   "example": "10000_TO_50000"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "description": "The business's email address.",
+                  "example": "finance@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "The business's phone number, in E.164 format.",
+                  "example": "+2348091234567"
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Kind of tax number sent in `tax_id_number`. It must fit `country_of_incorporation`, for example `tin` for Nigeria, `ein` for the US, `crn`, `utr` or `vat` for the UK.",
+                  "example": "tin"
+                },
+                "account_purpose_other": {
+                  "type": "string",
+                  "description": "The purpose in words, when `account_purpose` is `other`."
                 }
               }
             },

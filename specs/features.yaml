@@ -30,9 +30,11 @@ components:
     FeatureId:
       type: string
       description: >-
-        `virtual_cards` (Cards), `usd_account`, `eur_account` and `gbp_account`
-        (accounts), `crypto_wallet` (Wallet) and `international_transfers`
-        (Payout).
+        The catalogue lists six features: `virtual_cards` (Cards),
+        `usd_account`, `eur_account` and `gbp_account` (accounts),
+        `crypto_wallet` (Wallet) and `international_transfers` (Payout). These
+        routes serve cards: send `virtual_cards`. Open accounts, wallets and
+        payouts with their own APIs.
       enum:
         - crypto_wallet
         - virtual_cards
@@ -118,15 +120,18 @@ components:
               type: number
               minimum: 1
               description: >-
-                Expected monthly card spend. Required for `virtual_cards`. It
-                also becomes the card's spending limit.
+                Expected monthly card spend. Required for `virtual_cards`. When
+                a card is issued during activation, it also becomes that card's
+                daily limit.
               example: 200
             account_id:
               type: string
               format: uuid
               description: >-
-                A card-type account of this customer. Leave it out to use the
-                customer's card account.
+                Always send it for `virtual_cards`: the id of your business's
+                card account (type `card`, status `active`). The same card
+                account backs every cardholder. Leaving it out fails with
+                `cards service: internal server error`.
               example: 5d9e677f-f071-4881-a861-7cdcebacd9d5
             funding:
               type: object
