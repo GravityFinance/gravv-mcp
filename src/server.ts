@@ -299,6 +299,8 @@ export function createServer(config: ServerConfig) {
       if (blocked) return errorResult(`${name}: ${blocked.replaceAll(DEFAULT_DOCS_ORIGIN, docs.origin)}`);
 
       const known = TOOLS_BY_NAME.get(name);
+      const off = known ? gate.unavailableReason(known) : null;
+      if (off) return errorResult(off);
       if (known) {
         return errorResult(
           `${name} exists but its toolset is not loaded in this session. Enabled: ${[

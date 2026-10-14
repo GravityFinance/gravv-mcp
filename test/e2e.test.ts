@@ -192,6 +192,7 @@ describe("end-to-end over MCP stdio", () => {
       assert.ok(names.includes("createTransfer"));
       assert.ok(names.includes("createCard"), "cards ships by default");
       assert.ok(names.includes("createWallet"), "wallets ships by default — no restart to create one");
+      assert.ok(names.includes("simulateDeposit"), "the sandbox toolset loads by default on a sandbox key");
       assert.ok(
         !names.includes("createAccountApplication"),
         "the heavy account-application schemas are opt-in",
@@ -382,6 +383,27 @@ describe("end-to-end over MCP stdio", () => {
       assert.equal(payload.idempotency_key, "e2e-dup");
       assert.equal(payload.details.code, "ERROR_CODE_DUPLICATE_TRANSACTION", "details stays the raw body");
       assert.equal(received.length, 1, "a stored 409 is not resent");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a live key hides the sandbox simulator and refuses it by name", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_live_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const names: string[] = (await mcp.request("tools/list")).result.tools.map((t: any) => t.name);
+      assert.ok(!names.includes("simulateDeposit"));
+      const res = await mcp.request("tools/call", {
+        name: "simulateDeposit",
+        arguments: { account_id: "acc_1", amount: "1.00", rail: "wire" },
+      });
+      assert.equal(res.result.isError, true);
+      assert.match(textOf(res), /sandbox-only/);
+      assert.equal(received.length, 0, "nothing may reach the gateway");
     } finally {
       mcp.kill();
     }

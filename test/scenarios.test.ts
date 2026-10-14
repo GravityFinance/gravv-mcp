@@ -63,6 +63,7 @@ describe("route matching", () => {
     movesMoney: false,
     needsConfirm: false,
     needsIdempotency: false,
+    sandboxOnly: false,
     spec: "test.yaml",
   });
   const tools = [

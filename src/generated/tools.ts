@@ -34,6 +34,8 @@ export interface GeneratedTool {
   needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
+  /** Works only with a sandbox key: hidden and refused on any other. */
+  sandboxOnly: boolean;
   /** Source spec filename, for traceability. */
   spec: string;
 }
@@ -150,6 +152,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -193,6 +196,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -298,6 +302,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -353,6 +358,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -400,6 +406,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -529,6 +536,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -1574,6 +1582,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -1725,6 +1734,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -1841,6 +1851,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -2073,6 +2084,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -2292,6 +2304,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -2649,6 +2662,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -2927,6 +2941,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -3036,6 +3051,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -3424,6 +3440,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -3500,6 +3517,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -3535,6 +3553,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": true,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3630,6 +3649,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -3661,6 +3681,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3692,6 +3713,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3723,6 +3745,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -3755,6 +3778,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -3786,6 +3810,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -3818,6 +3843,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -3859,6 +3885,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -3890,6 +3917,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -3922,6 +3950,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -3954,6 +3983,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -3986,6 +4016,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -4018,6 +4049,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4069,6 +4101,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -4101,6 +4134,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -4133,6 +4167,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -4195,6 +4230,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -4259,6 +4295,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -4291,6 +4328,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -4323,6 +4361,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4355,6 +4394,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4429,6 +4469,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
   },
   {
@@ -4489,6 +4530,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -4577,6 +4619,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -4613,6 +4656,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -4667,6 +4711,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -4736,6 +4781,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -4814,6 +4860,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -4885,6 +4932,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -4931,6 +4979,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "features.yaml"
   },
   {
@@ -4953,6 +5002,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -5004,6 +5054,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -5042,6 +5093,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -5092,6 +5144,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "fx.yaml"
   },
   {
@@ -5114,6 +5167,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -5151,6 +5205,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "collections.yaml"
   },
   {
@@ -5236,6 +5291,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transactions.yaml"
   },
   {
@@ -5265,6 +5321,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5297,6 +5354,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5319,6 +5377,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "transfer.yaml"
   },
   {
@@ -5403,6 +5462,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "wallets.yaml"
   },
   {
@@ -5441,6 +5501,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -5473,7 +5534,76 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "webhooks.yaml"
+  },
+  {
+    "name": "simulateDeposit",
+    "toolset": "sandbox",
+    "method": "post",
+    "path": "/v2/accounts/simulate/deposit",
+    "description": "Simulate a deposit — Sandbox only; a live key gets a 403. Makes a test bank deposit land on an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled; wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "An `active` account of yours with bank details",
+          "example": "6f1c2a9e-3b1d-4f7a-9c62-0d8e4b7a5c11"
+        },
+        "amount": {
+          "type": "string",
+          "description": "Positive amount in major units, as a string. It must fit the rail's smallest unit.",
+          "example": "250.00"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Defaults to the account currency",
+          "example": "USD"
+        },
+        "rail": {
+          "type": "string",
+          "description": "Rail the deposit arrives on. Defaults to the bank's usual rail.",
+          "enum": [
+            "ach",
+            "wire",
+            "rtp",
+            "swift",
+            "sepa",
+            "fps"
+          ],
+          "example": "wire"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "account_id",
+        "amount"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "account_id",
+      "amount",
+      "currency",
+      "rail"
+    ],
+    "alsoInBody": [],
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": true,
+    "spec": "accounts-v2.yaml"
   },
   {
     "name": "startCustomerKyc",
@@ -5512,6 +5642,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -5552,6 +5683,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -5590,6 +5722,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -5628,6 +5761,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -6654,6 +6788,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -6698,6 +6833,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -6749,6 +6885,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   },
   {
@@ -6992,6 +7129,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "customers.yaml"
   },
   {
@@ -7138,6 +7276,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "kyc.yaml"
   },
   {
@@ -8175,6 +8314,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "accounts.yaml"
   },
   {
@@ -8231,6 +8371,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": false,
     "needsConfirm": false,
     "needsIdempotency": false,
+    "sandboxOnly": false,
     "spec": "external-accounts.yaml"
   },
   {
@@ -8282,6 +8423,7 @@ export const TOOLS: GeneratedTool[] = [
     "movesMoney": true,
     "needsConfirm": true,
     "needsIdempotency": true,
+    "sandboxOnly": false,
     "spec": "cards.yaml"
   }
 ];

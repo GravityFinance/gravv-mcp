@@ -138,10 +138,24 @@ export class SafetyGate {
     }
   }
 
+  /** Why a tool is off in this session, or null when it is available. */
+  unavailableReason(tool: GeneratedTool): string | null {
+    if (this.config.readOnly && tool.method.toLowerCase() !== "get") {
+      return `${tool.name} is not available: the server is running in --read-only mode, which disables all non-GET tools.`;
+    }
+    if (tool.sandboxOnly && this.config.environment !== "sandbox") {
+      return (
+        `${tool.name} is a sandbox-only test tool, and this is ${
+          this.config.environment === "live" ? "a LIVE key" : "a key that is not recognised as sandbox"
+        }. It works only with a key that starts grvSec_sandbox_; nothing was sent.`
+      );
+    }
+    return null;
+  }
+
   /** Filter the tool list before it is advertised. */
   isToolAvailable(tool: GeneratedTool): boolean {
-    if (this.config.readOnly && tool.method.toLowerCase() !== "get") return false;
-    return true;
+    return this.unavailableReason(tool) === null;
   }
 
   /**
@@ -155,11 +169,8 @@ export class SafetyGate {
     args: Record<string, unknown>,
     preview: { method: string; path: string; body: unknown },
   ): ConfirmationRequired | null {
-    if (this.config.readOnly && tool.method.toLowerCase() !== "get") {
-      throw new SafetyError(
-        `${tool.name} is not available: the server is running in --read-only mode, which disables all non-GET tools.`,
-      );
-    }
+    const unavailable = this.unavailableReason(tool);
+    if (unavailable) throw new SafetyError(unavailable);
 
     if (!tool.needsConfirm) return null;
 

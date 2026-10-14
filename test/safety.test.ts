@@ -180,6 +180,36 @@ describe("confirm-only gating", () => {
   });
 });
 
+describe("sandbox-only tools", () => {
+  const simulate = TOOLS_BY_NAME.get("simulateDeposit")!;
+  const body = { account_id: "acc_1", amount: "250.00", rail: "wire" };
+  const simPreview = { method: "POST", path: "/v2/accounts/simulate/deposit", body };
+
+  test("are advertised and run on a sandbox key", () => {
+    assert.equal(simulate.sandboxOnly, true);
+    assert.equal(gate().isToolAvailable(simulate), true);
+    assert.equal(gate().check(simulate, body, simPreview), null);
+  });
+
+  test("are hidden and refused on a live or unrecognised key, before any request", () => {
+    for (const environment of ["live", "unknown"] as const) {
+      const g = gate({ environment, allowLiveWrites: true });
+      assert.equal(g.isToolAvailable(simulate), false, environment);
+      assert.throws(
+        () => g.check(simulate, body, simPreview),
+        (e: Error) => e instanceof SafetyError && /sandbox-only/.test(e.message) && /grvSec_sandbox_/.test(e.message),
+      );
+    }
+  });
+
+  test("only the deposit simulator is sandbox-only", () => {
+    assert.deepEqual(
+      [...TOOLS_BY_NAME.values()].filter((t) => t.sandboxOnly).map((t) => t.name),
+      ["simulateDeposit"],
+    );
+  });
+});
+
 describe("read-only mode", () => {
   test("hides non-GET tools from the advertised list", () => {
     const g = gate({ readOnly: true });

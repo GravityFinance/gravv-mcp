@@ -119,7 +119,8 @@
     "outcome": "no-tool"
   },
   "S-ACC2-12.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-CRD-01.1": {
     "outcome": "ok",
@@ -240,7 +241,8 @@
     "tool": "getCardBalance"
   },
   "S-CRD-05.5": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-CRD-06.1": {
     "outcome": "ok",
@@ -817,7 +819,8 @@
     "tool": "listTransactions"
   },
   "S-TXN-03.4": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-TXN-04.1": {
     "outcome": "ok",
@@ -890,7 +893,8 @@
     "tool": "getExternalAccount"
   },
   "S-PAY-01.11": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-PAY-02.1": {
     "outcome": "ok",
@@ -1016,7 +1020,8 @@
     "tool": "createTransfer"
   },
   "S-PAY-10.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-PAY-11.1": {
     "outcome": "no-tool"
@@ -1105,10 +1110,12 @@
     "tool": "getTransaction"
   },
   "S-REM-01.12": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-REM-01.13": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-REM-02.1": {
     "outcome": "ok",
@@ -1327,7 +1334,8 @@
     "outcome": "no-tool"
   },
   "S-SBX-01.2": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-SBX-01.3": {
     "outcome": "no-tool"
@@ -1476,7 +1484,8 @@
     "outcome": "no-tool"
   },
   "S-COL-01.3": {
-    "outcome": "no-tool"
+    "outcome": "ok",
+    "tool": "simulateDeposit"
   },
   "S-COL-02.1": {
     "outcome": "ok",

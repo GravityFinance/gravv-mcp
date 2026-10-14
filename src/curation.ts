@@ -47,6 +47,7 @@ export const TOOLSETS = [
   "kyc",
   "features",
   "webhooks",
+  "sandbox",
 ] as const;
 
 export type Toolset = (typeof TOOLSETS)[number];
@@ -233,6 +234,11 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/risk/features": { name: "listFeatures", toolset: "features" },
   "POST /v1/risk/features/eligibility": { name: "checkFeatureEligibility", toolset: "features" },
   "POST /v1/risk/features/activate": { name: "activateFeature", toolset: "features" },
+
+  // ---- sandbox -------------------------------------------------------------
+  // Test-only routes. Default on, but each is hidden unless the key is a sandbox key
+  // (SANDBOX_ONLY), so a live server never advertises them.
+  "POST /v2/accounts/simulate/deposit": { name: "simulateDeposit", toolset: "sandbox" },
 
   // ---- webhooks ------------------------------------------------------------
   "GET /v1/webhooks/history": { name: "getWebhookHistory", toolset: "webhooks" },
@@ -441,6 +447,17 @@ export const CONFIRM_OPS = new Set<string>([
 ]);
 
 /**
+ * Routes that work only with a sandbox key; a live key gets 403. Their tools are not
+ * advertised, and are refused before any request, unless the key starts exactly
+ * `grvSec_sandbox_`. An unrecognised key counts as live, as everywhere else.
+ */
+export const SANDBOX_ONLY = new Set<string>(["POST /v2/accounts/simulate/deposit"]);
+
+export function isSandboxOnly(method: string, path: string): boolean {
+  return SANDBOX_ONLY.has(opKey(method, path));
+}
+
+/**
  * The API requires an Idempotency-Key on every POST and returns 400 without one. These
  * paths are the documented exceptions — sending a key to them is harmless but pointless.
  */
@@ -560,6 +577,10 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   },
   uploadCustomerKycDocument: { lookup: "getCustomerKycDocuments" },
   activateFeature: { lookup: "listFeatures, and read the feature's status" },
+  simulateDeposit: {
+    lookup:
+      "listTransactions with account_id set to the account (newest first), and look for the test deposit; each new key makes a new deposit",
+  },
   getFxQuote: { readOnly: true },
   validateAccountApplication: { readOnly: true },
   checkFeatureEligibility: { readOnly: true },

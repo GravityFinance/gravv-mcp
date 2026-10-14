@@ -28,6 +28,8 @@ import {
   isMoneyOp,
   needsConfirmation,
   needsIdempotencyKey,
+  isSandboxOnly,
+  SANDBOX_ONLY,
   type Toolset,
 } from "../src/curation.ts";
 
@@ -210,6 +212,7 @@ interface Generated {
   movesMoney: boolean;
   needsConfirm: boolean;
   needsIdempotency: boolean;
+  sandboxOnly: boolean;
   spec: string;
 }
 
@@ -416,6 +419,7 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
         movesMoney,
         needsConfirm,
         needsIdempotency,
+        sandboxOnly: isSandboxOnly(method, path),
         spec: file,
       });
     }
@@ -437,7 +441,11 @@ for (const k of curatedKeys) {
   }
 }
 
-for (const [set, label] of [[MONEY_OPS, "MONEY_OPS"], [CONFIRM_OPS, "CONFIRM_OPS"]] as const) {
+for (const [set, label] of [
+  [MONEY_OPS, "MONEY_OPS"],
+  [CONFIRM_OPS, "CONFIRM_OPS"],
+  [SANDBOX_ONLY, "SANDBOX_ONLY"],
+] as const) {
   for (const k of set) {
     if (!generatedKeys.has(k)) problems.push(`${label} gates "${k}", but no tool calls it`);
   }
@@ -507,6 +515,8 @@ export interface GeneratedTool {
   needsConfirm: boolean;
   /** Client must attach a generated Idempotency-Key. */
   needsIdempotency: boolean;
+  /** Works only with a sandbox key: hidden and refused on any other. */
+  sandboxOnly: boolean;
   /** Source spec filename, for traceability. */
   spec: string;
 }
