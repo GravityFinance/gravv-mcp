@@ -202,10 +202,18 @@ not registered as tools under any configuration, and responses are scanned for
 [client-side decryption flow](https://gravv-docs.syntext.dev/platform/cards/view-card-sensitive-details/overview)
 for those.
 
-**Idempotency is automatic.** Every write that needs an `Idempotency-Key` gets one — a
-new key for every call — and the key is returned with each successful result so you can
-trace the request. A call cannot yet be resent with an old key, so after a timeout check
-whether the operation happened (for example with `getTransaction`) before calling again.
+**Idempotency is automatic, and a call can be resent under its key.** Every write that
+needs an `Idempotency-Key` gets one — a new key for every call — and the key is returned
+with every result, successful or not. When a call times out, hits a network error or gets
+a `5xx`, nobody knows yet whether it took effect: the result says `outcome_unknown`, and
+its hint names the tool that shows whether it did. Look first. If nothing happened, call
+again with the same arguments plus that result's `idempotency_key`; if the first call did
+land in the meantime, the API returns its answer instead of running it twice. After any
+other `4xx`, call again without `idempotency_key`: the gateway keeps a `4xx` answer under
+its key for 24 hours, so the same key only gets that answer back. A write the gateway
+rate-limits is retried for you under a new key, which is safe because that request never
+ran; a key you passed yourself is never swapped, so that `429` comes back to you with a
+hint to look first.
 
 **`--read-only`** disables every non-GET tool, for reporting deployments.
 
@@ -392,7 +400,7 @@ The key was rejected. Confirm it is current and that you copied the whole value.
 
 **`404` on an id you know exists**
 You're probably in the other environment. Sandbox and live hold separate data. The
-`environment` field in every successful result, and the ENVIRONMENT line of the server
+`environment` field in every result, and the ENVIRONMENT line of the server
 instructions, tell you which one you're in.
 
 **"tool exists but its toolset is not loaded"**
@@ -417,14 +425,34 @@ Publishable keys cannot call the API. Set `GRAVV_API_KEY` to a secret key starti
 **`422`**
 Not always about idempotency. A transfer over a sender limit, a blocked sender, missing
 sender information or a missing supporting document is also a `422`; the error's code and
-the hint say which. A `422` with `idempotency_key_reused` means the key was seen before
-with a different body; the server makes a new key for every call, so calling again sends
-a fresh one.
+the hint say which. A `422` with `idempotency_key_reused` means the same `idempotency_key`
+was sent before with a different body. If this is a resend, send exactly the same
+arguments as the first call. If it is a new request, leave `idempotency_key` out and a
+fresh key is made.
 
 **Repeated `429`**
 The gateway allows 600 requests a minute, burst 50, per Gravv account, shared by every key
 and process. This server throttles itself to 60 a minute, so repeated `429`s usually mean
-another process uses the same account. Wait and try again.
+another process uses the same account. This server retries a POST with a new key (unless
+you passed the key yourself), so a `429` that persists has already been retried. Wait and
+try again.
+
+**A call timed out**
+The result says `outcome_unknown: true`, and the call may have taken effect. Do not call
+again straight away: the hint names the tool that shows whether it did (for a transfer,
+`listTransactions` for the source account, matched on your `client_reference`). If
+nothing happened, call again with the same arguments plus the `idempotency_key` from the
+result.
+
+**`409` after a resend**
+If the hint says the first call is still running, wait a few seconds and resend with the
+same arguments and `idempotency_key`. A `409` saying the `client_reference` was already
+used for a different transfer is final: find the earlier transfer, and use a new
+`client_reference` only for a genuinely new payment.
+
+**`413` on an upload**
+Files from about 600 KB are refused today, whatever limit the message states. Keep each
+file under 500 KB.
 
 **Documentation search returns nothing**
 It's keyword-based, not semantic. Rephrase using the vocabulary the docs use — "transfer"

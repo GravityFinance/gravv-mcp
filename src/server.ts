@@ -7,8 +7,11 @@ import {
   GravvClient,
   GravvApiError,
   PUBLISHABLE_KEY_MESSAGE,
+  bodyWithoutHtml,
+  errorFields,
   detectEnvironment,
   isPublishableKey,
+  isValidIdempotencyKey,
   type Environment,
 } from "./client.ts";
 import { SafetyGate, SafetyError, redact, checkCollectionMethods } from "./safety.ts";
@@ -119,7 +122,7 @@ export function selectTools(toolsets: Toolset[] | "all", gate: SafetyGate): Gene
   return candidates.filter((t) => (wanted === null || wanted.has(t.toolset)) && gate.isToolAvailable(t));
 }
 
-function instructions(
+export function instructions(
   environment: Environment,
   gate: SafetyGate,
   tools: GeneratedTool[],
@@ -151,7 +154,9 @@ function instructions(
       "Working with this API:",
       "- Read each tool's description before calling it. Several operations have prerequisites that are not obvious from their names — an account needs a KYC-verified customer, an external account must reach status `active` before you can transfer to it, and server-to-server KYC requires documents uploaded first.",
       "- Operations that move money return a preview instead of executing. Show the preview to the user, get agreement, then call again with confirm: true.",
-      "- Idempotency keys are generated automatically for POSTs, a new one for every call. The key is returned with each successful result for tracing. This server cannot resend a call with an old key yet, so after a timeout check the state (getTransaction, or a list filtered by client_reference) before calling again.",
+      "- Idempotency keys are made automatically for POSTs, a new one for every call, and returned with every result.",
+      "- After a timeout, a network error or a 5xx, the outcome is unknown: look the result up first (the error's hint names the tool). If nothing landed, call again with the same arguments plus the idempotency_key from that result. A 5xx is not kept, so the same key runs the call again.",
+      "- After any other 4xx, or a 429, leave idempotency_key out when you call again: a 4xx answer is kept for 24 hours under its key. Read the hint first: when the call may still have landed, it says to look the result up before calling again. The one exception is a 409 whose hint says the first call is still running: resend that with the same key.",
       "- Sandbox and live hold entirely separate data. An id from one environment will 404 in the other.",
       "- When a call fails in a way the error does not fully explain, search the docs rather than guessing at the payload.",
     );
@@ -290,6 +295,17 @@ export function createServer(config: ServerConfig) {
     }
 
     try {
+      // A key the model passes back resends a call whose outcome is unknown. A value that
+      // is not a valid key cannot be one an earlier result returned, so refuse it before
+      // the preview rather than quietly making a new key and running the call twice.
+      const suppliedKey = tool.needsIdempotency ? args.idempotency_key : undefined;
+      if (suppliedKey != null && !isValidIdempotencyKey(suppliedKey)) {
+        return errorResult(
+          "idempotency_key must be 1-255 printable ASCII characters. Pass it exactly as an earlier result " +
+            "returned it, or leave it out and a new key is made.",
+        );
+      }
+
       const preview = client!.buildRequest(tool, args);
 
       // Redirect a card method smuggled past the schema, before it reaches the API and
@@ -307,7 +323,7 @@ export function createServer(config: ServerConfig) {
         return { content: [{ type: "text" as const, text: JSON.stringify(gateResult, null, 2) }] };
       }
 
-      const result = await client!.call(tool, args);
+      const result = await client!.call(tool, args, { idempotencyKey: suppliedKey ?? undefined });
 
       const payload: Record<string, unknown> = {
         environment,
@@ -317,19 +333,29 @@ export function createServer(config: ServerConfig) {
       if (result.replayed) {
         payload.note =
           "This response was replayed from a previous identical request rather than re-executed. No new operation was performed.";
+      } else if (result.retriedWithNewKey) {
+        payload.note = "Rate limited first; retried with a new key. The earlier attempts did not run.";
       }
 
       return { content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }] };
     } catch (err) {
       if (err instanceof SafetyError) return errorResult(err.message);
       if (err instanceof GravvApiError) {
-        return errorResult(
-          JSON.stringify(
-            { error: err.message, status: err.status, hint: err.hint, details: redact(err.body) },
-            null,
-            2,
-          ),
-        );
+        // The key and environment come back on every error, as on success: after a
+        // timeout the key is what lets the model resend safely. The fields a model acts
+        // on are lifted beside the hint; details stays the raw body, less any HTML page.
+        const payload: Record<string, unknown> = { error: err.message, status: err.status };
+        const fields = errorFields(err.body);
+        for (const k of ["code", "transfer_status", "window"]) {
+          if (fields[k] !== undefined) payload[k] = redact(fields[k]);
+        }
+        if (err.outcomeUnknown) payload.outcome_unknown = true;
+        if (err.replayed) payload.replayed = true;
+        payload.environment = environment;
+        if (err.idempotencyKey) payload.idempotency_key = err.idempotencyKey;
+        payload.hint = err.hint;
+        payload.details = redact(bodyWithoutHtml(err.body));
+        return errorResult(JSON.stringify(payload, null, 2));
       }
       return errorResult(`Unexpected error calling ${name}: ${(err as Error).message}`);
     }

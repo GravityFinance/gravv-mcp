@@ -8,6 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { GeneratedTool } from "./generated/tools.ts";
+import { OUTCOME_LOOKUPS } from "./curation.ts";
 
 export const DEFAULT_BASE_URL = "https://api.gravv.xyz";
 
@@ -40,17 +41,32 @@ export const PUBLISHABLE_KEY_MESSAGE =
   "This is a publishable key (grvPub_). Publishable keys cannot call the Gravv API. " +
   "Set GRAVV_API_KEY to a secret key starting grvSec_sandbox_ or grvSec_live_.";
 
+export interface GravvApiErrorDetails {
+  /** The Idempotency-Key the failed call sent, so it can be traced or resent. */
+  idempotencyKey?: string;
+  /** The gateway answered with a stored response instead of running the request. */
+  replayed?: boolean;
+  /** The call may or may not have taken effect: look the result up before resending. */
+  outcomeUnknown?: boolean;
+}
+
 export class GravvApiError extends Error {
   readonly status: number;
   readonly body: unknown;
   readonly hint: string | undefined;
+  readonly idempotencyKey: string | undefined;
+  readonly replayed: boolean;
+  readonly outcomeUnknown: boolean;
 
-  constructor(message: string, status: number, body: unknown, hint?: string) {
+  constructor(message: string, status: number, body: unknown, hint?: string, details: GravvApiErrorDetails = {}) {
     super(message);
     this.name = "GravvApiError";
     this.status = status;
     this.body = body;
     this.hint = hint;
+    this.idempotencyKey = details.idempotencyKey;
+    this.replayed = details.replayed ?? false;
+    this.outcomeUnknown = details.outcomeUnknown ?? false;
   }
 }
 
@@ -98,14 +114,24 @@ export interface ClientOptions {
   timeoutMs?: number;
   /** Injectable for tests. */
   fetchImpl?: typeof fetch;
+  /** How the client waits before a retry. Injectable for tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface CallResult {
   data: unknown;
-  /** Present on POSTs; returned for tracing. Every call gets a new key. */
+  /**
+   * Present on POSTs: the key that was sent. It is the caller's when one was passed,
+   * otherwise a new one made for this call.
+   */
   idempotencyKey?: string;
   /** True when the gateway replayed a stored response rather than re-executing. */
   replayed: boolean;
+  /**
+   * True when the gateway's rate limiter refused an earlier attempt and this server
+   * retried under a new key. The refused attempts did not run.
+   */
+  retriedWithNewKey: boolean;
   status: number;
 }
 
@@ -116,6 +142,7 @@ export class GravvClient {
   private readonly limiter: RateLimiter;
   private readonly timeoutMs: number;
   private readonly doFetch: typeof fetch;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(opts: ClientOptions) {
     this.opts = opts;
@@ -124,6 +151,7 @@ export class GravvClient {
     this.limiter = new RateLimiter(opts.ratePerMinute ?? 60, opts.rateBurst ?? 15);
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.doFetch = opts.fetchImpl ?? fetch;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
   /**
@@ -155,7 +183,14 @@ export class GravvClient {
       const b: Record<string, unknown> = {};
       for (const k of tool.bodyProps) if (args[k] !== undefined) b[k] = args[k];
       // Fields the spec did not enumerate but the API accepts.
-      const known = new Set([...tool.pathParams, ...tool.queryParams, ...tool.bodyProps, "confirm"]);
+      // confirm and idempotency_key are MCP arguments; the key travels as a header.
+      const known = new Set([
+        ...tool.pathParams,
+        ...tool.queryParams,
+        ...tool.bodyProps,
+        "confirm",
+        "idempotency_key",
+      ]);
       for (const [k, v] of Object.entries(args)) if (!known.has(k) && v !== undefined) b[k] = v;
       // Identifiers the API wants in both the path and the body.
       for (const k of tool.alsoInBody) if (args[k] !== undefined) b[k] = args[k];
@@ -180,17 +215,34 @@ export class GravvClient {
 
     if (this.opts.apiKey) headers["Api-Key"] = this.opts.apiKey;
 
-    // The API rejects any POST without an Idempotency-Key with a 400, so we always
-    // generate one rather than relying on the caller. Exemptions are in curation.ts.
+    // The API rejects any POST without an Idempotency-Key with a 400, so every such call
+    // sends one: the caller's, to resend a call whose outcome is unknown, or else a new
+    // one. Exemptions are in curation.ts.
     let idempotencyKey: string | undefined;
     if (tool.needsIdempotency) {
+      if (opts.idempotencyKey !== undefined && !isValidIdempotencyKey(opts.idempotencyKey)) {
+        // The gateway refuses it too, but only after a round trip.
+        throw new GravvApiError(
+          "idempotency_key must be 1-255 printable ASCII characters",
+          400,
+          null,
+          "Pass the idempotency_key exactly as an earlier result returned it, or leave it out and a new key is made.",
+        );
+      }
       idempotencyKey = opts.idempotencyKey ?? randomUUID();
       headers["Idempotency-Key"] = idempotencyKey;
     }
+    // A key the caller passed may still guard a first call whose outcome is unknown, so
+    // it is never swapped for another.
+    const keySupplied = idempotencyKey !== undefined && opts.idempotencyKey !== undefined;
+    let retriedWithNewKey = false;
     if (body !== undefined) headers["Content-Type"] = "application/json";
 
-    // 409 means an identical request is still in flight; the gateway asks for a 1s
-    // pause. Anything else is returned to the caller for interpretation.
+    // Retries happen only where a resend cannot run the call twice: a 409 that says the
+    // first request is still running, and a 429 (below). There is no automatic retry
+    // after a timeout, a network error or a 5xx. The outcome is unknown, and a 5xx is not
+    // stored under its key, so a blind resend can run a money call twice. Those go back
+    // to the caller with a hint to look the result up first.
     const maxAttempts = 3;
     let lastError: GravvApiError | undefined;
 
@@ -205,15 +257,23 @@ export class GravvClient {
         res = await this.doFetch(url, {
           method: tool.method.toUpperCase(),
           headers,
-          body: body === undefined ? undefined : JSON.stringify(body),
+          body: body === undefined ? undefined : canonicalJson(body),
           signal: controller.signal,
         });
       } catch (err) {
         clearTimeout(timer);
-        if ((err as Error)?.name === "AbortError") {
-          throw new GravvApiError(`Request to ${tool.name} timed out after ${this.timeoutMs}ms`, 408, null);
-        }
-        throw new GravvApiError(`Network error calling ${tool.name}: ${(err as Error).message}`, 0, null);
+        // The status stays 408 or 0, as before; the hint and the outcome flag say what
+        // the model must do about it.
+        const timedOut = (err as Error)?.name === "AbortError";
+        const status = timedOut ? 408 : 0;
+        const message = timedOut
+          ? `Request to ${tool.name} timed out after ${this.timeoutMs}ms`
+          : `Network error calling ${tool.name}: ${(err as Error).message}`;
+        const hint = hintFor(status, tool, message, null, { keySupplied, idempotencyKey });
+        throw new GravvApiError(message, status, null, hint, {
+          idempotencyKey,
+          outcomeUnknown: isOutcomeUnknown(status, tool, message),
+        });
       }
       clearTimeout(timer);
 
@@ -230,34 +290,98 @@ export class GravvClient {
       if (res.ok) {
         // Every gateway response is wrapped as { data, error }.
         const data = parsed && typeof parsed === "object" && "data" in parsed ? parsed.data : parsed;
-        return { data, idempotencyKey, replayed, status: res.status };
+        return { data, idempotencyKey, replayed, retriedWithNewKey, status: res.status };
       }
 
       const apiMessage = extractErrorMessage(parsed, res.statusText);
 
-      if (res.status === 409 && attempt < maxAttempts) {
-        const retryAfter = Number(res.headers.get("Retry-After") ?? 1);
-        await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
-        lastError = new GravvApiError(apiMessage, 409, parsed);
+      // Only these two 409s mean "still running"; both send Retry-After: 1, and a resend
+      // under the same key gets the first request's answer. Every other 409 is final,
+      // such as a client_reference already used for a different transfer.
+      if (res.status === 409 && attempt < maxAttempts && IN_FLIGHT_CODES.has(errorCode(parsed) ?? "")) {
+        await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 1));
+        lastError = new GravvApiError(apiMessage, 409, parsed, undefined, { idempotencyKey });
         continue;
       }
 
-      if (res.status === 429 && attempt < maxAttempts) {
-        const retryAfter = Number(res.headers.get("Retry-After") ?? 6);
-        await new Promise((r) => setTimeout(r, Math.max(1, retryAfter) * 1000));
-        lastError = new GravvApiError(String(apiMessage), 429, parsed);
+      // The idempotency middleware runs before the rate limiter, so the limiter's 429 is
+      // stored under its key for 24 hours and a same-key retry only gets it back. That 429
+      // also proves the request never ran, so a key this server made is swapped for a new
+      // one. A caller's key is not: it may guard a first call whose outcome is unknown. A
+      // 429 that a service sent after the request reached it proves nothing, so a keyed
+      // call is not retried then.
+      const rateLimited = res.status === 429 && attempt < maxAttempts;
+      if (rateLimited && (idempotencyKey === undefined || (!keySupplied && isGatewayRateLimit(apiMessage)))) {
+        await this.sleep(retryAfterMs(res.headers.get("Retry-After"), 6));
+        lastError = new GravvApiError(String(apiMessage), 429, parsed, undefined, { idempotencyKey });
+        if (idempotencyKey !== undefined) {
+          idempotencyKey = randomUUID();
+          headers["Idempotency-Key"] = idempotencyKey;
+          retriedWithNewKey = true;
+        }
         continue;
       }
 
-      let hint = hintFor(res.status, tool, apiMessage, parsed);
+      let hint = hintFor(res.status, tool, apiMessage, parsed, { keySupplied, idempotencyKey, replayed });
       if (res.status === 401 && isPublishableKey(this.opts.apiKey ?? "")) {
         hint = `${PUBLISHABLE_KEY_MESSAGE} ${hint ?? ""}`.trim();
       }
-      throw new GravvApiError(apiMessage, res.status, parsed, hint);
+      throw new GravvApiError(apiMessage, res.status, parsed, hint, {
+        idempotencyKey,
+        replayed,
+        outcomeUnknown: isOutcomeUnknown(res.status, tool, apiMessage, parsed),
+      });
     }
 
     throw lastError ?? new GravvApiError(`${tool.name} failed after ${maxAttempts} attempts`, 500, null);
   }
+}
+
+/** 409 codes that mean the first request is still running, so a same-key retry is safe. */
+const IN_FLIGHT_CODES = new Set(["idempotency_in_flight", "ERROR_CODE_TRANSFER_IN_PROGRESS"]);
+
+/** The longest wait the gateway's own limiter asks for. */
+const MAX_RETRY_WAIT_MS = 30_000;
+
+/**
+ * How long a Retry-After header asks the client to wait, in ms.
+ *
+ * The header is either delta-seconds or an HTTP-date. A date read as a number is NaN,
+ * which skipped the wait altogether. Anything unreadable falls back to the default, and
+ * the result is kept within 0-30 s.
+ */
+export function retryAfterMs(header: string | null, fallbackSeconds: number, now = Date.now()): number {
+  let ms = fallbackSeconds * 1000;
+  const value = header?.trim() ?? "";
+  if (/^\d+(\.\d+)?$/.test(value)) {
+    ms = Number(value) * 1000;
+  } else if (value) {
+    const at = Date.parse(value);
+    if (!Number.isNaN(at)) ms = at - now;
+  }
+  return Math.min(Math.max(ms, 0), MAX_RETRY_WAIT_MS);
+}
+
+/**
+ * JSON with every object's keys sorted, recursively; arrays keep their order.
+ *
+ * The gateway's idempotency check hashes the raw body bytes, and a model resending "the
+ * same arguments" does not reliably keep their order. Without this, a resend under the
+ * first call's key gets 422 idempotency_key_reused exactly when the key matters. The API
+ * decodes JSON without regard to key order, so it reads the same request.
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v === null || typeof v !== "object" || Array.isArray(v)) return v;
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(v).sort()) sorted[k] = (v as Record<string, unknown>)[k];
+    return sorted;
+  });
+}
+
+/** The gateway's rule for an Idempotency-Key: 1-255 printable ASCII characters. */
+export function isValidIdempotencyKey(key: unknown): key is string {
+  return typeof key === "string" && /^[\x20-\x7E]{1,255}$/.test(key);
 }
 
 /**
@@ -266,23 +390,36 @@ export class GravvClient {
  * The shape is not consistent across statuses — verified against sandbox:
  *   400 -> {"data":null,"error":"missing idempotency key in request headers"}
  *   422 -> {"data":null,"error":{"code":"idempotency_key_reused","message":"..."}}
+ *   403 -> {"data":null,"error":{"reason":"forbidden","required_any":["transfer:initiate"]}}
+ *   503 -> {"error":"service_unavailable","message":"failed to read request body"}
  *
- *
- * Naively stringifying the second form yields "[object Object]", which tells the model
- * nothing and sends it guessing.
+ * Naively stringifying the object forms yields "[object Object]", which tells the model
+ * nothing and sends it guessing. Reading only `error` from the last form kept the code
+ * and lost the text. An HTML error page inside a message is cut off: it says nothing the
+ * first line does not, and it is not for the model.
  */
 export function extractErrorMessage(parsed: unknown, fallback: string): string {
   if (parsed == null) return fallback;
-  if (typeof parsed === "string") return parsed || fallback;
+  if (typeof parsed === "string") return withoutHtml(parsed) || fallback;
   if (typeof parsed !== "object") return String(parsed);
 
-  const err = (parsed as Record<string, unknown>).error ?? (parsed as Record<string, unknown>).message;
+  const top = parsed as Record<string, unknown>;
+  const err = top.error ?? top.message;
 
-  if (typeof err === "string" && err) return err;
+  if (typeof err === "string" && err) {
+    // Family F: a bare code in `error` and the text in `message`.
+    if (typeof top.message === "string" && top.message && top.message !== err && /^[a-z0-9_]+$/i.test(err)) {
+      return `${withoutHtml(top.message)} (${err})`;
+    }
+    return withoutHtml(err);
+  }
 
   if (err && typeof err === "object") {
     const e = err as Record<string, unknown>;
-    const message = typeof e.message === "string" ? e.message : undefined;
+    if (Array.isArray(e.required_any) && e.required_any.length > 0) {
+      return `${typeof e.reason === "string" ? e.reason : "forbidden"}: this key needs one of ${e.required_any.join(", ")}`;
+    }
+    const message = typeof e.message === "string" ? withoutHtml(e.message) : undefined;
     const code = typeof e.code === "string" ? e.code : undefined;
     if (message && code) return `${message} (${code})`;
     if (message) return message;
@@ -291,6 +428,70 @@ export function extractErrorMessage(parsed: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+const HTML_START = /<html|<!doctype html/i;
+
+/**
+ * Text with any HTML error page cut off: what comes before the page, up to the first
+ * line break, plus a note. The 502 that comes back as a 400 carries the web server's page.
+ */
+export function withoutHtml(text: string): string {
+  const at = text.search(HTML_START);
+  if (at < 0) return text;
+  const newline = text.indexOf("\n");
+  let head = text.slice(0, newline >= 0 && newline < at ? newline : at).trim();
+  if (!head) head = text.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
+  return `${head || "Server error"} (HTML error page omitted)`;
+}
+
+/**
+ * An error body with any HTML page cut out of its text, for the `details` the model sees.
+ * Everything else in the body is kept as it came.
+ */
+export function bodyWithoutHtml(body: unknown): unknown {
+  if (typeof body === "string") return withoutHtml(body);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const out: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  for (const k of ["error", "message"]) {
+    if (typeof out[k] === "string") out[k] = withoutHtml(out[k] as string);
+  }
+  return out;
+}
+
+/** Fields of an error body worth reading, at the top level or inside `error` (C.6 B, C, E). */
+const ERROR_FIELDS = [
+  "details",
+  "transfer_status",
+  "window",
+  "required_any",
+  "reason_detail",
+  "feature",
+  "access_status",
+  "request_access_url",
+  "documentation_url",
+  "request_id",
+  "reapply_after",
+  "limit",
+] as const;
+
+/**
+ * Whichever of the error's fields the body carries: its code, and the fields a hint or
+ * a model needs, such as a limit's window or a transfer's status. A field inside `error`
+ * wins over the same name at the top level.
+ */
+export function errorFields(body: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!body || typeof body !== "object") return out;
+  const top = body as Record<string, unknown>;
+  const inner = top.error && typeof top.error === "object" ? (top.error as Record<string, unknown>) : {};
+  const code = errorCode(body);
+  if (code) out.code = code;
+  for (const k of ERROR_FIELDS) {
+    const v = inner[k] ?? top[k];
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
 }
 
 /**
@@ -306,6 +507,201 @@ function errorCode(body: unknown): string | undefined {
   return typeof b.code === "string" && b.code ? b.code : undefined;
 }
 
+/**
+ * The gateway rate limiter's own 429 (`{"data":null,"error":"Too many request"}`). It
+ * answers before the request reaches any service. A service can also answer 429, after
+ * the request reached it.
+ */
+function isGatewayRateLimit(message: string): boolean {
+  return /too many request/i.test(message);
+}
+
+/**
+ * Where to look to learn whether a call took effect, for hints that say "look it up
+ * first". The per-tool text lives in curation.ts.
+ */
+function lookupFor(tool: GeneratedTool): string {
+  const entry = OUTCOME_LOOKUPS[tool.name];
+  return entry && "lookup" in entry ? entry.lookup : "the matching get or list tool";
+}
+
+/** The sentence for a call that cannot have changed anything, or undefined for a write. */
+function safeToRepeat(tool: GeneratedTool): string | undefined {
+  if (tool.method.toLowerCase() === "get") return "Nothing was changed by this read; it is safe to call again.";
+  const entry = OUTCOME_LOOKUPS[tool.name];
+  if (entry && "readOnly" in entry) return "This call changes nothing; it is safe to call again.";
+  return undefined;
+}
+
+/**
+ * A server fault that the gateway answered as a 400. It is stored under its key for 24
+ * hours like any 400, and replayed, so a same-key resend only gets the fault back.
+ */
+const SERVER_FAULT_400 =
+  /unexpected HTTP status code received from server: 5\d\d|<html|HTML error page omitted|circuit breaker|internal server error|please try again shortly|retry shortly|^failed to /i;
+
+function isServerFault400(message: string): boolean {
+  return SERVER_FAULT_400.test(message);
+}
+
+/**
+ * A 5xx that proves the request never ran: the auth check failed or timed out, the
+ * gateway could not read the body or reach the service (`service_unavailable`), or the
+ * transfer limits could not be checked, so the transfer was not created.
+ */
+function refusedBeforeRunning(status: number, message: string, body: unknown): boolean {
+  if (status !== 503 && status !== 504) return false;
+  if (errorCode(body) === "ERROR_CODE_LIMITS_UNAVAILABLE") return true;
+  const top = body && typeof body === "object" ? (body as Record<string, unknown>).error : undefined;
+  if (top === "service_unavailable") return true;
+  return /^auth (service unavailable|validation failed|validation timed out)$/i.test(message);
+}
+
+/**
+ * Whether a failed call may still have taken effect: a timeout or network error (0 or
+ * 408), a 5xx other than 501 that does not prove the request never ran, or a server
+ * fault sent as a 400. Never for a call that changes nothing.
+ */
+export function isOutcomeUnknown(status: number, tool: GeneratedTool, message = "", body: unknown = null): boolean {
+  if (safeToRepeat(tool)) return false;
+  if (status === 0 || status === 408) return true;
+  if (status === 400) return isServerFault400(message);
+  return status >= 500 && status !== 501 && !refusedBeforeRunning(status, message, body);
+}
+
+/** Extra facts about the call that change what a hint should say. */
+export interface HintContext {
+  /** The caller passed the idempotency key; this server did not make it. */
+  keySupplied?: boolean;
+  /** The key the call sent, quoted in a resend instruction. */
+  idempotencyKey?: string;
+  /** The gateway replayed a stored answer (Idempotency-Replayed: true). */
+  replayed?: boolean;
+}
+
+const REPLAYED_STORED =
+  "This is the stored answer to an earlier call with the same idempotency key (kept 24 hours); the request did not run again.";
+const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again without idempotency_key.`;
+
+/** After a timeout or a network error. */
+function hintNoAnswer(tool: GeneratedTool, ctx: HintContext): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return safe;
+  if (!tool.needsIdempotency) {
+    return "The outcome is unknown: the change may have been applied. Read the resource again before calling again.";
+  }
+  const key = ctx.idempotencyKey ? ` "${ctx.idempotencyKey}"` : " from this result";
+  return `The outcome is unknown: the call may have taken effect. Look it up first: ${lookupFor(tool)}. If it is not there, call ${tool.name} again with exactly the same arguments plus idempotency_key${key}. The gateway then returns the first call's answer if it landed in the meantime, instead of running it twice.`;
+}
+
+/** A 5xx: not stored by the gateway, so the same key runs the call again. */
+function hint5xx(tool: GeneratedTool): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return "A temporary fault. Try again shortly.";
+  if (!tool.needsIdempotency) {
+    return "The outcome is unknown: the change may have been applied. Read the resource again before calling again.";
+  }
+  return `The outcome is unknown: the call may have taken effect. The gateway does not keep 5xx answers, so calling again with the same idempotency_key runs the call again. Look the result up first: ${lookupFor(tool)}. If nothing landed, call again.`;
+}
+
+/** A server fault answered as a 400, and so stored for 24 hours under its key. */
+function hintServerFault400(tool: GeneratedTool): string {
+  const safe = safeToRepeat(tool);
+  if (safe) return `This is a server-side fault, not a bad request. ${safe}`;
+  if (!tool.needsIdempotency) {
+    return "This is a server-side fault, not a bad request, and the change may have been applied. Read the resource again before calling again.";
+  }
+  const reference = "client_reference" in ((tool.inputSchema.properties as Record<string, unknown>) ?? {});
+  return `This is a server-side fault, not a bad request, but it was answered as a 400, and a 400 is kept for 24 hours under its key. Look the result up first: ${lookupFor(tool)}. If nothing landed, call again without idempotency_key (a new key)${reference ? " and the same client_reference" : ""}.`;
+}
+
+const RATE_LIMITED =
+  "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
+
+function hint429(tool: GeneratedTool, message: string, ctx: HintContext): string {
+  if (!tool.needsIdempotency) return RATE_LIMITED;
+  const lookUp = safeToRepeat(tool)
+    ? "This call changes nothing; call again without idempotency_key."
+    : `Look the result up first (${lookupFor(tool)}); if nothing landed, call again without idempotency_key.`;
+  if (!isGatewayRateLimit(message)) {
+    return `The service refused this call with a 429 after it reached it, and that answer is kept for 24 hours under its key. ${lookUp}`;
+  }
+  if (ctx.keySupplied) {
+    return `${RATE_LIMITED} The earlier call under this idempotency_key left no stored answer, so the key no longer protects against a double send, and this 429 is now kept under it. ${lookUp}`;
+  }
+  return `${RATE_LIMITED} This server already retried with a new key.`;
+}
+
+/** A 409 is not one thing: only two of them mean "still running". */
+function hint409(tool: GeneratedTool, code: string | undefined): string {
+  switch (code) {
+    case "idempotency_in_flight":
+      return "The first call with this key is still running (the gateway holds it for up to 60 s). Wait, then call again with the same arguments and idempotency_key to get its answer.";
+    case "ERROR_CODE_TRANSFER_IN_PROGRESS":
+      return "A transfer with this client_reference is still being processed. Wait a few seconds, then call again with the same arguments and idempotency_key; if it is the same transfer, the API returns its result.";
+    case "ERROR_CODE_DUPLICATE_TRANSACTION":
+      // The reference was used for a DIFFERENT transfer, so "use the existing one" is wrong.
+      return `This client_reference was already used for a different transfer. Do not send again: find the earlier transfer (${lookupFor(tool)}). If this really is a new payment, use a new client_reference.`;
+    case "ERROR_CODE_CONFLICT":
+      return "The resource changed or is no longer in the state this change expects. Read it again before retrying.";
+    default:
+      return "Already exists. Look it up and use it rather than creating it again.";
+  }
+}
+
+/** The feature-access gate's 403s, by code. */
+const FEATURE_ACCESS: Record<string, (f: Record<string, unknown>) => string> = {
+  feature_access_required: (f) =>
+    `Your business does not have access to ${nonEmpty(f.feature) ?? "this feature"}. Request it in the Gravv Dashboard (API: POST ${nonEmpty(f.request_access_url) ?? "/v1/feature-access/requests"}).`,
+  feature_access_pending: () => "The access request is under review; wait for the feature_access webhook.",
+  feature_access_action_required: () => "Gravv asked for more information; answer it in the Dashboard.",
+  feature_access_rejected: (f) =>
+    `The request was rejected; you can apply again after ${nonEmpty(f.reapply_after) ?? "the reapply_after date"}.`,
+  feature_access_suspended: () => "Access is suspended; contact Gravv support.",
+};
+
+function nonEmpty(v: unknown): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
+/** A 403 is a scoped key, a Dashboard-only route or a feature gate, and says which. */
+function hint403(body: unknown): string {
+  const f = errorFields(body);
+  if (f.reason_detail === "api_key_not_accepted_on_admin_routes") return "This route does not accept API keys.";
+  if (Array.isArray(f.required_any) && f.required_any.length > 0) {
+    return `This API key is scoped and lacks the permission for this route: it needs one of ${f.required_any.join(", ")}. Use a key that has it. Retrying will not help.`;
+  }
+  const gate = typeof f.code === "string" ? FEATURE_ACCESS[f.code] : undefined;
+  if (gate) {
+    const requestId = nonEmpty(f.request_id);
+    return requestId ? `${gate(f)} Quote request_id ${requestId} to support.` : gate(f);
+  }
+  if (body && typeof body === "object" && (body as Record<string, unknown>).error === "forbidden") {
+    return "Dashboard-only: this route refuses API keys. Do it in the Gravv Dashboard.";
+  }
+  return "Forbidden. Read the error; retrying will not help.";
+}
+
+/** A 410: a paused transfer that can no longer be resumed. */
+function hint410(code: string | undefined): string {
+  if (code === "ERROR_CODE_TRANSFER_PAUSE_EXPIRED" || code === "ERROR_CODE_TRANSFER_PAUSE_CANCELLED") {
+    return "The pause has ended and this transfer can no longer be resumed. Start a new transfer with a new client_reference.";
+  }
+  return "Gone: this can no longer be used. Read the error; retrying will not help.";
+}
+
+/** A 5xx with its own next step, before the general 5xx rule. */
+function hint5xxByCause(tool: GeneratedTool, status: number, message: string, body: unknown): string {
+  if (status === 501) {
+    return "This operation is not available in this environment. Do not retry; search the docs for the feature.";
+  }
+  if (errorCode(body) === "ERROR_CODE_LIMITS_UNAVAILABLE") {
+    return "Transfer limits could not be checked, so the transfer was not created. Try again shortly.";
+  }
+  if (refusedBeforeRunning(status, message, body)) return "The request was refused before it ran. Try again shortly.";
+  return hint5xx(tool);
+}
+
 /** Transfer limit codes. All are 422, and none is fixed by a new idempotency key. */
 const LIMIT_CODES = new Set([
   "ERROR_CODE_LIMIT_EXCEEDED",
@@ -318,7 +714,7 @@ const LIMIT_CODES = new Set([
 /** A 422 is not one thing: idempotency, limits, blocks and missing information all use it. */
 function hint422(code: string | undefined): string {
   if (code === "idempotency_key_reused") {
-    return "The gateway saw this Idempotency-Key before with a different body. This server makes a new key for every call, so calling the tool again sends a fresh one.";
+    return "The same idempotency_key was sent before with a different body. If this is a resend, send exactly the same arguments as the first call. If it is a new request, leave idempotency_key out and a fresh key is made.";
   }
   if (code && LIMIT_CODES.has(code)) {
     return "Not an idempotency problem. The transfer is over a sender limit (see window and details). Reduce the amount or wait for the window to reset. Retrying the same call will not help.";
@@ -347,6 +743,23 @@ export function hintFor(
   tool: GeneratedTool,
   message = "",
   body: unknown = null,
+  ctx: HintContext = {},
+): string | undefined {
+  const hint = statusHint(status, tool, message, body, ctx);
+  // A stored 4xx looked like a fresh failure, so a model kept resending under the key.
+  if (!ctx.replayed) return hint;
+  // A stored server fault may still have taken effect, so its own hint, which looks the
+  // result up before any resend, must not be preceded by "call again".
+  const prefix = hint && isOutcomeUnknown(status, tool, message, body) ? REPLAYED_STORED : REPLAYED;
+  return hint ? `${prefix} ${hint}` : prefix;
+}
+
+function statusHint(
+  status: number,
+  tool: GeneratedTool,
+  message: string,
+  body: unknown,
+  ctx: HintContext,
 ): string | undefined {
   const mentionsIdempotency = /idempotenc/i.test(message);
 
@@ -360,7 +773,13 @@ export function hintFor(
     );
 
   switch (status) {
+    case 0:
+    case 408:
+      return hintNoAnswer(tool, ctx);
     case 400:
+      // A server fault dressed as a 400 first: it can mention a limit or a pending state,
+      // and it is no precondition and no bad field.
+      if (isServerFault400(message)) return hintServerFault400(tool);
       if (isStatePrecondition) {
         return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomer: the basic kyc status must be `completed`), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
       }
@@ -376,14 +795,22 @@ export function hintFor(
     case 401:
       return "The API key was rejected. Confirm GRAVV_API_KEY is set to a current key for the environment you intend.";
     case 403:
-      return "Forbidden. Some endpoints are dashboard-only and reject API-key callers — approvals in particular must be done in the Gravv dashboard.";
+      return hint403(body);
     case 404:
       return "Not found. Confirm the id exists in THIS environment — sandbox and live hold separate data.";
+    case 409:
+      return hint409(tool, errorCode(body));
+    case 410:
+      return hint410(errorCode(body));
+    case 413:
+      // Both shapes: request_body_too_large with a limit, and "the uploaded file is too
+      // large". Neither states the size that is refused in practice.
+      return "The upload is too large. Today files from about 600 KB are refused, whatever size the message states. Keep each file under 500 KB.";
     case 422:
       return hint422(errorCode(body));
     case 429:
-      return "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
+      return hint429(tool, message, ctx);
     default:
-      return undefined;
+      return status >= 500 ? hint5xxByCause(tool, status, message, body) : undefined;
   }
 }

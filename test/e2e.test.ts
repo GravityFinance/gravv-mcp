@@ -38,6 +38,27 @@ before(async () => {
         return;
       }
 
+      // A server fault on a write, to check what an error result carries.
+      if (req.url?.startsWith("/v1/wallets") && req.method === "POST") {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data: null, error: "bad gateway" }));
+        return;
+      }
+
+      // A stored transfer error, replayed, to check the fields lifted beside the hint.
+      if (req.url?.startsWith("/v1/transfer") && raw && JSON.parse(raw).client_reference === "dup-ref") {
+        res.writeHead(409, { "Content-Type": "application/json", "Idempotency-Replayed": "true" });
+        res.end(
+          JSON.stringify({
+            data: null,
+            error: "client_reference has already been used for a different transfer",
+            code: "ERROR_CODE_DUPLICATE_TRANSACTION",
+            transfer_status: "completed",
+          }),
+        );
+        return;
+      }
+
       res.writeHead(200, { "Content-Type": "application/json" });
       if (req.url?.startsWith("/v1/accounts")) {
         res.end(JSON.stringify({ data: { items: [{ id: "acc_1", currency: "USD", balance: "100.00" }] } }));
@@ -250,6 +271,92 @@ describe("end-to-end over MCP stdio", () => {
       assert.equal(received.length, 1);
       assert.ok(received[0]!.headers["idempotency-key"], "the POST must carry a generated Idempotency-Key");
       assert.equal(received[0]!.body.confirm, undefined, "confirm must not be forwarded to the API");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("a resend under the model's idempotency_key sends that header and keeps it out of the body", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const payload = JSON.parse(
+        textOf(
+          await mcp.request("tools/call", {
+            name: "createTransfer",
+            arguments: {
+              amount: 50,
+              source: { id: "acc_1" },
+              destination: { id: "acc_2" },
+              idempotency_key: "e2e-key-1",
+              confirm: true,
+            },
+          }),
+        ),
+      );
+      assert.equal(payload.idempotency_key, "e2e-key-1");
+      assert.equal(received.length, 1);
+      assert.equal(received[0]!.headers["idempotency-key"], "e2e-key-1");
+      assert.equal(received[0]!.body.idempotency_key, undefined, "the key is a header, not a body field");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("an error result carries the environment and the key that was sent", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", {
+        name: "createWallet",
+        arguments: { customer_id: "cus_1", network: "polygon" },
+      });
+      assert.equal(res.result.isError, true);
+      const payload = JSON.parse(textOf(res));
+      assert.equal(payload.status, 502);
+      assert.equal(payload.environment, "sandbox");
+      assert.equal(payload.outcome_unknown, true, "a 5xx on a write may have taken effect");
+      assert.ok(payload.idempotency_key);
+      assert.equal(payload.idempotency_key, received[0]!.headers["idempotency-key"]);
+      assert.deepEqual(payload.details, { data: null, error: "bad gateway" }, "details stays the raw body");
+    } finally {
+      mcp.kill();
+    }
+  });
+
+  test("an error result lifts the code and transfer_status, and flags a replay", async () => {
+    received = [];
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+      GRAVV_API_KEY: "grvSec_sandbox_e2e",
+    });
+    try {
+      await mcp.initialize();
+      const res = await mcp.request("tools/call", {
+        name: "createTransfer",
+        arguments: {
+          amount: 50,
+          source: { id: "acc_1" },
+          destination: { id: "acc_2" },
+          client_reference: "dup-ref",
+          idempotency_key: "e2e-dup",
+          confirm: true,
+        },
+      });
+      assert.equal(res.result.isError, true);
+      const payload = JSON.parse(textOf(res));
+      assert.equal(payload.status, 409);
+      assert.equal(payload.code, "ERROR_CODE_DUPLICATE_TRANSACTION");
+      assert.equal(payload.transfer_status, "completed");
+      assert.equal(payload.replayed, true);
+      assert.equal(payload.idempotency_key, "e2e-dup");
+      assert.equal(payload.details.code, "ERROR_CODE_DUPLICATE_TRANSACTION", "details stays the raw body");
+      assert.equal(received.length, 1, "a stored 409 is not resent");
     } finally {
       mcp.kill();
     }

@@ -7,11 +7,12 @@
  * specifications remain the source of truth for request and response *shapes*; this
  * file is the source of truth for how the tools *present*.
  *
- * Four things live here, none of which can be derived from a spec:
+ * Five things live here, none of which can be derived from a spec:
  *   1. NAMES        — stable tool names
  *   2. TOOLSETS     — which domain a tool belongs to, for opt-in loading
  *   3. BLOCKED      — operations that must never become tools
  *   4. PREREQUISITES — call ordering, which only the guides encode
+ *   5. OUTCOME_LOOKUPS — where to look when a write's outcome is unknown
  */
 
 export type Method = "get" | "post" | "put" | "patch" | "delete";
@@ -587,6 +588,54 @@ export const PREREQUISITES: Record<string, string> = {
 
   exportTransactions:
     "Returns at most the 10 newest matching rows (a known bug). For more, use listTransactions with paging. Dates are YYYY-MM-DD; export_format is csv or json, lower case.",
+};
+
+/**
+ * How to learn whether a call took effect, for every tool that sends an Idempotency-Key.
+ *
+ * After a timeout, a network error or a 5xx the outcome is unknown, and the error's hint
+ * says to look the result up before resending. "The matching get or list tool" is not
+ * enough: the obvious lookup for a transfer, a list filtered by client_reference, does
+ * not exist. Each `lookup` completes "Look it up first: …". `readOnly` marks a POST that
+ * changes nothing, so calling it again is safe.
+ */
+export type OutcomeLookup = { lookup: string } | { readOnly: true };
+
+export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
+  createTransfer: {
+    lookup:
+      "listTransactions with account_id set to the source account (newest first), and find your client_reference in the rows (there is no client_reference filter)",
+  },
+  withdrawFromCard: { lookup: "getCardBalance, and listTransactions with card_id set to the card" },
+  createFxOrder: { lookup: "listFxOrders (newest first), and match the pair, side and amount" },
+  cancelFxOrder: { lookup: "getFxOrder, and read its status" },
+  createCollection: { lookup: "getWebhookHistory, and find the event that carries your client_reference" },
+  createCardPaymentIntent: { lookup: "getWebhookHistory, and find the event that carries your client_reference" },
+  chargeSavedCard: { lookup: "getWebhookHistory, and find the event for your payment_intent_id" },
+  createCustomer: { lookup: "listCustomers, and match the email" },
+  createExternalAccount: { lookup: "listExternalAccounts, and match the customer, account number and rail" },
+  createAccount: { lookup: "listAccounts with customer_id, and match the currency" },
+  createWallet: {
+    lookup: "listWallets with customer_id and network (a second call creates a second wallet)",
+  },
+  createCard: { lookup: "listCards, and match the cardholder" },
+  createCardApplication: { lookup: "listCardApplications, and match the cardholder" },
+  createAccountApplication: { lookup: "listAccountApplications with customer_id" },
+  submitAccountApplication: { lookup: "getAccountApplication, and read its status" },
+  processAccountApplication: { lookup: "getAccountApplication, and read its status" },
+  submitAndProcessAccountApplication: { lookup: "getAccountApplication, and read its status" },
+  completeAccountApplicationTos: { lookup: "getAccountApplication, and read its status" },
+  startCustomerKyc: {
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop, as each start is billed",
+  },
+  startCustomerKycS2S: {
+    lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop, as each start is billed",
+  },
+  uploadCustomerKycDocument: { lookup: "getCustomerKycDocuments" },
+  activateFeature: { lookup: "listFeatures, and read the feature's status" },
+  getFxQuote: { readOnly: true },
+  validateAccountApplication: { readOnly: true },
+  checkFeatureEligibility: { readOnly: true },
 };
 
 /** Tool names that must carry a `confirm` argument, derived from MONEY_OPS. */

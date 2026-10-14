@@ -7,7 +7,18 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 ## 0.3.2 (unreleased)
 
 This release removes tools that could never succeed and corrects tool descriptions that
-gave wrong answers. API tools go from 87 to 72 (60 in the default load).
+gave wrong answers. API tools go from 87 to 72 (60 in the default load). It also lets a
+call whose outcome is unknown be resent under its first idempotency key, and makes every
+error say what to do next.
+
+### Added
+
+- An optional `idempotency_key` argument on the 25 tools that send an `Idempotency-Key`.
+  Pass the key from a result whose outcome is unknown (a timeout, a network error or a
+  `5xx`), with exactly the same arguments, to resend that call; if it had taken effect,
+  the API returns its answer instead of running it again. It is sent as the header, never
+  in the body, and a value that is not 1-255 printable ASCII characters is refused before
+  any request. Leave it out and a new key is made, as before.
 
 ### Removed
 
@@ -40,6 +51,15 @@ not "Unknown tool".
 - Key detection is exact and case-sensitive: `grvSec_live_` is live, `grvSec_sandbox_` is
   sandbox, anything else is unknown and treated as live. A `grvPub_` (publishable) key now
   gets a message saying it cannot call the API.
+- A POST refused by the gateway's rate limiter is retried under a new key. The `429` was
+  stored under the old key, so a same-key retry could never succeed. A key the caller
+  passed is never swapped: that `429` is returned with a hint to look the result up first.
+- A `409` is retried only while the first request is still running
+  (`idempotency_in_flight`, `ERROR_CODE_TRANSFER_IN_PROGRESS`), with the same key. Every
+  other `409` is final at once. A `Retry-After` given as a date is read, and waits are
+  capped at 30 s.
+- Request bodies are sent with their keys sorted, so the same arguments in another order
+  no longer get `422 idempotency_key_reused` on a resend. The API reads the same request.
 
 ### Fixed
 
@@ -64,7 +84,23 @@ not "Unknown tool".
   must be active and the amount must not exceed its balance.
 - A `422` is no longer always blamed on idempotency: limit, blocked-sender,
   missing-information and missing-document errors get their own hints.
-- The server no longer says a returned idempotency key can be reused; no tool accepts one
-  yet.
+- The server instructions give the key rule the client applies: after an unknown outcome,
+  look the result up, then resend with the same key; after any other `4xx`, call again
+  without `idempotency_key`, because a `4xx` answer is kept under its key for 24 hours.
+  The advice to look up a transfer with a list filtered by `client_reference` is gone: no
+  list has that filter.
+- Timeouts, network errors, `5xx` answers and server faults answered as a `400` set
+  `outcome_unknown` and name the tool that shows whether the call landed. Reads, and
+  POSTs that change nothing, say they are safe to repeat. A `503` or `504` from before the
+  request ran says so.
+- Error results carry `environment` and the `idempotency_key` that was sent, flag a
+  replayed answer with `replayed`, and lift `code`, `window` and `transfer_status` beside
+  the hint. `details` stays the raw body.
+- Error messages keep the text of a `service_unavailable` answer, name the permission a
+  scoped key lacks, and no longer include an HTML error page.
+- New hints for a scoped key's `403`, a Dashboard-only route and the feature-access gate;
+  a duplicate `client_reference` (`409`, used for a different transfer, so do not
+  resend); a conflict; an ended transfer pause (`410`); an oversized upload (`413`); a
+  missing operation (`501`); and limits or auth outages (`503`, `504`).
 - Rate limits: the gateway allows 600 requests a minute, burst 50, per Gravv account. The
   local default stays 60 a minute, burst 15; the help text no longer says 10.

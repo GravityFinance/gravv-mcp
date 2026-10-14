@@ -4,6 +4,7 @@ import {
   BLOCKED_TOOL_NAMES,
   DEFAULT_TOOLSETS,
   MONEY_OPS,
+  OUTCOME_LOOKUPS,
   RETIRED_TOOLSETS,
   TOOLSETS,
   UnknownToolsetError,
@@ -12,6 +13,8 @@ import {
 } from "../src/curation.ts";
 import { TOOLS, TOOLS_BY_NAME } from "../src/generated/tools.ts";
 import { MANUAL_TOOLS } from "../src/manual-tools.ts";
+import { instructions } from "../src/server.ts";
+import { SafetyGate } from "../src/safety.ts";
 
 const advertised = new Set([...TOOLS_BY_NAME.keys(), ...MANUAL_TOOLS.map((t) => t.name)]);
 
@@ -114,6 +117,51 @@ const GATED: Record<string, { route: string; why: string }> = {
   chargeSavedCard: { route: "POST /v1/collections/cards/payment-intents/charge", why: "charges a saved card" },
 };
 
+describe("idempotency_key argument", () => {
+  const hasKeyArg = (t: (typeof TOOLS)[number]) => "idempotency_key" in ((t.inputSchema as any).properties ?? {});
+
+  test("every tool that sends a key declares it, and no other tool does", () => {
+    const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
+    const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
+    assert.deepEqual(declared, keyed);
+    assert.equal(keyed.length, 25);
+  });
+
+  test("the exempt POSTs do not offer it", () => {
+    for (const name of ["verifyExternalAccount", "retryWebhookEvent"]) {
+      assert.equal(hasKeyArg(TOOLS_BY_NAME.get(name)!), false, name);
+    }
+  });
+
+  test("it is optional and follows the gateway's key rule", () => {
+    for (const t of TOOLS.filter(hasKeyArg)) {
+      const schema = (t.inputSchema as any).properties.idempotency_key;
+      assert.equal(((t.inputSchema as any).required as string[]).includes("idempotency_key"), false, t.name);
+      assert.equal(schema.maxLength, 255, t.name);
+      const re = new RegExp(schema.pattern);
+      assert.ok(re.test("6f1c-key"), t.name);
+      assert.equal(re.test("bad\nkey"), false, t.name);
+    }
+  });
+});
+
+describe("outcome lookups", () => {
+  test("every tool that sends a key has an entry, and only those", () => {
+    assert.deepEqual(
+      Object.keys(OUTCOME_LOOKUPS).sort(),
+      TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort(),
+    );
+  });
+
+  test("each lookup starts with a tool that exists", () => {
+    for (const [name, entry] of Object.entries(OUTCOME_LOOKUPS)) {
+      if (!("lookup" in entry)) continue;
+      const first = entry.lookup.match(/^[A-Za-z0-9]+/)?.[0] ?? "";
+      assert.ok(advertised.has(first), `${name}: "${first}" is not a tool`);
+    }
+  });
+});
+
 describe("money and irreversible tools are gated", () => {
   for (const [name, { route, why }] of Object.entries(GATED)) {
     test(`${name} needs confirm: ${why}`, () => {
@@ -153,6 +201,7 @@ const FALSE_TEXT: Array<[RegExp, string]> = [
   [/until the status changes to/i, "polling must also stop on setup_failed"],
   [/token you got from the webhook/i, "card tokens come from listSavedCards"],
   [/Optional spending limit/i, "leaving limit out zeroes the daily limit"],
+  [/filtered by client_reference/i, "listTransactions has no client_reference filter"],
 ];
 
 describe("corrected texts stay corrected", () => {
@@ -164,6 +213,12 @@ describe("corrected texts stay corrected", () => {
       }
     });
   }
+
+  test("the server instructions carry none of them", () => {
+    const gate = new SafetyGate({ environment: "sandbox", allowLiveWrites: false, readOnly: false });
+    const text = instructions("sandbox", gate, TOOLS, true, false);
+    for (const [pattern, why] of FALSE_TEXT) assert.doesNotMatch(text, pattern, why);
+  });
 
   test("account-application hints use the lower-case statuses the API sends", () => {
     for (const name of ["submitAccountApplication", "processAccountApplication", "submitAndProcessAccountApplication"]) {
