@@ -28,7 +28,8 @@ OPTIONS
 ENVIRONMENT
   GRAVV_API_KEY              Sandbox or live key; the key selects the environment.
   GRAVV_ALLOW_LIVE_WRITES    Set to "true" to permit money movement on a live key.
-  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 10.
+  GRAVV_RATE_PER_MINUTE      Client-side rate limit. Default 60 (burst 15). The gateway
+                             allows 600/min, burst 50, per tenant.
   GRAVV_BASE_URL             Same as --base-url.
 
 NOTES

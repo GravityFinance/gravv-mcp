@@ -320,3 +320,11 @@ describe("422 hints follow the error code", () => {
     assert.match(h, /not an idempotency problem/);
   });
 });
+
+describe("429 hint", () => {
+  test("states the gateway limit instead of blaming the local ceiling", () => {
+    const h = hintFor(429, TOOLS_BY_NAME.get("listTransactions")!, "Too many request") ?? "";
+    assert.match(h, /600 requests a minute/);
+    assert.doesNotMatch(h, /lower GRAVV_RATE_PER_MINUTE/);
+  });
+});

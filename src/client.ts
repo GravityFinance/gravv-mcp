@@ -41,14 +41,12 @@ export class GravvApiError extends Error {
 }
 
 /**
- * Token bucket matching the server-side limiter so we queue locally instead of
- * generating 429s.
+ * Token bucket so we queue locally instead of generating 429s.
  *
- * NOTE: the enforced ceiling is not clearly documented. The published limit is 10/min,
- * but 40 consecutive sandbox requests measured zero 429s, so throttling that hard would
- * make the server feel broken for no reason. The default is a courtesy 60/min; if a
- * given environment is stricter the 429 handler backs off, and GRAVV_RATE_PER_MINUTE
- * lowers the ceiling.
+ * The gateway allows 600 requests a minute, burst 50, per tenant: every key and every
+ * process of one business shares that bucket, and a 429 carries no Retry-After. The
+ * default here is a courtesy 60/min, burst 15, well below it, so one agent leaves room
+ * for the merchant's own traffic. GRAVV_RATE_PER_MINUTE changes the ceiling.
  */
 export class RateLimiter {
   private tokens: number;
@@ -366,7 +364,7 @@ export function hintFor(
     case 422:
       return hint422(errorCode(body));
     case 429:
-      return "Rate limited. The client throttles locally, so repeated 429s suggest the configured ceiling is above the real one — lower GRAVV_RATE_PER_MINUTE.";
+      return "Rate limited by the gateway (600 requests a minute, burst 50, per tenant). This server already throttles itself to 60 a minute by default, so repeated 429s usually mean another process uses the same Gravv account. Wait and try again.";
     default:
       return undefined;
   }
