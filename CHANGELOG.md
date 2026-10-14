@@ -8,8 +8,8 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 
 This release removes tools that could never succeed and corrects tool descriptions that
 gave wrong answers. API tools go from 87 to 72 (60 in the default load). It also lets a
-call whose outcome is unknown be resent under its first idempotency key, and makes every
-error say what to do next.
+call whose outcome is unknown be resent under its first idempotency key, makes every
+error say what to do next, and gives every documentation page its own text again.
 
 ### Added
 
@@ -19,6 +19,10 @@ error say what to do next.
   the API returns its answer instead of running it again. It is sent as the header, never
   in the body, and a value that is not 1-255 printable ASCII characters is refused before
   any request. Leave it out and a new key is made, as before.
+- `GRAVV_DOCS_ORIGIN` and `--docs-origin` set where the documentation tools read the
+  docs, for when the docs site moves. The docs links the server returns follow the
+  setting. A value that is not an `http` or `https` URL stops the server with the
+  reason. The default stays `https://gravv-docs.syntext.dev`.
 
 ### Removed
 
@@ -60,6 +64,10 @@ not "Unknown tool".
   capped at 30 s.
 - Request bodies are sent with their keys sorted, so the same arguments in another order
   no longer get `422 idempotency_key_reused` on a resend. The API reads the same request.
+- The `section` argument of `searchGravvDocs` has no fixed list. It takes any section the
+  docs site's index has (each result names its section), and an unknown one returns the
+  list. `Home`, which matched no page, is gone.
+- `getGravvDocPage` also accepts a page's full docs URL.
 
 ### Fixed
 
@@ -104,3 +112,11 @@ not "Unknown tool".
   missing operation (`501`); and limits or auth outages (`503`, `504`).
 - Rate limits: the gateway allows 600 requests a minute, burst 50, per Gravv account. The
   local default stays 60 a minute, burst 15; the help text no longer says 10.
+- Documentation search: each page is paired with its own text by title and URL, not by
+  position. When the docs site listed its pages in a different order in its index and its
+  full text, 71 pages had only their one-line description, and searches missed them. A
+  page containing a `---` line is no longer cut short.
+- Documentation slugs come from the URL path, so they stay the same if the index names
+  another host.
+- When a refresh of the docs index fails, the documentation tools keep answering from the
+  last copy, with a note saying so, instead of failing.
