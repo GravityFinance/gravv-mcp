@@ -43,7 +43,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "scenarios": "node --experimental-strip-types scripts/scenarios.ts",
     "docs-links": "node --experimental-strip-types scripts/docs-links.ts",
-    "sandbox-replay": "node --experimental-strip-types scripts/sandbox-replay.ts"
+    "sandbox-replay": "node --experimental-strip-types scripts/sandbox-replay.ts",
+    "export-data": "node --experimental-strip-types scripts/export-data.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0"
