@@ -583,6 +583,10 @@ written to disk, logged, or included in tool output.
 If a documentation search comes back empty, rephrase it. Search matches wording rather
 than meaning, so an unusual phrasing occasionally misses a page that does exist.
 
+The Gravv CLI gives the same error fixes and money-moving rules as this server. It embeds
+`data/gravv-shared.json`, which `npm run export-data` writes from `src/`; a test fails when
+that file is out of date.
+
 ---
 
 ## License

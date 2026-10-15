@@ -12,6 +12,8 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
 
+- `data/gravv-shared.json` (`npm run export-data`): the error fixes, money-moving and
+  sandbox-only routes, goal prompts and scenario requests, for the Gravv CLI to embed.
 - 24 tools. accounts: `getAccountCapabilities`, `createAccountV2`, `listAccountsV2`,
   `getAccountV2`, `getAccountRequirements`, `listAccountApplicationsV2`,
   `getAccountApplicationV2`, `updateAccountApplicationV2`. transfers:
