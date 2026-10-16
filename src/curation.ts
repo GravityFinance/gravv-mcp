@@ -454,6 +454,9 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
  * the model tends to retry variations. Naming the refusal and pointing at the supported
  * path stops that loop.
  */
+const V1_APPLICATIONS_REMOVED =
+  "Removed in 0.4.0: the v1 account application tools are gone. Open an account with getAccountCapabilities, getAccountRequirements and createAccountV2, then answer the bank with getAccountApplicationV2 and updateAccountApplicationV2.";
+
 export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardSensitiveDetails:
     `Not available over MCP: this returns the card PAN and CVV, which must not enter a model's context. Merchants retrieve these client-side with their own key pair — see ${SENSITIVE_DETAILS_GUIDE}`,
@@ -504,6 +507,21 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
     "Not available over MCP: rejecting an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
   searchWebhookIngestion:
     "Not available over MCP: this is an internal Dashboard route that API keys cannot call. Check your own webhook deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
+  // The v1 account API left the docs; a saved workflow that names one of its tools is told
+  // where the job went rather than getting "Unknown tool".
+  createAccountApplication: V1_APPLICATIONS_REMOVED,
+  updateAccountApplication: V1_APPLICATIONS_REMOVED,
+  getAccountApplication: V1_APPLICATIONS_REMOVED,
+  listAccountApplications: V1_APPLICATIONS_REMOVED,
+  listPendingAccountApplications: V1_APPLICATIONS_REMOVED,
+  deleteAccountApplication: V1_APPLICATIONS_REMOVED,
+  submitAccountApplication: V1_APPLICATIONS_REMOVED,
+  processAccountApplication: V1_APPLICATIONS_REMOVED,
+  submitAndProcessAccountApplication: V1_APPLICATIONS_REMOVED,
+  getAccountApplicationHistory: V1_APPLICATIONS_REMOVED,
+  validateAccountApplication: V1_APPLICATIONS_REMOVED,
+  completeAccountApplicationTos: V1_APPLICATIONS_REMOVED,
+  updateAccountStatus: "Removed in 0.4.0: no tool freezes, unfreezes or closes an account.",
 };
 
 /**

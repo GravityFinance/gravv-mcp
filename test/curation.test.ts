@@ -22,7 +22,8 @@ import { FALSE_TEXT } from "./false-text.ts";
 const advertised = new Set([...TOOLS_BY_NAME.keys(), ...MANUAL_TOOLS.map((t) => t.name)]);
 
 /**
- * Tools removed because they could never succeed. Each must stay off the list and keep
+ * Tools removed because they could never succeed, or because their API left the docs (the
+ * v1 account applications and account status). Each must stay off the list and keep
  * an explanation, so a saved workflow that names one is told why rather than getting a
  * bare "Unknown tool" and retrying variations.
  */
@@ -41,6 +42,19 @@ const REMOVED = [
   "deletePaymentLink",
   "updatePaymentLinkStatus",
   "getPublicPaymentLink",
+  "createAccountApplication",
+  "updateAccountApplication",
+  "getAccountApplication",
+  "listAccountApplications",
+  "listPendingAccountApplications",
+  "deleteAccountApplication",
+  "submitAccountApplication",
+  "processAccountApplication",
+  "submitAndProcessAccountApplication",
+  "getAccountApplicationHistory",
+  "validateAccountApplication",
+  "completeAccountApplicationTos",
+  "updateAccountStatus",
 ];
 
 describe("removed tools", () => {
@@ -50,6 +64,12 @@ describe("removed tools", () => {
       assert.ok(BLOCKED_TOOL_NAMES[name], `${name} needs a BLOCKED_TOOL_NAMES entry`);
     });
   }
+
+  test("the v1 account application names point at the v2 flow", () => {
+    for (const name of REMOVED.filter((n) => /AccountApplication/.test(n))) {
+      assert.match(BLOCKED_TOOL_NAMES[name]!, /createAccountV2/, name);
+    }
+  });
 
   test("every blocked name is absent from the tool list", () => {
     for (const name of Object.keys(BLOCKED_TOOL_NAMES)) {

@@ -104,6 +104,7 @@ documented endpoint now has a tool or a stated reason it has none.
   Open accounts with `getAccountCapabilities`, `getAccountRequirements` and
   `createAccountV2`, and answer the bank with `getAccountApplicationV2` and
   `updateAccountApplicationV2`.
+- A call to one of those names answers with what to use instead.
 - The `account-applications` toolset, which held them. `--toolsets=account-applications`
   still starts, with a warning, and the name is ignored. Every toolset now loads by
   default.

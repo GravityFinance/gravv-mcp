@@ -489,6 +489,10 @@ message says what to do instead. `deleteSavedCard` is back in 0.4.0.
 Card KYC returned in 0.4.0 as `startCardholderKyc`, `startCardholderKycS2S` and
 `uploadCardholderKycDocument`, in the `cards` toolset.
 
+**"Removed in 0.4.0" for a v1 account application tool or `updateAccountStatus`**
+The v1 account API left the docs. Accounts are opened with `createAccountV2`; the message
+names the tools to use.
+
 **`simulateDeposit` "is a sandbox-only test tool"**
 It runs only with a `grvSec_sandbox_` key. On a live key nothing is sent.
 
