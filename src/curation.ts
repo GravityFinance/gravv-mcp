@@ -740,7 +740,7 @@ export const PREREQUISITES: Record<string, string> = {
     "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
-    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
+    "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
 
   createSettlementInstruction:
     "These are your own payout destinations for createFxOrder proceeds: pass the returned id as the order destination {type: external_account, id}. This server sends currency in upper case. There is no duplicate check, so list first with listSettlementInstructions.",

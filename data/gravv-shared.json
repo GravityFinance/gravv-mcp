@@ -2015,7 +2015,7 @@
         "account_type": "operating",
         "category": "sub_account",
         "bank_code": "<USD-W1 bank_code>",
-        "network": "base",
+        "network": "polygon",
         "label": "Acme USD",
         "data": {
           "root": {

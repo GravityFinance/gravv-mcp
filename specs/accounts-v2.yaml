@@ -50,26 +50,15 @@ components:
   schemas:
     Network:
       type: string
-      description: Network name in lower case
+      description: >-
+        Blockchain network, in lower case. Gravv supports stellar, polygon,
+        ethereum, avalanche_c_chain and solana.
       enum:
         - stellar
         - polygon
         - ethereum
-        - base
-        - solana
         - avalanche_c_chain
-        - sui
-        - tron
-        - bsc
-        - flow_evm
-        - canton
-        - bitcoin
-        - celo
-        - gnosis
-        - arbitrum
-        - optimism
-        - xdc
-        - tempo
+        - solana
       example: polygon
     Category:
       type: string
@@ -239,8 +228,8 @@ components:
           description: >-
             Network for the account's token wallet. Required when the bank
             offers token wallets, unless you send `wallet_id`. Otherwise it is
-            refused. It must be one of the bank's `token_options`. Prefer
-            polygon, ethereum, base or solana, which work end to end.
+            refused. It must be one of the bank's `token_options`, and one of
+            stellar, polygon, ethereum, avalanche_c_chain or solana.
           allOf:
             - $ref: '#/components/schemas/Network'
         wallet_id:

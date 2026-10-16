@@ -1737,26 +1737,13 @@ export const TOOLS: GeneratedTool[] = [
         },
         "network": {
           "type": "string",
-          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`. Otherwise it is refused. It must be one of the bank's `token_options`. Prefer polygon, ethereum, base or solana, which work end to end.",
+          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`. Otherwise it is refused. It must be one of the bank's `token_options`, and one of stellar, polygon, ethereum, avalanche_c_chain or solana.",
           "enum": [
             "stellar",
             "polygon",
             "ethereum",
-            "base",
-            "solana",
             "avalanche_c_chain",
-            "sui",
-            "tron",
-            "bsc",
-            "flow_evm",
-            "canton",
-            "bitcoin",
-            "celo",
-            "gnosis",
-            "arbitrum",
-            "optimism",
-            "xdc",
-            "tempo"
+            "solana"
           ],
           "example": "polygon"
         },
@@ -4006,7 +3993,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "wallets",
     "method": "post",
     "path": "/v1/wallets",
-    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, base, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
+    "description": "Create a wallet — Creates a blockchain wallet for a customer on one network. The call is synchronous: the response has the address. Every call creates a new wallet with a new address, even for the same customer and network. A Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can hold USDC.\n\nSYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4031,7 +4018,6 @@ export const TOOLS: GeneratedTool[] = [
           "enum": [
             "polygon",
             "ethereum",
-            "base",
             "avalanche",
             "stellar",
             "solana"
@@ -5760,26 +5746,13 @@ export const TOOLS: GeneratedTool[] = [
         },
         "network": {
           "type": "string",
-          "description": "Network name in lower case",
+          "description": "Blockchain network, in lower case. Gravv supports stellar, polygon, ethereum, avalanche_c_chain and solana.",
           "enum": [
             "stellar",
             "polygon",
             "ethereum",
-            "base",
-            "solana",
             "avalanche_c_chain",
-            "sui",
-            "tron",
-            "bsc",
-            "flow_evm",
-            "canton",
-            "bitcoin",
-            "celo",
-            "gnosis",
-            "arbitrum",
-            "optimism",
-            "xdc",
-            "tempo"
+            "solana"
           ],
           "example": "polygon"
         },
@@ -6695,7 +6668,6 @@ export const TOOLS: GeneratedTool[] = [
           "enum": [
             "polygon",
             "ethereum",
-            "base",
             "avalanche",
             "stellar",
             "solana"

@@ -33,7 +33,6 @@ components:
       enum:
         - polygon
         - ethereum
-        - base
         - avalanche
         - stellar
         - solana
