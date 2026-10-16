@@ -69,15 +69,15 @@ export const PROMPTS: GoalPrompt[] = [
     name: "open-account",
     title: "Open an account for a customer",
     description:
-      "Choose and open a bank account, a wallet-only account or the business's card account, unblock an application, or freeze and close an account.",
+      "Choose and open a bank account or the business's card account, unblock an application, or give out deposit details.",
     scenarios: [
       "S-ACC2-01", "S-ACC2-02", "S-ACC2-03", "S-ACC2-04", "S-ACC2-05", "S-ACC2-06", "S-ACC2-07", "S-ACC2-08", "S-ACC2-09", "S-ACC2-10", "S-ACC2-11", "S-ACC2-12",
-      "S-ACC1-01", "S-ACC1-02", "S-ACC1-03", "S-ACC1-04", "S-ACC1-05", "S-ACC1-06", "S-ACC1-07", "S-ACC1-08", "S-ACC1-09",
+      "S-ACC1-01", "S-ACC1-07",
     ],
     argument: {
       name: "path",
       kind: "path",
-      description: "Optional: v2 (a new bank account), v1, business-v1, card-account or manage. Leave it out for every path.",
+      description: "Optional: v2 (a new bank account), card-account or manage. Leave it out for every path.",
     },
     intro:
       "Open the account the customer needs, in the order below. An account needs a customer whose KYC is completed.",
@@ -90,8 +90,8 @@ export const PROMPTS: GoalPrompt[] = [
     paths: [
       {
         keys: ["v2"],
-        title: "A bank account with the v2 tools (preferred for a new account)",
-        scenarios: ["S-ACC2-01", "S-ACC2-02", "S-ACC2-03", "S-ACC2-04", "S-ACC2-05", "S-ACC2-06", "S-ACC2-07", "S-ACC2-08", "S-ACC2-09", "S-ACC2-10"],
+        title: "A bank account for a person or a business, with the v2 tools",
+        scenarios: ["S-ACC1-01", "S-ACC2-01", "S-ACC2-02", "S-ACC2-03", "S-ACC2-04", "S-ACC2-05", "S-ACC2-06", "S-ACC2-07", "S-ACC2-08", "S-ACC2-09", "S-ACC2-10"],
         steps: [
           "getCustomer: the `kyc` entry with type `basic` must be `completed`. If it is not, onboard the customer first.",
           "getAccountCapabilities with customer_id: choose `bank_code`, currency and network (from `token_wallets`). listAccountsV2 with customer_id shows what the customer holds; warn when the count already equals the option's limit.",
@@ -102,56 +102,29 @@ export const PROMPTS: GoalPrompt[] = [
         ],
       },
       {
-        keys: ["v1"],
-        title: "A v1 account in one call (wallet-only, or a customer already on v1)",
-        scenarios: ["S-ACC1-01", "S-ACC1-02", "S-ACC1-03", "S-ACC1-04", "S-ACC1-05"],
-        steps: [
-          "getCustomer: basic KYC `completed`.",
-          "listAccounts with customer_id (and currency) to avoid a duplicate.",
-          "createAccount with currency, network (`polygon` for sandbox testing) and a label. Never send `bank`. `type: non_custodial` is the only type with no bank details: repeat the network back to the user.",
-          "USD, EUR, GBP, MXN and BRL accounts start `pending`: poll getAccount until `active`. NGN and `non_custodial` accounts are active at once. Never set a pending account to active with updateAccountStatus.",
-          "The v1 and v2 tools name account types differently: say so rather than translating `operating` into `regular`.",
-        ],
-      },
-      {
-        keys: ["business-v1"],
-        title: "A business USD account through a v1 application",
-        scenarios: ["S-ACC1-06", "S-ACC1-08"],
-        steps: [
-          "These tools are in the `account-applications` toolset, which loads only when named.",
-          "Ask for the legal form, the tax id and its type, the account purpose, both addresses, the three company documents, and who signs, controls and directs.",
-          "getCustomer: the business and every associated person `completed`.",
-          "validateAccountApplication, then createAccountApplication; updateAccountApplication until `validation_errors` is empty.",
-          "completeAccountApplicationTos only when `tos_link` is set and `agreement_id` is empty.",
-          "submitAndProcessAccountApplication, then poll getAccountApplication until `approved`, `rejected` or `manual_review`; `is_fully_processed: false` means in progress. Then getAccount with `metadata.internal_account_id`.",
-          "Rejected: show `reason` word for word (getAccountApplicationHistory) and ask only for what it names. `manual_review`: Gravv must act, so do not resubmit. deleteAccountApplication removes a draft and cannot be undone: ask first.",
-        ],
-      },
-      {
         keys: ["card-account"],
         title: "The business's card account (needed before issuing cards)",
         scenarios: ["S-ACC1-07"],
         steps: [
           "listAccounts with account_type `card`: a business has one card account, and every card application uses it.",
-          "If there is none, open it in the Dashboard, or with createAccount: type `card`, currency USD, and the business's own customer id (the customer_id on its main accounts). An end customer's id is refused.",
+          "If there is none, open it in the Dashboard, or with createAccount: type `card`, currency USD, bank `lead_bank` or `cross_river_bank`, and the business's own customer id (the customer_id on its account whose category is `main`). An end customer's id is refused. createAccount is only for this one account.",
           "It starts `pending` and is ready at `account.activated`, when getAccount shows `active`.",
         ],
       },
       {
         keys: ["manage"],
-        title: "Give out deposit details, freeze, unfreeze or close an account",
-        scenarios: ["S-ACC1-09", "S-ACC2-11", "S-ACC2-12"],
+        title: "Give out deposit details, or test a deposit",
+        scenarios: ["S-ACC2-11", "S-ACC2-12"],
         steps: [
           "getAccountV2 gives the payer details: show one block per currency, and for a wallet-backed account say \"send only USDC on <network>\". `ledger_balance` is not in major units.",
-          "updateAccountStatus freezes, unfreezes or deletes. Repeat the label, currency and balance and ask first; `deleted` cannot be undone.",
-          "Before `deleted`, getAccount: if the balance is not zero, propose moving the funds first.",
+          "No tool freezes, unfreezes or closes an account.",
           "In sandbox, simulateDeposit makes a test deposit. Each call makes a new one, so ask before repeating it.",
         ],
       },
     ],
     rules: [
-      "Do not call createAccountV2 or createAccount while basic KYC is not `completed`: the call fails with `CUSTOMER_KYC_INCOMPLETE`.",
-      "Prefer the v2 tools for a new bank account, unless the user needs a wallet-only account, a card account, or already uses v1.",
+      "Do not call createAccountV2 while basic KYC is not `completed`: the call fails with `CUSTOMER_KYC_INCOMPLETE`.",
+      "Open every account with createAccountV2, except the business's one card account, which createAccount opens.",
       "Opening an account moves no money, but an account is long-lived: show the summary and ask before creating.",
     ],
     docs: ["platform/accounts/overview"],
@@ -337,7 +310,7 @@ export const PROMPTS: GoalPrompt[] = [
         title: "Between a customer's own accounts",
         scenarios: ["S-PAY-10"],
         steps: [
-          "listAccounts or getAccountV2 for both accounts. No payee is needed.",
+          "listAccountsV2 or getAccountV2 for both accounts. No payee is needed.",
           "createTransfer with destination `destination_type: internal_account`; confirm source, destination and amount first.",
         ],
       },
@@ -470,7 +443,7 @@ export const PROMPTS: GoalPrompt[] = [
     labels: [
       "Available: USDC and USDT to a wallet on the same network; USDT to USDC, or back, between one customer's own wallets (preview first).",
       `Not yet available (${SUPPORT}): USDC to a wallet on another network.`,
-      "Not supported: USDT across networks; sending from avalanche or sui; anything on tron.",
+      "Not supported: USDT across networks; sending from avalanche; anything on tron.",
     ],
     paths: [
       {
@@ -537,7 +510,7 @@ export const PROMPTS: GoalPrompt[] = [
         title: "Quote and place an order",
         scenarios: ["S-FX-01", "S-FX-03", "S-FX-04"],
         steps: [
-          "getAccount or getAccountV2 for the source account, getWallet for a wallet.",
+          "getAccountV2 for the source account, getWallet for a wallet.",
           "listFxCurrencyPairs and listFxRates are for display only: they are not the price the user gets. getFxQuote with the amount is the real price and the check that a pair is enabled. A pair that is not enabled is switched on by support; do not try other spellings.",
           "Show \"sell X, receive Y at R, quote expires T\". createFxOrder with quote_id, source, destination and a client_reference, and confirm: true only after the user agrees.",
           "getFxOrder until final, then listTransactions.",
@@ -629,7 +602,7 @@ export const PROMPTS: GoalPrompt[] = [
         title: "Top up a card",
         scenarios: ["S-CRD-05", "S-CRD-03"],
         steps: [
-          "getCard or listCards for status and network; getAccount or getWallet for the source's network and balance.",
+          "getCard or listCards for status and network; getAccountV2 or getWallet for the source's network and balance.",
           "createTransfer to the card. Repeat the amount, the source and the card's last 4 digits, and confirm first. A source on another network, or a bank-held account, cannot fund the card: offer one that can.",
           "getTransaction until final, then getCardBalance.",
         ],

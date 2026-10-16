@@ -65,11 +65,8 @@ describe("toolsets", () => {
     }
   });
 
-  test("the default set is every toolset except account-applications", () => {
-    assert.deepEqual(
-      [...DEFAULT_TOOLSETS].sort(),
-      TOOLSETS.filter((t) => t !== "account-applications").sort(),
-    );
+  test("the default set is every toolset", () => {
+    assert.deepEqual([...DEFAULT_TOOLSETS].sort(), [...TOOLSETS].sort());
   });
 
   test("no value means the default set, and 'all' means all", () => {
@@ -88,6 +85,13 @@ describe("toolsets", () => {
     const warnings: string[] = [];
     assert.deepEqual(parseToolsets("customers,payment-links", (m) => warnings.push(m)), ["customers"]);
     assert.match(warnings[0]!, /payment-links/);
+  });
+
+  test("a retired account-applications name is dropped, and points at createAccountV2", () => {
+    const warnings: string[] = [];
+    assert.deepEqual(parseToolsets("account-applications,accounts", (m) => warnings.push(m)), ["accounts"]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /"account-applications" was removed in 0\.4\.0 \(.*createAccountV2/);
   });
 
   test("a moved name loads the toolset it moved to, with a warning", () => {
@@ -155,7 +159,6 @@ const GATED: Record<string, { route: string; why: string }> = {
  * Pinned both ways like GATED.
  */
 const CONFIRMED: Record<string, { route: string; why: string }> = {
-  deleteAccountApplication: { route: "DELETE /v1/accounts/applications/{id}", why: "cannot be restored" },
   activateFeature: { route: "POST /v1/risk/features/activate", why: "can issue a card; no deactivate route" },
   deleteSettlementInstruction: { route: "DELETE /v1/settlement-instructions/{id}", why: "cannot be restored" },
   deleteSavedCard: { route: "DELETE /v1/collections/cards/{card_id}", why: "cannot be restored" },
@@ -168,7 +171,7 @@ describe("idempotency_key argument", () => {
     const declared = TOOLS.filter(hasKeyArg).map((t) => t.name).sort();
     const keyed = TOOLS.filter((t) => t.needsIdempotency).map((t) => t.name).sort();
     assert.deepEqual(declared, keyed);
-    assert.equal(keyed.length, 33);
+    assert.equal(keyed.length, 27);
   });
 
   test("the exempt POSTs do not offer it", () => {
@@ -276,14 +279,6 @@ describe("corrected texts stay corrected", () => {
     const gate = new SafetyGate({ environment: "sandbox", allowLiveWrites: false, readOnly: false });
     const text = instructions("sandbox", gate, TOOLS, true, false);
     for (const [pattern, why] of FALSE_TEXT) assert.doesNotMatch(text, pattern, why);
-  });
-
-  test("account-application hints use the lower-case statuses the API sends", () => {
-    for (const name of ["submitAccountApplication", "processAccountApplication", "submitAndProcessAccountApplication"]) {
-      const d = TOOLS_BY_NAME.get(name)!.description;
-      assert.doesNotMatch(d, /\b(DRAFT|SUBMITTED|PROCESSING|CREATING_ACCOUNT|APPROVED|REJECTED)\b/, name);
-      assert.match(d, /manual_review/, `${name} must name manual_review`);
-    }
   });
 
   test("listFxPendingApprovals stays, and says who can see it", () => {

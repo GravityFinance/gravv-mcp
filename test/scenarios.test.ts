@@ -14,7 +14,7 @@ import type { GeneratedTool } from "../src/generated/tools.ts";
 const requests = loadRequests();
 
 describe("scenario fixtures", () => {
-  test("cover all 90 scenarios, with unique ids that name their scenario", () => {
+  test("cover all 83 scenarios, with unique ids that name their scenario", () => {
     const ids = new Set<string>();
     for (const r of requests) {
       assert.ok(!ids.has(r.id), `duplicate id ${r.id}`);
@@ -24,7 +24,7 @@ describe("scenario fixtures", () => {
       assert.match(r.path, /^\/v[12]\//);
       if (r.method === "GET") assert.equal(r.body, undefined, `${r.id} is a GET with a body`);
     }
-    assert.equal(new Set(requests.map((r) => r.scenario)).size, 90);
+    assert.equal(new Set(requests.map((r) => r.scenario)).size, 83);
   });
 
   test("no request lists by client_reference, which no list route filters on", () => {
@@ -69,13 +69,13 @@ describe("route matching", () => {
   });
   const tools = [
     tool("getAccount", "get", "/v1/accounts/{account_id}", ["account_id"]),
-    tool("getApplication", "get", "/v1/accounts/applications/{id}", ["id"]),
+    tool("getApplication", "get", "/v2/accounts/applications/{application_id}", ["application_id"]),
   ];
 
   test("a literal segment beats a parameter", () => {
-    const found = findTool("GET", "/v1/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d", tools);
+    const found = findTool("GET", "/v2/accounts/applications/2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d", tools);
     assert.equal(found?.tool.name, "getApplication");
-    assert.deepEqual(found?.params, { id: "2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d" });
+    assert.deepEqual(found?.params, { application_id: "2b4d6f8a-1c3e-4a5b-9d7f-0e2a4c6e8b1d" });
   });
 
   test("a word segment is a route of its own, not an id", () => {

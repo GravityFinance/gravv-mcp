@@ -1,17 +1,12 @@
 {
   "_comment": [
-    "The API-key developer endpoints in scope, copied from client-docs tests/data/api_operations.json at 74e23af (docs Phase 3).",
+    "The API-key developer endpoints in scope, copied from client-docs tests/data/api_operations.json at 4ceae7d (the v1 accounts removal, client-docs PR #22).",
     "test/coverage.test.ts checks that every one is in a vendored spec and has a tool or a BLOCKED reason, and that the specs carry nothing else. Update it with the specs when docs add or retire an endpoint."
   ],
   "operations": [
-    "DELETE /v1/accounts/applications/{id}",
     "DELETE /v1/collections/cards/{card_id}",
     "DELETE /v1/settlement-instructions/{id}",
     "GET /v1/accounts",
-    "GET /v1/accounts/applications",
-    "GET /v1/accounts/applications/pending",
-    "GET /v1/accounts/applications/{id}",
-    "GET /v1/accounts/applications/{id}/history",
     "GET /v1/accounts/capabilities",
     "GET /v1/accounts/{account_id}",
     "GET /v1/cards",
@@ -60,18 +55,11 @@
     "GET /v2/accounts/applications/{application_id}",
     "GET /v2/accounts/requirements",
     "GET /v2/accounts/{id}",
-    "PATCH /v1/accounts/{account_id}/status",
     "PATCH /v1/cards/{card_id}/update",
     "PATCH /v1/external-accounts/{external_account_id}",
     "PATCH /v1/settlement-instructions/{id}",
     "PATCH /v2/accounts/applications/{application_id}",
     "POST /v1/accounts",
-    "POST /v1/accounts/applications",
-    "POST /v1/accounts/applications/tos",
-    "POST /v1/accounts/applications/validate",
-    "POST /v1/accounts/applications/{id}/process",
-    "POST /v1/accounts/applications/{id}/submit",
-    "POST /v1/accounts/applications/{id}/submit-and-process",
     "POST /v1/cards",
     "POST /v1/cards/applications/new",
     "POST /v1/cards/withdraw",
@@ -100,7 +88,6 @@
     "POST /v1/webhooks/event/send/{id}",
     "POST /v2/accounts",
     "POST /v2/accounts/simulate/deposit",
-    "PUT /v1/accounts/applications/{id}",
     "PUT /v1/cards/{card_id}/pin",
     "PUT /v1/customers/{customer_id}"
   ]

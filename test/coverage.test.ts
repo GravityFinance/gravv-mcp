@@ -41,9 +41,9 @@ describe("endpoint coverage", () => {
     assert.deepEqual(missing, []);
   });
 
-  test("the counts are pinned: 99 endpoints, 96 tools, 3 blocked", () => {
-    assert.equal(inScope.length, 99);
-    assert.equal(inScope.filter((op) => toolFor.has(op)).length, 96);
+  test("the counts are pinned: 86 endpoints, 83 tools, 3 blocked", () => {
+    assert.equal(inScope.length, 86);
+    assert.equal(inScope.filter((op) => toolFor.has(op)).length, 83);
     assert.deepEqual(inScope.filter((op) => BLOCKED[op]).sort(), [
       "GET /v1/cards/{card_id}/pin",
       "GET /v1/cards/{card_id}/sensitive-details",

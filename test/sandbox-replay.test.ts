@@ -69,7 +69,7 @@ describe("step rules", () => {
     assert.match(stepProblems({ ...base, path: `/v1/customers/${VERIFIED_CUSTOMERS[0]}/kyc/status` }).join(), /KYC/);
     assert.match(stepProblems({ ...base, path: "/v1/risk/features" }).join(), /risk/);
     assert.match(stepProblems({ ...base, path: "/v1/customers/11111111-2222-4333-8444-555555555555" }).join(), /not a verified customer/);
-    const create: ReplayStep = { ...base, kind: "create", method: "POST", path: "/v1/accounts", createdId: "id" };
+    const create: ReplayStep = { ...base, kind: "create", method: "POST", path: "/v1/wallets", createdId: "id" };
     assert.match(stepProblems({ ...create, body: { customer_id: "11111111-2222-4333-8444-555555555555", label: "{run}" } }).join(), /verified customer/);
     assert.match(stepProblems({ ...create, body: { customer_id: VERIFIED_CUSTOMERS[1], label: "fixed" } }).join(), /run label/);
   });
@@ -103,7 +103,7 @@ describe("runReplay", () => {
     assert.ok(sent.every((r) => r.url.startsWith("https://api.gravv.xyz/")));
     assert.ok(sent.every((r) => r.key === KEY));
     const create = sent.find((r) => r.method === "POST")!;
-    assert.equal((create.body as { label: string }).label, "mcp-replay-test USD");
+    assert.equal((create.body as { name: string }).name, "mcp-replay-test wallet");
     assert.ok(!JSON.stringify(report).includes(KEY), "the key is never in the report");
   });
 

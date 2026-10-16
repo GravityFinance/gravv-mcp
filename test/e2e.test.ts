@@ -204,10 +204,6 @@ describe("end-to-end over MCP stdio", () => {
       assert.ok(names.includes("createWallet"), "wallets ships by default — no restart to create one");
       assert.ok(names.includes("simulateDeposit"), "the sandbox toolset loads by default on a sandbox key");
       assert.ok(
-        !names.includes("createAccountApplication"),
-        "the heavy account-application schemas are opt-in",
-      );
-      assert.ok(
         !names.includes("getCardSensitiveDetails"),
         "cardholder-data endpoints must never be advertised",
       );
@@ -558,14 +554,14 @@ describe("end-to-end over MCP stdio", () => {
   });
 
   test("a tool from an unloaded toolset says how to enable it", async () => {
-    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`], {
+    const mcp = new McpProcess([`--base-url=http://127.0.0.1:${gatewayPort}`, "--toolsets=customers"], {
       GRAVV_API_KEY: "grvSec_sandbox_e2e",
     });
     try {
       await mcp.initialize();
-      const res = await mcp.request("tools/call", { name: "createAccountApplication", arguments: {} });
+      const res = await mcp.request("tools/call", { name: "createWallet", arguments: {} });
       assert.equal(res.result.isError, true);
-      assert.match(textOf(res), /--toolsets=account-applications/);
+      assert.match(textOf(res), /--toolsets=wallets/);
     } finally {
       mcp.kill();
     }

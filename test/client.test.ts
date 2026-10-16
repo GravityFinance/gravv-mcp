@@ -222,7 +222,7 @@ describe("auth and idempotency", () => {
     const cases: Array<[string, Record<string, unknown>]> = [
       ["createTransfer", { amount: 5, source: { id: "acc_1" }, idempotency_key: "k-inline" }],
       ["createCustomer", { body: { email: "a@b.c" }, idempotency_key: "k-wrapped" }],
-      ["submitAccountApplication", { id: "app_1", idempotency_key: "k-none" }],
+      ["cancelFxOrder", { order_id: "ord_1", idempotency_key: "k-none" }],
     ];
     for (const [name, args] of cases) {
       const { calls, fetchImpl } = stub([{ status: 200, body: { data: {} } }]);
