@@ -23,7 +23,7 @@ To confirm it's wired up, ask your assistant:
 
 > *What Gravv accounts do I have?*
 
-It should call `listAccounts` and come back with real data. If you have no accounts yet,
+It should call `listAccountsV2` and come back with real data. If you have no accounts yet,
 try *"Search the Gravv docs for how to open an account"* — the documentation tools work
 even before you have any.
 
@@ -180,7 +180,7 @@ same `idempotency_key` and when to leave it out.
 
 | Prompt | For | Optional argument |
 |---|---|---|
-| `open-account` | a bank, wallet-only or card account; an application the bank is waiting on; freeze or close | `path`: v2, v1, business-v1, card-account, manage |
+| `open-account` | a bank account or the business's card account; an application the bank is waiting on; deposit details | `path`: v2, card-account, manage |
 | `onboard-customer` | create and verify a person or a business; resubmit; read KYC documents | `path`: person-hosted, person-s2s, business, resubmit, documents |
 | `send-payout` | ACH, wire, RTP, SWIFT, SEPA, Faster Payments, or between own accounts | `rail`: ach, wire, rtp, swift, sepa, fps, book |
 | `send-remittance` | a bank account or mobile wallet abroad | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
@@ -194,8 +194,8 @@ same `idempotency_key` and when to leave it out.
 The argument narrows the prompt to one path; leave it out to get them all. Route
 availability follows the docs: a route is Available, Not yet available (ask support to
 switch it on for your business), or Not supported. A prompt names any tool it uses that
-the session has not loaded (the `account-applications` toolset is opt-in, and
-`simulateDeposit` needs a sandbox key), and says so when there is no API key.
+the session has not loaded (a toolset left out of `--toolsets`, or `simulateDeposit`,
+which needs a sandbox key), and says so when there is no API key.
 
 **Next steps and fix hints.** Results carry the same knowledge where a call answers. A 200
 that is not done, such as a paused transfer, a declined card or a file the card KYC
@@ -236,10 +236,9 @@ it charges the card at once; it asks for confirmation even when it only makes a 
 ```
 
 **Tools that cannot be undone take two calls too.** `deleteSavedCard`,
-`deleteSettlementInstruction`, `deleteAccountApplication` and `activateFeature` (which can
-issue a card) return a preview first and run only with `confirm: true`. They move no
-money, so they do not need `GRAVV_ALLOW_LIVE_WRITES`. `updateAccountStatus` has no confirm
-step: its description tells the assistant to ask you before freezing or deleting.
+`deleteSettlementInstruction` and `activateFeature` (which can issue a card) return a
+preview first and run only with `confirm: true`. They move no money, so they do not need
+`GRAVV_ALLOW_LIVE_WRITES`.
 
 **Sandbox-only tools stay in sandbox.** `simulateDeposit` is listed and runs only with a
 `grvSec_sandbox_` key. On any other key it is hidden, and a call by name is refused
@@ -281,8 +280,7 @@ hint to look first.
 
 ## Toolsets
 
-Everything except `account-applications` loads by default. Account onboarding carries
-large schemas and is an infrequent, deliberate flow, so it is opt-in.
+Every toolset loads by default. Name some with `--toolsets` to load only those.
 
 ```bash
 npx @gravv-infra/mcp                                       # default
@@ -293,7 +291,7 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | Toolset | Default | Covers |
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
-| `accounts` | ✓ | accounts and status, capabilities, v2 accounts and their applications |
+| `accounts` | ✓ | capabilities, v2 accounts and their applications, and the business's one card account |
 | `transfers` | ✓ | transfers, supporting documents, resume, limits, rates, supported countries and currencies |
 | `transactions` | ✓ | history, volume, export |
 | `external-accounts` | ✓ | recipients, verification, institutions |
@@ -304,11 +302,11 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | `collections` | ✓ | card payment intents, saved cards, and bank transfer collections |
 | `webhooks` | ✓ | event history, delivery calls, retry |
 | `sandbox` | ✓ | the deposit simulator (sandbox keys only) |
-| `account-applications` | | account onboarding |
 
-The `approvals` and `payment-links` toolsets were removed in 0.3.2. A configuration that
-still names them starts with a warning, and those names are ignored. The `features`
-toolset merged into `cards` in 0.4.0: `--toolsets=features` loads `cards`, with a warning.
+The `approvals` and `payment-links` toolsets were removed in 0.3.2, and
+`account-applications` in 0.4.0. A configuration that still names them starts with a
+warning, and those names are ignored. The `features` toolset merged into `cards` in 0.4.0:
+`--toolsets=features` loads `cards`, with a warning.
 
 ---
 
@@ -328,10 +326,16 @@ that cannot be undone and also requires `confirm: true`.
 `getCustomerKycDocuments` · `downloadCustomerKycDocument` · `getCustomerKycStatus`
 
 **accounts**
-`getAccountCapabilities` · `createAccount` · `getAccount` · `listAccounts` ·
-`updateAccountStatus` · `getAccountRequirements` · `createAccountV2` · `getAccountV2` ·
+`getAccountCapabilities` · `getAccountRequirements` · `createAccountV2` · `getAccountV2` ·
 `listAccountsV2` · `getAccountApplicationV2` · `listAccountApplicationsV2` ·
-`updateAccountApplicationV2`
+`updateAccountApplicationV2` · `createAccount` · `getAccount` · `listAccounts`
+
+Accounts are opened with `createAccountV2`, after `getAccountCapabilities` and
+`getAccountRequirements`. The one exception is your business's card account, which backs
+every card you issue: v2 cannot open a working card account yet, so `createAccount`,
+`getAccount` and `listAccounts` are kept for that one account only. Accounts and wallets
+take five networks: `polygon`, `ethereum`, `solana`, `stellar` and Avalanche
+(`avalanche_c_chain` on accounts, `avalanche` on wallets).
 
 **external-accounts** — recipients you pay out to
 `createExternalAccount` · `getExternalAccount` · `listExternalAccounts` ·
@@ -379,13 +383,6 @@ countries.
 
 **sandbox** — sandbox keys only
 `simulateDeposit`
-
-**account-applications** — the v1 application flow, opt-in via `--toolsets=account-applications`
-`createAccountApplication` · `updateAccountApplication` · `getAccountApplication` ·
-`listAccountApplications` · `listPendingAccountApplications` · `deleteAccountApplication†` ·
-`submitAccountApplication` · `processAccountApplication` ·
-`submitAndProcessAccountApplication` · `getAccountApplicationHistory` ·
-`validateAccountApplication` · `completeAccountApplicationTos`
 
 Each tool's description carries its own prerequisites — several operations depend on
 something else having happened first, and the assistant reads those before calling.
@@ -491,6 +488,10 @@ message says what to do instead. `deleteSavedCard` is back in 0.4.0.
 **"Renamed" for `startRiskKyc`, `startRiskKycS2S` or `uploadRiskDocument`**
 Card KYC returned in 0.4.0 as `startCardholderKyc`, `startCardholderKycS2S` and
 `uploadCardholderKycDocument`, in the `cards` toolset.
+
+**"Removed in 0.4.0" for a v1 account application tool or `updateAccountStatus`**
+The v1 account API left the docs. Accounts are opened with `createAccountV2`; the message
+names the tools to use.
 
 **`simulateDeposit` "is a sandbox-only test tool"**
 It runs only with a `grvSec_sandbox_` key. On a live key nothing is sent.

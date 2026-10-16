@@ -164,24 +164,24 @@ describe("resuming a transfer is gated like a payout", () => {
 });
 
 describe("confirm-only gating", () => {
-  const del = TOOLS_BY_NAME.get("deleteAccountApplication")!;
+  const del = TOOLS_BY_NAME.get("deleteSettlementInstruction")!;
   const activate = TOOLS_BY_NAME.get("activateFeature")!;
-  const delPreview = { method: "DELETE", path: "/v1/accounts/applications/app_1", body: undefined };
+  const delPreview = { method: "DELETE", path: "/v1/settlement-instructions/si_1", body: undefined };
 
   test("a delete returns a preview first, naming what goes", () => {
-    const result = gate().check(del, { id: "app_1" }, delPreview);
+    const result = gate().check(del, { id: "si_1" }, delPreview);
     assert.equal(result?.status, "confirmation_required");
-    assert.match(result!.willDo, /Delete account application app_1\. It cannot be restored/);
-    assert.equal(gate().check(del, { id: "app_1", confirm: true }, delPreview), null);
+    assert.match(result!.willDo, /Delete settlement instruction si_1\. It cannot be read, used or restored/);
+    assert.equal(gate().check(del, { id: "si_1", confirm: true }, delPreview), null);
   });
 
   test("a live key needs no live-writes switch for it, but the preview warns", () => {
     const live = gate({ environment: "live" });
-    const pending = live.check(del, { id: "app_1" }, delPreview);
+    const pending = live.check(del, { id: "si_1" }, delPreview);
     assert.match(pending!.warning!, /LIVE KEY.*cannot be undone/);
     assert.doesNotMatch(pending!.warning!, /real money/);
-    assert.equal(live.check(del, { id: "app_1", confirm: true }, delPreview), null);
-    assert.equal(gate({ environment: "unknown" }).check(del, { id: "app_1", confirm: true }, delPreview), null);
+    assert.equal(live.check(del, { id: "si_1", confirm: true }, delPreview), null);
+    assert.equal(gate({ environment: "unknown" }).check(del, { id: "si_1", confirm: true }, delPreview), null);
   });
 
   test("a settlement instruction delete names it and the lost default", () => {

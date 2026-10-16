@@ -169,9 +169,10 @@ describe("renderPrompt", () => {
 
   test("it names the tools the session has not loaded, and how to load them", () => {
     const open = PROMPTS_BY_NAME.get("open-account")!;
-    const text = renderPrompt(open, { path: "business-v1" }, ctx);
-    assert.match(text, /Not loaded in this session: validateAccountApplication, createAccountApplication/);
-    assert.match(text, /They load with --toolsets=account-applications \(or --toolsets=all\)\./);
+    const noAccounts = new Set(TOOLS.filter((t) => t.toolset !== "accounts").map((t) => t.name));
+    const text = renderPrompt(open, { path: "v2" }, { hasApiKey: true, loadedTools: noAccounts });
+    assert.match(text, /Not loaded in this session: getAccountCapabilities, listAccountsV2, getAccountRequirements/);
+    assert.match(text, /They load with --toolsets=accounts \(or --toolsets=all\)\./);
     assert.doesNotMatch(renderPrompt(open, { path: "v2" }, ctx), /## This session/);
   });
 

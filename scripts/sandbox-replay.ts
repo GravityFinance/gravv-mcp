@@ -117,19 +117,16 @@ export const STEPS: ReplayStep[] = [
   },
   {
     id: "C1",
-    what: "open a v1 USD account for the individual",
+    what: "create a polygon wallet for the individual",
     kind: "create",
     method: "POST",
-    path: "/v1/accounts",
-    body: { customer_id: BUYER, type: "regular", currency: "USD", label: "{run} USD", blockchain_network: "polygon" },
+    path: "/v1/wallets",
+    body: { customer_id: BUYER, network: "polygon", name: "{run} wallet" },
     expect: {
       status: 200,
-      dataKeys: [
-        "blockchain_network", "capabilities", "category", "currency", "customer_id", "date_created", "id",
-        "inflow_behavior", "label", "status", "type",
-      ],
+      dataKeys: ["address", "customer_id", "date_created", "id", "name", "network", "wallet_type"],
     },
-    seen: "bank-payouts.jsonl:205",
+    seen: "wallets-collections.jsonl:6",
     createdId: "id",
   },
   {

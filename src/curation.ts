@@ -36,7 +36,6 @@ export const opKey = (method: string, path: string) => `${method.toUpperCase()} 
 export const TOOLSETS = [
   "customers",
   "accounts",
-  "account-applications",
   "transfers",
   "transactions",
   "external-accounts",
@@ -56,9 +55,13 @@ export type Toolset = (typeof TOOLSETS)[number];
  * (`--toolsets=approvals`, `GRAVV_TOOLSETS=...`), so they are accepted with a warning and
  * ignored rather than refused: refusing them would stop those servers from starting.
  */
-export const RETIRED_TOOLSETS: Readonly<Record<string, string>> = {
-  approvals: "approving and rejecting is Dashboard-only, and API keys always got 403",
-  "payment-links": "payment links are retired from the Gravv API",
+export const RETIRED_TOOLSETS: Readonly<Record<string, { version: string; why: string }>> = {
+  approvals: { version: "0.3.2", why: "approving and rejecting is Dashboard-only, and API keys always got 403" },
+  "payment-links": { version: "0.3.2", why: "payment links are retired from the Gravv API" },
+  "account-applications": {
+    version: "0.4.0",
+    why: "the v1 account application tools are gone; open accounts with createAccountV2 in `accounts`",
+  },
 };
 
 /**
@@ -71,23 +74,15 @@ export const MOVED_TOOLSETS: Readonly<Record<string, Toolset>> = {
   features: "cards",
 };
 
-/** Toolsets that load only when named, or with --toolsets=all. */
-export const OPT_IN_TOOLSETS: ReadonlySet<Toolset> = new Set<Toolset>(["account-applications"]);
-
 /**
- * Loaded when the operator passes no --toolsets flag: everything except
- * `account-applications`.
+ * Loaded when the operator passes no --toolsets flag: every toolset.
  *
- * Gating most domains behind opt-in flags turned out to cost context rather than save
- * it: a handful of account-application tools carry very large onboarding schemas and
- * dominate the total, while every other domain is cheap. Excluding just those buys more
- * than gating half the API did.
- *
- * So everything else loads by default and nobody restarts the server to create a wallet.
- * Account onboarding is a deliberate, infrequent flow; `--toolsets=all` or
- * `--toolsets=account-applications` turns it on when it is actually needed.
+ * Gating most domains behind opt-in flags cost context rather than saved it, since every
+ * domain is cheap. So everything loads by default and nobody restarts the server to
+ * create a wallet. The one opt-in toolset, `account-applications`, held the v1 account
+ * application tools and went with them.
  */
-export const DEFAULT_TOOLSETS: Toolset[] = TOOLSETS.filter((t) => !OPT_IN_TOOLSETS.has(t));
+export const DEFAULT_TOOLSETS: Toolset[] = [...TOOLSETS];
 
 /** Raised for a --toolsets / GRAVV_TOOLSETS name that is not a toolset. */
 export class UnknownToolsetError extends Error {
@@ -125,7 +120,8 @@ export function parseToolsets(
   const kept: Toolset[] = [];
   for (const t of requested) {
     if (Object.hasOwn(RETIRED_TOOLSETS, t)) {
-      warn(`toolset "${t}" was removed in 0.3.2 (${RETIRED_TOOLSETS[t]}); ignoring it.`);
+      const { version, why } = RETIRED_TOOLSETS[t]!;
+      warn(`toolset "${t}" was removed in ${version} (${why}); ignoring it.`);
       continue;
     }
     if (Object.hasOwn(MOVED_TOOLSETS, t)) {
@@ -174,13 +170,16 @@ export const NAMES: Record<string, Op> = {
   },
 
   // ---- accounts ------------------------------------------------------------
+  // The three v1 calls the docs keep (card-account.yaml), only for the business's one card
+  // account: v2 cannot open a working card account yet. Their names and toolset are
+  // unchanged from when they were the whole v1 accounts API.
   "POST /v1/accounts": { name: "createAccount", toolset: "accounts" },
   "GET /v1/accounts": { name: "listAccounts", toolset: "accounts" },
   "GET /v1/accounts/{account_id}": { name: "getAccount", toolset: "accounts" },
-  "PATCH /v1/accounts/{account_id}/status": { name: "updateAccountStatus", toolset: "accounts" },
+  // Served by the v2 service, and the first step of the v2 flow, despite its v1 path.
   "GET /v1/accounts/capabilities": { name: "getAccountCapabilities", toolset: "accounts" },
-  // v2 opens an account and its application in one call. Unlike the v1 application tools
-  // these load by default: the schemas are smaller and v2 is the path the guides teach.
+  // v2 opens an account and its application in one call. Every account but the card
+  // account is opened here.
   "POST /v2/accounts": { name: "createAccountV2", toolset: "accounts" },
   "GET /v2/accounts": { name: "listAccountsV2", toolset: "accounts" },
   "GET /v2/accounts/{id}": { name: "getAccountV2", toolset: "accounts" },
@@ -188,21 +187,6 @@ export const NAMES: Record<string, Op> = {
   "GET /v2/accounts/applications": { name: "listAccountApplicationsV2", toolset: "accounts" },
   "GET /v2/accounts/applications/{application_id}": { name: "getAccountApplicationV2", toolset: "accounts" },
   "PATCH /v2/accounts/applications/{application_id}": { name: "updateAccountApplicationV2", toolset: "accounts" },
-  "POST /v1/accounts/applications": { name: "createAccountApplication", toolset: "account-applications" },
-  "GET /v1/accounts/applications": { name: "listAccountApplications", toolset: "account-applications" },
-  "GET /v1/accounts/applications/pending": { name: "listPendingAccountApplications", toolset: "account-applications" },
-  "GET /v1/accounts/applications/{id}": { name: "getAccountApplication", toolset: "account-applications" },
-  "PUT /v1/accounts/applications/{id}": { name: "updateAccountApplication", toolset: "account-applications" },
-  "DELETE /v1/accounts/applications/{id}": { name: "deleteAccountApplication", toolset: "account-applications" },
-  "POST /v1/accounts/applications/{id}/submit": { name: "submitAccountApplication", toolset: "account-applications" },
-  "POST /v1/accounts/applications/{id}/process": { name: "processAccountApplication", toolset: "account-applications" },
-  "POST /v1/accounts/applications/{id}/submit-and-process": {
-    name: "submitAndProcessAccountApplication",
-    toolset: "account-applications",
-  },
-  "GET /v1/accounts/applications/{id}/history": { name: "getAccountApplicationHistory", toolset: "account-applications" },
-  "POST /v1/accounts/applications/tos": { name: "completeAccountApplicationTos", toolset: "account-applications" },
-  "POST /v1/accounts/applications/validate": { name: "validateAccountApplication", toolset: "account-applications" },
 
   // ---- external accounts (payees) -----------------------------------------
   "POST /v1/external-accounts": { name: "createExternalAccount", toolset: "external-accounts" },
@@ -470,6 +454,9 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
  * the model tends to retry variations. Naming the refusal and pointing at the supported
  * path stops that loop.
  */
+const V1_APPLICATIONS_REMOVED =
+  "Removed in 0.4.0: the v1 account application tools are gone. Open an account with getAccountCapabilities, getAccountRequirements and createAccountV2, then answer the bank with getAccountApplicationV2 and updateAccountApplicationV2.";
+
 export const BLOCKED_TOOL_NAMES: Record<string, string> = {
   getCardSensitiveDetails:
     `Not available over MCP: this returns the card PAN and CVV, which must not enter a model's context. Merchants retrieve these client-side with their own key pair — see ${SENSITIVE_DETAILS_GUIDE}`,
@@ -520,6 +507,21 @@ export const BLOCKED_TOOL_NAMES: Record<string, string> = {
     "Not available over MCP: rejecting an FX order is Dashboard-only, and API-key calls always get 403. Do it in the Gravv Dashboard.",
   searchWebhookIngestion:
     "Not available over MCP: this is an internal Dashboard route that API keys cannot call. Check your own webhook deliveries with getWebhookHistory, getWebhookEventDetail and getWebhookCallHistory.",
+  // The v1 account API left the docs; a saved workflow that names one of its tools is told
+  // where the job went rather than getting "Unknown tool".
+  createAccountApplication: V1_APPLICATIONS_REMOVED,
+  updateAccountApplication: V1_APPLICATIONS_REMOVED,
+  getAccountApplication: V1_APPLICATIONS_REMOVED,
+  listAccountApplications: V1_APPLICATIONS_REMOVED,
+  listPendingAccountApplications: V1_APPLICATIONS_REMOVED,
+  deleteAccountApplication: V1_APPLICATIONS_REMOVED,
+  submitAccountApplication: V1_APPLICATIONS_REMOVED,
+  processAccountApplication: V1_APPLICATIONS_REMOVED,
+  submitAndProcessAccountApplication: V1_APPLICATIONS_REMOVED,
+  getAccountApplicationHistory: V1_APPLICATIONS_REMOVED,
+  validateAccountApplication: V1_APPLICATIONS_REMOVED,
+  completeAccountApplicationTos: V1_APPLICATIONS_REMOVED,
+  updateAccountStatus: "Removed in 0.4.0: no tool freezes, unfreezes or closes an account.",
 };
 
 /**
@@ -553,8 +555,6 @@ export const MONEY_OPS = new Set<string>([
  * when a new one arrives without its gate.
  */
 export const CONFIRM_OPS = new Set<string>([
-  // A deleted application cannot be restored over the API.
-  "DELETE /v1/accounts/applications/{id}",
   // Activating virtual_cards creates a card application and can issue a card at once;
   // there is no route to deactivate a feature.
   "POST /v1/risk/features/activate",
@@ -680,16 +680,16 @@ export function uploadLimit(tool: string): string {
  */
 export const PREREQUISITES: Record<string, string> = {
   createAccount:
-    "PREREQUISITE: the customer must exist and have passed KYC. Call getCustomer and check that the `kyc` entry with type `basic` has status `completed`. An account cannot be opened for an unverified customer. Choose the bank, currency and network with getAccountCapabilities first. For a bank account with its token wallet in one call, use createAccountV2. A `card` account takes currency USD and is ready at account.activated. After a failed call, fix the request and leave idempotency_key out.",
+    "ONLY for your business's one card account. Open every other account with createAccountV2. A business has one card account: look first with listAccounts (account_type card). bank is `lead_bank` or `cross_river_bank`. It is ready at account.activated, when getAccount shows `active`. After a failed call, fix the request and leave idempotency_key out.",
 
-  updateAccountStatus:
-    "This tool has no confirm step: ask the user to confirm before freezing or deleting an account. `deleted` is permanent and needs a zero balance.",
+  listAccounts:
+    "ONLY to find your business's one card account (account_type card, status active) and your business's own customer id (the customer_id on your account whose category is `main`). For every other account, use listAccountsV2.",
 
-  deleteAccountApplication:
-    "Only a `draft` application can be deleted, and it cannot be restored. Requires confirm: true.",
+  getAccount:
+    "ONLY for your business's one card account: poll it after createAccount until `active`. For every other account, use getAccountV2.",
 
   getAccountCapabilities:
-    "Call first, before createAccountV2, getAccountRequirements or createAccount. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+    "Call first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
 
   createAccountV2:
     `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2.`,
@@ -710,13 +710,13 @@ export const PREREQUISITES: Record<string, string> = {
     `PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("updateAccountApplicationV2")}) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.`,
 
   simulateDeposit:
-    "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2 or getAccount). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
+    "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
   createExternalAccount:
     "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccount for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
 
   uploadTransferDocument:
     `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
@@ -730,14 +730,6 @@ export const PREREQUISITES: Record<string, string> = {
   getRemitterLimits:
     "remitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
 
-  submitAccountApplication:
-    "ORDERING: statuses are lower case: draft -> submitted -> processing -> approved, rejected or manual_review (`expired` exists but is not set today). Submitting needs zero validation errors and moves a draft or rejected application to submitted. Call processAccountApplication next, or use submitAndProcessAccountApplication to do both.",
-
-  processAccountApplication:
-    "ASYNC: returns status `processing`. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. A 200 can carry status `rejected` with an errors[] list.",
-
-  submitAndProcessAccountApplication:
-    "ASYNC: submits and starts processing. is_fully_processed=false is normal. Poll getAccountApplication until status is `approved`, `rejected` or `manual_review`. If processing_result is null, call processAccountApplication.",
 
   createWallet:
     "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
@@ -883,7 +875,7 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   createSettlementInstruction: {
     lookup: "listSettlementInstructions with currency, and match the account name (there is no duplicate check)",
   },
-  createAccount: { lookup: "listAccounts with customer_id, and match the currency" },
+  createAccount: { lookup: "listAccounts with account_type card (a business has one card account)" },
   createAccountV2: {
     lookup: "listAccountsV2 with customer_id and currency, and listAccountApplicationsV2 with customer_id",
   },
@@ -892,11 +884,6 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   },
   createCard: { lookup: "listCards, and match the cardholder" },
   createCardApplication: { lookup: "listCardApplications, and match the cardholder" },
-  createAccountApplication: { lookup: "listAccountApplications with customer_id" },
-  submitAccountApplication: { lookup: "getAccountApplication, and read its status" },
-  processAccountApplication: { lookup: "getAccountApplication, and read its status" },
-  submitAndProcessAccountApplication: { lookup: "getAccountApplication, and read its status" },
-  completeAccountApplicationTos: { lookup: "getAccountApplication, and read its status" },
   startCustomerKyc: {
     lookup: "getCustomer, and read the basic kyc status; do not start it again in a loop, as each start is billed",
   },
@@ -920,7 +907,6 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
       "listTransactions with account_id set to the account (newest first), and look for the test deposit; each new key makes a new deposit",
   },
   getFxQuote: { readOnly: true },
-  validateAccountApplication: { readOnly: true },
   checkFeatureEligibility: { readOnly: true },
 };
 

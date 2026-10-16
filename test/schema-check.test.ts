@@ -92,7 +92,7 @@ describe("checkSchema", () => {
   });
 
   test("anyOf takes a value that fits one or more of its shapes", () => {
-    // createAccount currency: a listed code, or any label for a wallet-only account.
+    // A currency that takes a listed code, or any other non-empty label.
     const currency = {
       anyOf: [{ type: "string", enum: ["USD", "NGN"] }, { type: "string", minLength: 1 }],
     };

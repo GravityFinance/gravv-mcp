@@ -278,7 +278,6 @@ const RESULTS: Record<string, { tool: string; data: unknown; says: RegExp }> = {
     data: { status: "pending_liveness", websdk_url: "https://liveness.test/x" },
     says: /websdk_url[^]*activateFeature again/,
   },
-  "application-null": { tool: "getAccountApplication", data: null, says: /No application has this id/ },
   "account-v2-action": {
     tool: "getAccountV2",
     data: { status: "pending", requires_user_action: true, status_reason: "documents_required", application_id: "a1" },
@@ -326,7 +325,7 @@ describe("next steps on 200 answers", () => {
     assert.equal(nextStepFor("getTransaction", { status: "completed" }), undefined);
     assert.equal(nextStepFor("resumeTransfer", { resumed: true }), undefined);
     assert.equal(nextStepFor("getExternalAccount", { status: "active" }), undefined);
-    assert.equal(nextStepFor("getAccount", null), undefined, "only the v1 application read means data null");
+    assert.equal(nextStepFor("getAccount", null), undefined, "a null answer gets no step");
   });
 
   test("the server returns next_step ahead of data", async () => {

@@ -7,7 +7,7 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 ## 0.4.0 (unreleased)
 
 This release brings the tools in line with the current API reference. API tools go from 72
-to 96 (84 in the default load; 83 on a live key, which hides the sandbox tool). Every
+to 83, all in the default load (82 on a live key, which hides the sandbox tool). Every
 documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
@@ -25,9 +25,8 @@ documented endpoint now has a tool or a stated reason it has none.
 - A `sandbox` toolset. Its tool runs only with a `grvSec_sandbox_` key; on any other key it
   is hidden from the tool list and refused by name before any request.
 - A confirm step for tools that cannot be undone but move no money: `deleteSavedCard`,
-  `deleteSettlementInstruction`, `deleteAccountApplication` and `activateFeature`. The
-  first call returns a preview; `confirm: true` runs it. `GRAVV_ALLOW_LIVE_WRITES` is not
-  needed for them.
+  `deleteSettlementInstruction` and `activateFeature`. The first call returns a preview;
+  `confirm: true` runs it. `GRAVV_ALLOW_LIVE_WRITES` is not needed for them.
 - `file_path` on every upload tool. The server reads the file, checks its type from its
   first bytes and its size against the field's limit, and sends the base64 itself, so the
   file never passes through the model.
@@ -47,8 +46,8 @@ documented endpoint now has a tool or a stated reason it has none.
   one optional argument narrows it to one path. They are offered without an API key too.
 - `next_step` on a successful result that is not done: a paused or waiting transfer, a
   manual-review webhook, a declined or 3-D Secure card payment, a refused card KYC file, the
-  liveness step, a missing v1 application, a v2 account the bank is waiting on, a pending
-  or failed payee, and limits on the default tier or in shadow mode.
+  liveness step, a v2 account the bank is waiting on, a pending or failed payee, and
+  limits on the default tier or in shadow mode.
 - Fix hints for the 4xx answers the integration scenarios name: duplicate and
   uncorrectable payees, payees missing an institution, closed routes, transfer limits,
   resuming a transfer that is not paused, an existing customer email, incomplete or
@@ -57,25 +56,23 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Changed
 
+- `createAccount`, `getAccount` and `listAccounts` stay, only for the business's one card
+  account: v2 cannot open a working card account yet. Their descriptions say so, and that
+  every other account is opened with `createAccountV2`. `createAccount` takes `type`
+  `card`, currency `USD` and a `bank` (`lead_bank` or `cross_river_bank`).
+- Accounts and wallets take only five networks: `polygon`, `ethereum`, `solana`, `stellar`
+  and Avalanche (`avalanche_c_chain` on accounts, `avalanche` on wallets).
 - The MCP SDK floor is 1.30.0, the version the server is tested with.
 - An error whose fix hint says the call did not run, such as "failed to add customer:
   email already exists", is no longer flagged `outcome_unknown`.
 - The `activateFeature` note for `provider_data.account_id` says to always send the
   business's card account; the spec said it could be left out.
-- `createAccount` takes any non-empty currency label for a `non_custodial` (wallet-only)
-  account, such as `USDC`, and says the business opens its one card account there with
-  its own customer id.
 - Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
   the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
   `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
   500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
   about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
   name the tool's limit.
-- The v1 application tools take the fields the bank checks (`tax_id_type`,
-  `nationalities`, `place_of_birth`, `account_purpose`, a business `email` and `phone`),
-  no longer require every address part, and `updateAccountApplication` requires no field
-  in `data`: send only what changes.
-
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
   warning.
@@ -95,6 +92,24 @@ documented endpoint now has a tool or a stated reason it has none.
   `uploadCardholderKycDocument`, in `cards`. The old `startRiskKyc*` and
   `uploadRiskDocument` names answer with the new names.
 - `deleteSavedCard` is available again, now that the specification describes its body.
+
+### Removed
+
+- The v1 account application and status tools, which the docs no longer document:
+  `createAccountApplication`, `updateAccountApplication`, `getAccountApplication`,
+  `listAccountApplications`, `listPendingAccountApplications`, `deleteAccountApplication`,
+  `submitAccountApplication`, `processAccountApplication`,
+  `submitAndProcessAccountApplication`, `getAccountApplicationHistory`,
+  `validateAccountApplication`, `completeAccountApplicationTos` and `updateAccountStatus`.
+  Open accounts with `getAccountCapabilities`, `getAccountRequirements` and
+  `createAccountV2`, and answer the bank with `getAccountApplicationV2` and
+  `updateAccountApplicationV2`.
+- A call to one of those names answers with what to use instead.
+- The `account-applications` toolset, which held them. `--toolsets=account-applications`
+  still starts, with a warning, and the name is ignored. Every toolset now loads by
+  default.
+- The `v1` and `business-v1` paths of the `open-account` prompt. Its `manage` path no
+  longer freezes or closes an account.
 
 ### Fixed
 
@@ -118,9 +133,10 @@ documented endpoint now has a tool or a stated reason it has none.
   `docs/_redirects.json`) into `src/docs-redirects.ts`, and `--check` reports them stale.
   It reads them from the directory above `GRAVV_OPENAPI_DIR`, or from `GRAVV_DOCS_DIR`.
 - `yaml` moved to devDependencies; it is used only by the generator and tests.
-- The specs are synced from the top of the client-docs docs stack, the webhooks catalogue
-  branch (8917a0c), which has not merged. The nightly drift check compares against
-  client-docs main, so it reports drift until that work merges.
+- The specs are synced from client-docs `feature/docs-remove-accounts-v1` (4ceae7d, PR
+  #22), which has not merged. The nightly drift check compares against client-docs main,
+  so it reports drift until that work merges.
+- The sandbox replay's create step makes a wallet instead of a v1 account.
 - The scenario and replay schema check reads `anyOf`: a value fits when any shape fits.
 - The publish workflow installs npm 11.20.0 instead of `npm@latest` and publishes with
   `--provenance`, so a release published with the `NPM_TOKEN` secret carries a provenance

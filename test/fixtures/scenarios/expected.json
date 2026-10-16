@@ -531,137 +531,19 @@
     "outcome": "ok",
     "tool": "getAccountCapabilities"
   },
-  "S-ACC1-01.3": {
+  "S-ACC1-07.1": {
     "outcome": "ok",
     "tool": "listAccounts"
   },
-  "S-ACC1-02.1": {
-    "outcome": "ok",
-    "tool": "createAccount"
-  },
-  "S-ACC1-02.2": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-02.3": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-03.1": {
-    "outcome": "ok",
-    "tool": "createAccount"
-  },
-  "S-ACC1-03.2": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-04.1": {
-    "outcome": "ok",
-    "tool": "createAccount"
-  },
-  "S-ACC1-04.2": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-05.1": {
-    "outcome": "ok",
-    "tool": "createAccount"
-  },
-  "S-ACC1-05.2": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-06.1": {
-    "outcome": "ok",
-    "tool": "validateAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-06.2": {
-    "outcome": "ok",
-    "tool": "createAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-06.3": {
-    "outcome": "ok",
-    "tool": "updateAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-06.4": {
-    "outcome": "ok",
-    "tool": "completeAccountApplicationTos",
-    "optIn": true
-  },
-  "S-ACC1-06.5": {
-    "outcome": "ok",
-    "tool": "getAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-06.6": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-07.1": {
-    "outcome": "ok",
-    "tool": "createAccountApplication",
-    "optIn": true
-  },
   "S-ACC1-07.2": {
     "outcome": "ok",
-    "tool": "updateAccountApplication",
-    "optIn": true
+    "tool": "createAccount"
   },
   "S-ACC1-07.3": {
     "outcome": "ok",
     "tool": "getAccount"
   },
-  "S-ACC1-08.1": {
-    "outcome": "ok",
-    "tool": "listAccountApplications",
-    "optIn": true
-  },
-  "S-ACC1-08.2": {
-    "outcome": "ok",
-    "tool": "getAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-08.3": {
-    "outcome": "ok",
-    "tool": "getAccountApplicationHistory",
-    "optIn": true
-  },
-  "S-ACC1-08.4": {
-    "outcome": "ok",
-    "tool": "getAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-08.5": {
-    "outcome": "ok",
-    "tool": "getAccountApplicationHistory",
-    "optIn": true
-  },
-  "S-ACC1-08.6": {
-    "outcome": "ok",
-    "tool": "updateAccountApplication",
-    "optIn": true
-  },
-  "S-ACC1-08.7": {
-    "outcome": "ok",
-    "tool": "listPendingAccountApplications",
-    "optIn": true
-  },
-  "S-ACC1-09.1": {
-    "outcome": "ok",
-    "tool": "listAccounts"
-  },
-  "S-ACC1-09.2": {
-    "outcome": "ok",
-    "tool": "updateAccountStatus"
-  },
-  "S-ACC1-09.3": {
-    "outcome": "ok",
-    "tool": "getAccount"
-  },
-  "S-ACC1-09.4": {
+  "S-ACC1-07.4": {
     "outcome": "ok",
     "tool": "listAccounts"
   },

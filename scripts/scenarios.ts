@@ -28,7 +28,7 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TOOLS, type GeneratedTool } from "../src/generated/tools.ts";
 import { MANUAL_TOOLS } from "../src/manual-tools.ts";
-import { BLOCKED, OPT_IN_TOOLSETS } from "../src/curation.ts";
+import { BLOCKED } from "../src/curation.ts";
 import { checkSchema } from "./schema-check.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,8 +51,6 @@ export interface ScenarioResult {
   outcome: Outcome;
   /** The tool that serves the route, when there is one. */
   tool?: string;
-  /** The tool is in a toolset that is off unless asked for. */
-  optIn?: true;
   /** Why the outcome is not ok. */
   problems?: string[];
 }
@@ -102,7 +100,7 @@ function bind(template: string, path: string): { params: Record<string, string>;
 
 /**
  * The tool for a route. A literal segment beats a parameter, so
- * `/v1/accounts/applications/...` finds the application tool, not `/v1/accounts/{account_id}`.
+ * `/v2/accounts/requirements` finds the requirements tool, not `/v2/accounts/{id}`.
  */
 export function findTool(
   method: string,
@@ -185,7 +183,6 @@ export function checkRequest(
   if (!found) return { outcome: "no-tool" };
   const { tool, params } = found;
   const base: ScenarioResult = { outcome: "ok", tool: tool.name };
-  if (OPT_IN_TOOLSETS.has(tool.toolset)) base.optIn = true;
 
   const built = buildArguments(tool, params, new URLSearchParams(qs), request.body);
   const problems =

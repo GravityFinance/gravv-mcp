@@ -853,7 +853,7 @@ function statusHint(
       // and it is no precondition and no bad field.
       if (isServerFault400(message)) return hintServerFault400(tool);
       if (isStatePrecondition) {
-        return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomer: the basic kyc status must be `completed`), the account may need funding (getAccount), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
+        return "This is a state precondition, not a malformed request — the payload may be perfectly valid. Something must happen first: the customer may need KYC (getCustomer: the basic kyc status must be `completed`), the account may need funding (getAccountV2), or a recipient may still be pending rather than active (getExternalAccount). Search the docs for the flow if the ordering is unclear.";
       }
       // The API names the offending field in most 400s. When it has, repeating that is
       // more useful than a generic theory about what else might be wrong.

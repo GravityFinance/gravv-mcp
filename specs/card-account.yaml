@@ -1,0 +1,438 @@
+openapi: 3.1.0
+info:
+  title: Gravv card account API
+  description: >-
+    Open and find your business's one card account. Send your API key in the `Api-Key` header.
+  version: 1.0.0
+servers:
+- url: https://api.gravv.xyz
+security:
+- ApiKeyAuth: []
+tags:
+- name: Card account
+  description: Your business's one card account, which backs every card you issue
+paths:
+  /v1/accounts:
+    post:
+      tags:
+      - Card account
+      summary: Open your card account
+      description: |-
+        Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. An end customer's ID is refused, and so is a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or get the account until it is `active`, before you activate cards with it.
+
+        This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+            examples:
+              CardAccount:
+                summary: Open your card account
+                value:
+                  currency: USD
+                  type: card
+                  label: cards
+                  customer_id: 550e8400-e29b-41d4-a716-446655440178
+                  blockchain_network: polygon
+                  bank: cross_river_bank
+      responses:
+        '200':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountEnvelope'
+              example:
+                data:
+                  id: 6f1c2b8e-9a43-4f0e-8d35-2b7f0f6c1a90
+                  label: cards
+                  date_created: '2026-10-13T09:12:44Z'
+                  wallet_address: '0x25a4c9853e761753ae18d6871731e305b8b0b2a4'
+                  blockchain_network: polygon
+                  type: card
+                  customer_id: 550e8400-e29b-41d4-a716-446655440178
+                  capabilities:
+                  - transfer
+                  - receive
+                  - remittance
+                  currency: USD
+                  tenant_name: Acme Payments
+                  tenant_id: b8b2f7f4-3c2a-4f3e-9d61-0c5a7d1e2f33
+                  status: pending
+                  category: sub_account
+                error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags:
+      - Card account
+      summary: List your accounts
+      description: >-
+        Lists your accounts, newest first. Use it to find your card account with `account_type=card&status=active`,
+        and your business's own customer ID on the account whose `category` is `main`. Filters combine
+        with AND.
+      parameters:
+      - in: query
+        name: items_per_page
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        description: Number of items per page, up to 100
+        example: 10
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+        description: Page number, from 1
+        example: 1
+      - in: query
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        description: Filter by customer
+        example: 550e8400-e29b-41d4-a716-446655440178
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - pending
+          - frozen
+          - deleted
+          - manual_review
+        description: Filter by status
+      - in: query
+        name: account_type
+        schema:
+          type: string
+        description: Filter by account type, such as `regular` or `card`
+      responses:
+        '200':
+          description: List of accounts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /v1/accounts/{account_id}:
+    get:
+      tags:
+      - Card account
+      summary: Get your card account
+      description: >-
+        Returns one account with its deposit details, balance and assets. Poll it after you create an
+        account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with
+        `internal account not found`.
+      parameters:
+      - in: path
+        name: account_id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Account details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Required for POST requests. 1 to 255 printable ASCII characters. A retry with the same key and
+        body within 24 hours returns the first response, including a 400. After you fix a failed request,
+        send a new key.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: create-account-ops-1
+  responses:
+    BadRequest:
+      description: >-
+        The request failed. These account routes return every error as HTTP 400, including not found.
+        Read the error message for the cause.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+            - data
+            - error
+            properties:
+              data:
+                type: 'null'
+                example: null
+              error:
+                type: string
+                description: Human-readable error message.
+                example: invalid request payload
+  schemas:
+    Account:
+      type: object
+      description: >-
+        An internal account. Empty fields are left out. Accounts opened with `/v2/accounts` are returned
+        here too, without their v2-only fields.
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a4d83e55-435e-41c9-9a0b-dcb99f690c95
+        label:
+          type: string
+          example: ops
+        date_created:
+          type: string
+          format: date-time
+          example: '2025-10-07T09:49:23Z'
+        wallet_address:
+          type: string
+          example: '0xf73bdd069dc31aa8f334b177b175936ba98237a2'
+        blockchain_network:
+          type: string
+          example: polygon
+        type:
+          type: string
+          description: Type of account.
+          enum:
+          - regular
+          - savings
+          - card
+          - auto_sweep
+          - collection
+          - default
+          - non_custodial
+          example: regular
+        customer_id:
+          type: string
+          format: uuid
+          example: d12ded01-9081-4a3c-a76c-70654f0a0175
+        capabilities:
+          type: array
+          description: What the account can do. It depends on the account type.
+          items:
+            type: string
+            enum:
+            - transfer
+            - receive
+            - remittance
+            - card_payment
+            - sweep_collection
+          example:
+          - transfer
+          - receive
+          - remittance
+        currency:
+          type: string
+          example: USD
+        virtual_account_id:
+          type: string
+          format: uuid
+          example: 73cea894-bca7-43e2-b278-02bd6d991e2e
+        tenant_name:
+          type: string
+          example: Acme Payments
+        tenant_id:
+          type: string
+          example: cd90c45c-fa78-4624-a80a-642be301c812
+        tier:
+          type: string
+          example: ''
+        status:
+          type: string
+          description: >-
+            `pending` while the bank sets the account up, then `active`. `frozen` means suspended or set-up
+            failed, `manual_review` means held for review, and `deleted` is closed and final. `reason`
+            explains a status other than `active`.
+          enum:
+          - active
+          - pending
+          - frozen
+          - manual_review
+          - deleted
+          example: active
+        reason:
+          type: string
+          description: Why the account is not active. Omitted for active accounts.
+        category:
+          type: string
+          description: '`main` for your own accounts, `sub_account` for your customers'' accounts.'
+          enum:
+          - main
+          - sub_account
+          example: sub_account
+        balance:
+          type: string
+          description: >-
+            Balance as a decimal string in major units. For USD it is the USDC balance; for EUR it is
+            that balance converted to EUR; for NGN it is the token balance. For other currencies it is
+            the USDC amount, not converted. Omitted when it cannot be read, so treat a missing value as
+            unknown, not zero.
+          example: '0.00'
+        is_tokenized:
+          type: boolean
+          description: True for NGN accounts
+          example: false
+        inflow_behavior:
+          type: string
+          description: Set for NGN accounts only
+          enum:
+          - settle
+          - auto_onramp
+        polygon_wallet:
+          type: object
+          description: The token wallet of an NGN account
+          properties:
+            address:
+              type: string
+            network:
+              type: string
+            token_balance:
+              type: string
+        virtual_account_bank_name:
+          type: string
+          example: Bank of Nowhere
+        virtual_account_bank_address:
+          type: string
+          example: 1800 North Pole St., Orlando, FL 32801
+        virtual_account_bank_beneficiary_address:
+          type: string
+        virtual_account_bank_beneficiary_name:
+          type: string
+          example: Jane Doe
+        virtual_account_bank_account_number:
+          type: string
+          description: >-
+            Deposit account number. The US account number for USD, the IBAN for EUR, the account number
+            for GBP, the CLABE for MXN and the BR code for BRL. Bank details appear only once the account
+            is `active`.
+          example: '900300758080'
+        virtual_account_bank_routing_number:
+          type: string
+          description: The ABA routing number for USD, the BIC for EUR and the sort code for GBP.
+          example: '101019644'
+        assets:
+          type: array
+          description: Balance per token
+          items:
+            type: object
+            properties:
+              balance:
+                type: string
+                example: '0'
+              decimals:
+                type: integer
+                example: 6
+              symbol:
+                type: string
+                example: USDC
+    AccountEnvelope:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          $ref: '#/components/schemas/Account'
+        error:
+          type: 'null'
+          example: null
+    AccountListEnvelope:
+      type: object
+      required:
+      - data
+      - error
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Account'
+            page:
+              type: integer
+            items_per_page:
+              type: integer
+              description: The number of items on this page, not the page size you asked for.
+            total_pages:
+              type: integer
+              description: Omitted when there are no matching accounts.
+            total_items:
+              type: integer
+        error:
+          type: 'null'
+          example: null
+    CreateAccountRequest:
+      type: object
+      required:
+      - currency
+      - type
+      - label
+      - customer_id
+      - blockchain_network
+      - bank
+      properties:
+        currency:
+          type: string
+          enum:
+          - USD
+          description: Always `USD`
+          example: USD
+        type:
+          type: string
+          enum:
+          - card
+          description: Always `card`
+          example: card
+        label:
+          type: string
+          description: Label for the account
+          example: ops
+          maxLength: 50
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            Your business's own customer ID: the `customer_id` on your account whose `category` is `main`
+          example: 550e8400-e29b-41d4-a716-446655440178
+        blockchain_network:
+          type: string
+          enum:
+          - polygon
+          - ethereum
+          - solana
+          - stellar
+          - avalanche_c_chain
+          description: Network of the account's wallet, in lower case
+          example: polygon
+        bank:
+          type: string
+          enum:
+          - lead_bank
+          - cross_river_bank
+          description: Bank that holds the card account
+          example: cross_river_bank

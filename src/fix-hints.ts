@@ -143,7 +143,7 @@ export const ERROR_FIXES: ErrorFix[] = [
   },
   {
     id: "kyc-incomplete",
-    scenarios: ["S-ACC2-01", "S-ACC1-02"],
+    scenarios: ["S-ACC2-01"],
     tools: ["createAccountV2", "createAccount"],
     codes: ["CUSTOMER_KYC_INCOMPLETE"],
     messages: [/has not completed KYC/i, /kyc validation failed/i],
@@ -195,8 +195,8 @@ export const ERROR_FIXES: ErrorFix[] = [
     hint:
       "account_id (provider_data.account_id on activateFeature) must be the business's own card account, and it must " +
       "be active: find it with listAccounts (account_type card, status active). If there is none, open it first: " +
-      "createAccount with type card, currency USD and the business's own customer id, or the Dashboard. It is ready " +
-      "at account.activated.",
+      "createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own " +
+      "customer id, or the Dashboard. It is ready at account.activated.",
   },
   {
     id: "card-activate-fault",
@@ -457,15 +457,6 @@ export const RESULT_STEPS: ResultStep[] = [
     step: (data) =>
       obj(data).status === "pending_liveness"
         ? "Give the cardholder `websdk_url` for the liveness check, then call activateFeature again without idempotency_key."
-        : undefined,
-  },
-  {
-    id: "application-null",
-    scenarios: ["S-ACC1-08"],
-    tools: ["getAccountApplication"],
-    step: (data) =>
-      data === null
-        ? "No application has this id in this environment (sandbox and live hold separate data). Check the id, or list them with listAccountApplications."
         : undefined,
   },
   {
