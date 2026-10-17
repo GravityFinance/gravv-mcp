@@ -68,7 +68,7 @@ components:
       description: >-
         The account holder's address. Required for `swift`, `sepa`, `ach_wire`
         and `fps`, and for some banks and payout corridors.
-      properties:
+      properties: &address_properties
         address_line1:
           type: string
           minLength: 4
@@ -96,191 +96,731 @@ components:
           type: string
           description: Alpha-2 code
           example: US
-    AddExternalAccountRequest:
+    BeneficiaryAddress:
       type: object
       description: >-
-        The fields each `payee_type` needs:
-
-
-        - `bank_account`: `account_number`. Send `institution_id` to name the
-        bank.
-
-        - `mobile_money`: `phone_number` with the country code, and
-        `institution_id` for the operator.
-
-        - `ach_wire` (USD only): `routing_number`, `account_number`,
-        `payment_rail`, `account_owner_type`, `bank_name` and `address`.
-
-        - `swift` (USD only): `bic`, `account_number` (even with an IBAN),
-        `account_owner_type`, `address` with `city`, `state` and `country`,
-        and the bank address fields.
-
-        - `sepa` (EUR only): `iban`, `account_owner_type`, `bank_name` and
-        `address`.
-
-        - `fps` (GBP only): `routing_number` (the sort code), `account_number`,
-        `account_owner_type`, `bank_name` and `address`.
-
-
-        Unknown fields are ignored. Only the first problem found is reported.
+        The account holder's address. `address_line1` is 4 to 34 characters,
+        and the other fields are at most 35. Gravv checks `postal_code` against
+        `country`.
       required:
-        - customer_id
-        - currency
-        - account_name
-      properties:
-        customer_id:
-          type: string
-          format: uuid
-          description: The customer who owns this external account
-          example: 3130ca8b-8b32-4843-8623-bf83e766b86a
-        currency:
-          type: string
-          description: Three-letter ISO 4217 code of the currency paid out
-          example: USD
-        account_name:
-          type: string
+        - address_line1
+      properties: *address_properties
+    SwiftBeneficiaryAddress:
+      type: object
+      description: >-
+        The account holder's address. A `swift` payee needs `address_line1`,
+        `city`, `state` and `country`. `address_line1` is 4 to 34 characters,
+        and the other fields are at most 35.
+      required:
+        - address_line1
+        - city
+        - state
+        - country
+      properties: *address_properties
+    AddExternalAccountRequest:
+      description: >-
+        Pick the tab for the kind of payee, and for a local bank account, the
+        tab for its currency. Each tab lists the fields that kind uses and marks
+        the ones Gravv requires when you save the payee. Unknown fields are ignored. Only
+        the first problem found is reported.
+      oneOf:
+        - title: African bank account (NGN, GHS, KES, XOF, XAF)
+          type: object
           description: >-
-            Account holder's name. Unaccented letters, spaces and `' - . , & /
-            ( )` only, starting with a letter, with no digits. It comes back in
-            upper case, and may be replaced by the name the bank holds.
-          example: Jane Doe
-        payee_type:
+            A bank account in Nigeria, Ghana, Kenya, the WAEMU zone (XOF) or the
+            CEMAC zone (XAF). The response is 200 with status `active`. Send
+            `account_number` and the bank's `institution_id`. You do not need a
+            routing number.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: &bank_account_payee_type
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - bank_account
+              example: bank_account
+            customer_id: &customer_id
+              type: string
+              format: uuid
+              description: The customer who owns this external account
+              example: 3130ca8b-8b32-4843-8623-bf83e766b86a
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - NGN
+                - GHS
+                - KES
+                - XOF
+                - XAF
+              example: NGN
+            account_name: &account_name
+              type: string
+              description: >-
+                Account holder's name. Unaccented letters, spaces and `' - . , & /
+                ( )` only, starting with a letter, with no digits. It comes back in
+                upper case, and may be replaced by the name the bank holds.
+              example: Jane Doe
+            account_number:
+              type: string
+              description: >-
+                Letters and digits, with no spaces. Each country has its own rule:
+                10 digits in Nigeria (NUBAN), 10 to 16 digits in Ghana, 8 to 20
+                characters in Kenya, 24 characters in the WAEMU zone (the RIB) and
+                23 digits in the CEMAC zone. Needed to pay this payee.
+              example: '0123456789'
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`. Gravv saves
+                a payee without one, but cannot pay it.
+            institution_country_iso_code: &institution_country_iso_code
+              type: string
+              description: >-
+                Bank country as an alpha-2 code. It picks the account number rule.
+                Defaults to the institution's country.
+              example: NG
+            account_owner_type: &account_owner_type
+              type: string
+              description: '`individual` for a person, `business` for a company'
+              enum:
+                - individual
+                - business
+            address:
+              $ref: '#/components/schemas/Address'
+            internal_account_id: &internal_account_id
+              type: string
+              format: uuid
+              description: Your account that pays this external account
+        - title: Moroccan bank account (MAD)
+          type: object
           description: >-
-            Leave it out to detect the type from the fields you send. Send it
-            for a Mexican CLABE paid in MXN, which is otherwise read as
-            `ach_wire`.
-          allOf:
-            - $ref: '#/components/schemas/PayeeType'
-        account_number:
-          type: string
+            A bank account in Morocco. The response is 200 with status `active`.
+            `institution_id` is required: it names the bank the payout goes to.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - institution_id
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - MAD
+              example: MAD
+            account_name: *account_name
+            account_number:
+              type: string
+              description: The RIB, exactly 24 letters and digits
+              example: '007780000123400000012345'
+            iban:
+              type: string
+              description: >-
+                IBAN, for a bank whose `account_number_type` is `iban`. Gravv
+                checks it with mod 97.
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`. The bank
+                must be able to receive MAD payouts.
+              example: 4f6a8c2e-1b3d-4e5f-9a7b-2c4d6e8f0a1b
+            institution_country_iso_code: *institution_country_iso_code
+            account_owner_type: *account_owner_type
+            address:
+              description: >-
+                Some Moroccan banks need the holder's address, and Gravv refuses
+                the payee without it.
+              allOf:
+                - $ref: '#/components/schemas/Address'
+            internal_account_id: *internal_account_id
+        - title: Mexican bank account (MXN)
+          type: object
           description: >-
-            4 to 34 letters and digits, with no spaces. Some countries have
-            their own rule: 10 digits in Nigeria, 10 to 16 digits in Ghana, and
-            8 to 20 characters in Kenya.
-          example: '000123456789'
-        iban:
-          type: string
-          description: IBAN, checked with mod 97. Required for `sepa`.
-          example: DE89370400440532013000
-        bic:
-          type: string
+            A bank account in Mexico, paid to its CLABE. The response is 200 with
+            status `active`. Always send `payee_type`. Gravv checks the CURP or RFC
+            when you save the payee, and the other payout details when you send
+            money.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type:
+              type: string
+              description: >-
+                Send it for a Mexican CLABE paid in MXN, which is otherwise read
+                as `ach_wire`.
+              enum:
+                - bank_account
+              example: bank_account
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - MXN
+              example: MXN
+            account_name: *account_name
+            account_number:
+              type: string
+              description: The 18-digit CLABE. Needed to pay this payee.
+              example: '002180000123456789'
+            institution_id:
+              type: string
+              format: uuid
+              description: An `id` from `GET /v1/external-accounts/institutions`
+            institution_country_iso_code:
+              type: string
+              description: Bank country as an alpha-2 code
+              example: MX
+            national_id:
+              type: string
+              maxLength: 64
+              description: >-
+                The holder's CURP or RFC. Send it with `national_id_type`. Needed
+                to pay this payee.
+              example: GODE561231HDFRRN09
+            national_id_type:
+              type: string
+              description: A Mexican payee takes `CURP` or `RFC` only.
+              enum:
+                - CURP
+                - RFC
+              example: CURP
+            account_owner_type: *account_owner_type
+            address: &payout_address
+              description: >-
+                Needed to pay this payee, with `address_line1`, `city` and
+                `country`.
+              allOf:
+                - $ref: '#/components/schemas/Address'
+            internal_account_id: *internal_account_id
+        - title: Brazilian account (BRL)
+          type: object
           description: >-
-            BIC of 8 or 11 characters. Required for `swift`. The bank must be in
-            the SWIFT directory. Gravv fills in its `institution_id` and
-            `bank_name` for you.
-          example: DEUTDEFF
-        routing_number:
-          type: string
+            A PIX key or bank account in Brazil. The response is 200 with status
+            `active`. Gravv checks the identity fields when you save the payee,
+            and the payout details when you send money.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - BRL
+              example: BRL
+            account_name: *account_name
+            pix_key:
+              type: string
+              minLength: 1
+              maxLength: 77
+              description: PIX key, with no spaces. Needed to pay this payee.
+              example: maria.souza@example.com
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces
+            institution_id:
+              type: string
+              format: uuid
+              description: An `id` from `GET /v1/external-accounts/institutions`
+            national_id:
+              type: string
+              maxLength: 64
+              description: >-
+                The holder's CPF (a person) or CNPJ (a company). Send it with
+                `national_id_type`. Gravv checks its check digits. Needed to pay
+                this payee.
+              example: '52998224725'
+            national_id_type:
+              type: string
+              enum:
+                - CPF
+                - CNPJ
+              example: CPF
+            account_owner_type: *account_owner_type
+            address: *payout_address
+            internal_account_id: *internal_account_id
+        - title: Colombian bank account (COP)
+          type: object
           description: >-
-            For `ach_wire`, a 9-digit ABA routing number. For `fps`, the sort
-            code. For India, the IFSC.
-          example: '021000021'
-        payment_rail:
-          type: string
+            A bank account in Colombia. The response is 200 with status
+            `active`. Gravv checks the payout details when you send money, not
+            when you save the payee.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - COP
+              example: COP
+            account_name: *account_name
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces. Needed to pay this payee.
+              example: '12345678901'
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`. Needed to
+                pay this payee.
+            bank_account_type:
+              type: string
+              description: Needed to pay this payee
+              enum:
+                - checking
+                - savings
+            national_id:
+              type: string
+              maxLength: 64
+              description: >-
+                The holder's CC (a person) or NIT (a company). Send it with
+                `national_id_type`. Needed to pay this payee.
+              example: '1020304050'
+            national_id_type:
+              type: string
+              enum:
+                - CC
+                - NIT
+              example: CC
+            account_owner_type: *account_owner_type
+            address: *payout_address
+            internal_account_id: *internal_account_id
+        - title: Indian bank account (INR)
+          type: object
           description: >-
-            Required for `ach_wire`. There is no default. `wire` needs a routing
-            number that takes wires, and `rtp` one that takes instant payments.
-          enum:
-            - ach
-            - wire
-            - rtp
-          example: wire
-        bank_account_type:
-          type: string
-          enum:
-            - checking
-            - savings
-        phone_number:
-          type: string
-          description: Mobile money number with the country code. Required for `mobile_money`.
-          example: '+256772123456'
-        institution_id:
-          type: string
-          format: uuid
+            A bank account in India, named by its IFSC. The response is 200 with
+            status `active`. Gravv checks the payout details when you send money,
+            not when you save the payee.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - INR
+              example: INR
+            account_name: *account_name
+            account_number:
+              type: string
+              description: The account number, 9 to 18 digits. Needed to pay this payee.
+              example: '50100123456789'
+            routing_number:
+              type: string
+              description: The IFSC. Needed to pay this payee.
+              example: HDFC0000123
+            account_owner_type: *account_owner_type
+            address: *payout_address
+            internal_account_id: *internal_account_id
+        - title: Hong Kong bank account (HKD)
+          type: object
           description: >-
-            An `id` from `GET /v1/external-accounts/institutions`. Required for
-            MAD payouts and filled in from `bic` for `swift`.
-        institution_country_iso_code:
-          type: string
+            A bank account in Hong Kong. The response is 200 with status
+            `active`. Gravv checks the payout details when you send money, not
+            when you save the payee.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - HKD
+              example: HKD
+            account_name: *account_name
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces. Needed to pay this payee.
+              example: '123456789012'
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`. Needed to
+                pay this payee.
+            account_owner_type: *account_owner_type
+            address: *payout_address
+            internal_account_id: *internal_account_id
+        - title: Bank account in another currency
+          type: object
           description: >-
-            Bank country as an alpha-2 code. It picks the account number rule.
-            Defaults to the institution's country.
-          example: NG
-        account_owner_type:
-          type: string
-          description: Required for `swift`, `sepa`, `ach_wire` and `fps`
-          enum:
-            - individual
-            - business
-        bank_name:
-          type: string
-          description: Required for `sepa`, `ach_wire` and `fps`
-          example: Example Bank
-        bank_address_line_1:
-          type: string
-          description: Required for `swift`
-        bank_city:
-          type: string
-          description: Required for `swift`
-        bank_state:
-          type: string
-          description: Required for `swift`
-        bank_postal_code:
-          type: string
-          description: Required for `swift`. Checked against `bank_country`.
-        bank_country:
-          type: string
-          description: Required for `swift`
-        intermediary_financial_institution:
-          type: string
+            A local bank account in a currency without its own tab, such as PKR
+            or EGP. The response is 200 with status `active`. Send
+            `account_number`, or `iban` where the bank uses one, and
+            `institution_id` to name the bank. Some banks need `address`.
+          required:
+            - customer_id
+            - currency
+            - account_name
+          properties:
+            payee_type: *bank_account_payee_type
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code of the currency paid out. The currencies
+                with their own tab are not listed here.
+              not:
+                enum:
+                  - NGN
+                  - GHS
+                  - KES
+                  - XOF
+                  - XAF
+                  - MAD
+                  - MXN
+                  - BRL
+                  - COP
+                  - INR
+                  - HKD
+              example: PKR
+            account_name: *account_name
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces
+              example: '00123456789012'
+            iban:
+              type: string
+              description: >-
+                IBAN, for a bank whose `account_number_type` is `iban`. Gravv
+                checks it with mod 97.
+            institution_id:
+              type: string
+              format: uuid
+              description: An `id` from `GET /v1/external-accounts/institutions`
+            institution_country_iso_code: *institution_country_iso_code
+            bank_name:
+              type: string
+              description: The bank's name, used when you send no `institution_id`
+            bank_account_type:
+              type: string
+              enum:
+                - checking
+                - savings
+            account_owner_type: *account_owner_type
+            address:
+              $ref: '#/components/schemas/Address'
+            internal_account_id: *internal_account_id
+        - title: Mobile money wallet
+          type: object
           description: >-
-            Optional intermediary bank for `swift`. Send all the intermediary
-            fields or none. Only `intermediary_bank_address2` is optional.
-        intermediary_bank_routing_number:
-          type: string
-        intermediary_bank_address1:
-          type: string
-        intermediary_bank_address2:
-          type: string
-        intermediary_bank_city:
-          type: string
-        intermediary_bank_state:
-          type: string
-        intermediary_bank_zip_code:
-          type: string
-        intermediary_bank_country:
-          type: string
-        address:
-          $ref: '#/components/schemas/Address'
-        internal_account_id:
-          type: string
-          format: uuid
-          description: Your account that pays this external account
-        national_id:
-          type: string
-          maxLength: 64
+            A mobile money wallet, paid to its phone number. The response is 200
+            with status `active`. Send `institution_id` for the operator.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - phone_number
+          properties:
+            payee_type:
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - mobile_money
+              example: mobile_money
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              example: UGX
+            account_name: *account_name
+            phone_number:
+              type: string
+              description: Mobile money number with the country code
+              example: '+256772123456'
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`, for the
+                operator
+            institution_country_iso_code:
+              type: string
+              description: >-
+                Wallet country as an alpha-2 code. Defaults to the operator's
+                country.
+              example: UG
+            account_owner_type: *account_owner_type
+            internal_account_id: *internal_account_id
+        - title: US bank account (ACH, wire, RTP)
+          type: object
           description: >-
-            The holder's national ID. Send it with `national_id_type`. Some
-            payout corridors need it, such as CURP or RFC for Mexico and CPF or
-            CNPJ for Brazil.
-        national_id_type:
-          type: string
-          enum:
-            - CURP
-            - RFC
-            - CPF
-            - CNPJ
-            - NIT
-            - CC
-            - PAN
-            - BVN
-            - NIN
-            - OTHER
-        pix_key:
-          type: string
-          minLength: 1
-          maxLength: 77
-          description: PIX key, for payouts to Brazil
+            A US bank account paid in USD on one rail: `ach`, `wire` or `rtp`.
+            The response is 202 with status `pending` while setup runs. To pay
+            one account on two rails, save it once for each rail.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - account_number
+            - routing_number
+            - payment_rail
+            - account_owner_type
+            - bank_name
+            - address
+          properties:
+            payee_type:
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - ach_wire
+              example: ach_wire
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - USD
+              example: USD
+            account_name: *account_name
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces
+              example: '000123456789'
+            routing_number:
+              type: string
+              description: A 9-digit ABA routing number
+              example: '021000021'
+            payment_rail:
+              type: string
+              description: >-
+                There is no default. `wire` needs a routing number that takes
+                wires, and `rtp` one that takes instant payments.
+              enum:
+                - ach
+                - wire
+                - rtp
+              example: wire
+            bank_account_type:
+              type: string
+              description: Send it for an `ach` payee. Setup can fail without it.
+              enum:
+                - checking
+                - savings
+            account_owner_type: *account_owner_type
+            bank_name:
+              type: string
+              description: The bank's name. The response returns it as `institution_name`.
+              example: Example Bank
+            address:
+              $ref: '#/components/schemas/BeneficiaryAddress'
+            internal_account_id: *internal_account_id
+        - title: SWIFT (USD)
+          type: object
+          description: >-
+            A bank abroad paid in USD by SWIFT. The response is 202 with status
+            `pending` while setup runs. Look the bank up with
+            `GET /v1/external-accounts/institutions?swift_code=<BIC>` and copy
+            its `prefill` fields. One error lists all the missing bank fields.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - account_number
+            - bic
+            - account_owner_type
+            - address
+            - bank_address_line_1
+            - bank_city
+            - bank_state
+            - bank_postal_code
+            - bank_country
+          properties:
+            payee_type:
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - swift
+              example: swift
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - USD
+              example: USD
+            account_name: *account_name
+            account_number:
+              type: string
+              description: >-
+                4 to 34 letters and digits, with no spaces. Required even when you
+                send `iban`.
+              example: '12345678'
+            iban:
+              type: string
+              description: IBAN, checked with mod 97
+            bic:
+              type: string
+              description: >-
+                BIC of 8 or 11 characters. The bank must be in the SWIFT directory.
+                Gravv fills in its `institution_id` and `bank_name` for you.
+              example: DEUTDEFF
+            institution_id:
+              type: string
+              format: uuid
+              description: >-
+                An `id` from `GET /v1/external-accounts/institutions`. Gravv fills
+                it in from `bic`. If the BIC is listed in more than one country,
+                send `institution_id` or `bank_country`.
+            bank_name:
+              type: string
+              description: Gravv fills it in from `bic`
+            account_owner_type: *account_owner_type
+            bank_address_line_1:
+              type: string
+              description: The bank's street address
+            bank_city:
+              type: string
+            bank_state:
+              type: string
+            bank_postal_code:
+              type: string
+              description: Checked against `bank_country`
+            bank_country:
+              type: string
+              description: The bank's country as an alpha-2 code
+            intermediary_financial_institution:
+              type: string
+              description: >-
+                Optional intermediary bank. Send all the intermediary fields or
+                none. Only `intermediary_bank_address2` is optional.
+            intermediary_bank_routing_number:
+              type: string
+            intermediary_bank_address1:
+              type: string
+            intermediary_bank_address2:
+              type: string
+            intermediary_bank_city:
+              type: string
+            intermediary_bank_state:
+              type: string
+            intermediary_bank_zip_code:
+              type: string
+            intermediary_bank_country:
+              type: string
+            address:
+              $ref: '#/components/schemas/SwiftBeneficiaryAddress'
+            internal_account_id: *internal_account_id
+        - title: SEPA (EUR)
+          type: object
+          description: >-
+            A euro account in a SEPA country, paid by IBAN. The response is 202
+            with status `pending` while setup runs.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - iban
+            - account_owner_type
+            - bank_name
+            - address
+          properties:
+            payee_type:
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - sepa
+              example: sepa
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - EUR
+              example: EUR
+            account_name: *account_name
+            iban:
+              type: string
+              description: >-
+                IBAN, checked with mod 97. Gravv takes the payee's country from
+                it.
+              example: DE89370400440532013000
+            bic:
+              type: string
+              description: BIC of 8 or 11 characters. Gravv checks its format.
+              example: COBADEFFXXX
+            account_owner_type: *account_owner_type
+            bank_name:
+              type: string
+              description: The bank's name. The response returns it as `institution_name`.
+              example: Example Bank
+            address:
+              $ref: '#/components/schemas/BeneficiaryAddress'
+            internal_account_id: *internal_account_id
+        - title: Faster Payments (GBP)
+          type: object
+          description: >-
+            A UK account paid in GBP by Faster Payments, with a sort code and
+            account number. The response is 202 with status `pending` while
+            setup runs.
+          required:
+            - customer_id
+            - currency
+            - account_name
+            - account_number
+            - routing_number
+            - account_owner_type
+            - bank_name
+            - address
+          properties:
+            payee_type:
+              type: string
+              description: Leave it out to detect the type from the fields you send.
+              enum:
+                - fps
+              example: fps
+            customer_id: *customer_id
+            currency:
+              type: string
+              description: Three-letter ISO 4217 code of the currency paid out
+              enum:
+                - GBP
+              example: GBP
+            account_name: *account_name
+            account_number:
+              type: string
+              description: 4 to 34 letters and digits, with no spaces
+              example: '31926819'
+            routing_number:
+              type: string
+              description: The sort code
+              example: '601613'
+            account_owner_type: *account_owner_type
+            bank_name:
+              type: string
+              description: The bank's name. The response returns it as `institution_name`.
+              example: Example Bank
+            address:
+              $ref: '#/components/schemas/BeneficiaryAddress'
+            internal_account_id: *internal_account_id
     UpdateExternalAccountRequest:
       type: object
       description: >-
@@ -603,7 +1143,7 @@ paths:
               $ref: '#/components/schemas/AddExternalAccountRequest'
             examples:
               BankAccount:
-                summary: Bank account
+                summary: Nigerian bank account
                 value:
                   payee_type: bank_account
                   customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
@@ -611,6 +1151,99 @@ paths:
                   account_name: Ada Okafor
                   account_number: '0123456789'
                   institution_id: 9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f
+              MoroccanBankAccount:
+                summary: Moroccan bank account
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: MAD
+                  account_name: Youssef Amrani
+                  account_number: '007780000123400000012345'
+                  institution_id: 4f6a8c2e-1b3d-4e5f-9a7b-2c4d6e8f0a1b
+                  address:
+                    address_line1: 12 Rue Ibn Batouta
+                    city: Casablanca
+                    country: MA
+              MexicanBankAccount:
+                summary: Mexican bank account
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: MXN
+                  account_name: Diego Hernandez
+                  account_number: '002180000123456789'
+                  institution_country_iso_code: MX
+                  national_id: GODE561231HDFRRN09
+                  national_id_type: CURP
+                  address:
+                    address_line1: Av Vallarta 1520
+                    city: Guadalajara
+                    country: MX
+              BrazilianAccount:
+                summary: Brazilian PIX key
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: BRL
+                  account_name: Maria Souza
+                  pix_key: maria.souza@example.com
+                  national_id: '52998224725'
+                  national_id_type: CPF
+                  address:
+                    address_line1: Rua Augusta 1500
+                    city: Sao Paulo
+                    country: BR
+              ColombianBankAccount:
+                summary: Colombian bank account
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: COP
+                  account_name: Camila Rojas
+                  account_number: '12345678901'
+                  institution_id: 7b9d1f3a-5c7e-4a9b-8d1f-3a5c7e9b1d2f
+                  bank_account_type: savings
+                  national_id: '1020304050'
+                  national_id_type: CC
+                  address:
+                    address_line1: Carrera 7 71 21
+                    city: Bogota
+                    country: CO
+              IndianBankAccount:
+                summary: Indian bank account
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: INR
+                  account_name: Priya Sharma
+                  account_number: '50100123456789'
+                  routing_number: HDFC0000123
+                  address:
+                    address_line1: 14 MG Road
+                    city: Bengaluru
+                    country: IN
+              HongKongBankAccount:
+                summary: Hong Kong bank account
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: HKD
+                  account_name: Chan Tai Man
+                  account_number: '123456789012'
+                  institution_id: 2a4c6e8f-0b1d-4f3a-9c5e-7a9b1c3d5e7f
+                  address:
+                    address_line1: 1 Queens Road Central
+                    city: Hong Kong
+                    country: HK
+              OtherBankAccount:
+                summary: Bank account in another currency
+                value:
+                  payee_type: bank_account
+                  customer_id: 3130ca8b-8b32-4843-8623-bf83e766b86a
+                  currency: PKR
+                  account_name: Ali Khan
+                  account_number: '00123456789012'
+                  institution_id: 8e0a2c4f-6b8d-4a1c-9e3f-5b7d9f1a3c5e
               MobileMoney:
                 summary: Mobile money wallet
                 value:

@@ -34,6 +34,7 @@ import {
   needsIdempotencyKey,
   isSandboxOnly,
   SANDBOX_ONLY,
+  FLATTEN_BODY_VARIANTS,
   UPLOADS,
   DOWNLOADS,
   type Toolset,
@@ -238,6 +239,70 @@ function slim(schema: any, depth = 0): any {
   return out;
 }
 
+/**
+ * Merges two schemas for the same field from different body shapes. Objects keep every
+ * property either declares (merged the same way, all-level deep), required only where both
+ * require it, and stay open if either is open. Arrays merge their items. An enum stays only
+ * when both have one, as the union of their values.
+ */
+function mergeShapes(a: Json, b: Json): Json {
+  if (!a || typeof a !== "object") return b;
+  if (!b || typeof b !== "object") return a;
+  const out: Json = { ...a };
+  if (Array.isArray(a.enum) && Array.isArray(b.enum)) out.enum = [...new Set([...(a.enum as unknown[]), ...(b.enum as unknown[])])];
+  else delete out.enum;
+  if (a.properties || b.properties) {
+    const props: Json = { ...((a.properties as Json) ?? {}) };
+    for (const [k, v] of Object.entries((b.properties as Json) ?? {})) props[k] = k in props ? mergeShapes(props[k] as Json, v as Json) : v;
+    out.properties = props;
+    const ra = new Set<string>((a.required as string[]) ?? []);
+    const both = ((b.required as string[]) ?? []).filter((r) => ra.has(r));
+    if (both.length) out.required = both;
+    else delete out.required;
+    if (a.additionalProperties === false && b.additionalProperties === false) out.additionalProperties = false;
+    else if (a.additionalProperties !== undefined || b.additionalProperties !== undefined) {
+      out.additionalProperties = a.additionalProperties === false ? b.additionalProperties : a.additionalProperties;
+    }
+  }
+  if (a.items && b.items) out.items = mergeShapes(a.items as Json, b.items as Json);
+  for (const k of ["anyOf", "oneOf", "not"]) delete out[k];
+  return out;
+}
+
+/**
+ * Turns a request body whose `oneOf` lists object shapes into one object with every field
+ * any shape declares (see mergeShapes), required only where every shape requires it. The
+ * returned text names each shape and the fields it requires, for the tool description.
+ * Returns undefined for any other body. Only tools in FLATTEN_BODY_VARIANTS use it.
+ */
+function flattenVariants(body: Json): { body: Json; shapes: string } | undefined {
+  const variants = body?.oneOf as Json[] | undefined;
+  if (!Array.isArray(variants) || !variants.every((v) => v?.type === "object" && v.properties)) return undefined;
+  let flat: Json = { type: "object", properties: { ...((body.properties as Json) ?? {}) } };
+  for (const v of variants) {
+    flat = mergeShapes(flat, { type: "object", properties: v.properties, additionalProperties: v.additionalProperties });
+  }
+  const requiredSets = variants.map((v) => new Set<string>((v.required as string[]) ?? []));
+  const inEvery = [...requiredSets[0]!].filter((r) => requiredSets.every((set) => set.has(r)));
+  flat.required = [...new Set([...((body.required as string[]) ?? []), ...inEvery])];
+  if (variants.every((v) => v.additionalProperties === false)) flat.additionalProperties = false;
+  else delete flat.additionalProperties;
+  const shapes =
+    "The body takes one of these shapes. " +
+    variants
+      .map((v, i) => {
+        const own = ((v.required as string[]) ?? []).filter((r) => !inEvery.includes(r));
+        // `anyOf: [{required: [a]}, {required: [b]}]` on a shape means "a or b".
+        const either = Array.isArray(v.anyOf)
+          ? (v.anyOf as Json[]).map((alt) => ((alt?.required as string[]) ?? []).join(" and ")).filter(Boolean)
+          : [];
+        if (either.length) own.push(either.join(" or "));
+        return `${v.title ?? `Shape ${i + 1}`}: ${own.length ? `also requires ${own.join(", ")}` : "nothing more is required"}.`;
+      })
+      .join(" ");
+  return { body: flat, shapes };
+}
+
 interface Generated {
   name: string;
   toolset: Toolset;
@@ -350,7 +415,14 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       }
       const bodySchemaRaw = bodyContent?.["application/json"]?.schema;
       if (bodySchemaRaw) {
-        const body = slim(deref(bodySchemaRaw, doc));
+        let body = slim(deref(bodySchemaRaw, doc));
+        // One shape per kind of account or payee in the spec (the docs show a tab for
+        // each) stays one flat argument set in the tool, with the shapes named.
+        const flat = FLATTEN_BODY_VARIANTS.has(curated.name) ? flattenVariants(body) : undefined;
+        if (flat) {
+          body = flat.body;
+          description += `\n\n${flat.shapes}`;
+        }
 
         if (body?.type === "object" && body.properties && !body.oneOf && !body.anyOf) {
           // Plain object: inline its properties so the model fills one flat argument set.

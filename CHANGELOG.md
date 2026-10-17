@@ -22,6 +22,10 @@ documented endpoint now has a tool or a stated reason it has none.
   `getSettlementInstruction`, `updateSettlementInstruction`, `deleteSettlementInstruction`.
   external-accounts: `updateExternalAccount`. kyc: `downloadCustomerKycDocument`. sandbox:
   `simulateDeposit`. Plus the four tools under "Renamed and unblocked" below.
+- `createAccountV2` and `createExternalAccount` name each kind of account or payee and the
+  fields it requires, from the specs' new one-shape-per-kind request bodies. Their
+  arguments stay one flat set. `createAccountV2` now declares the form fields each account
+  option asks for in `data.root`, and lists the currencies the account options take.
 - A `sandbox` toolset. Its tool runs only with a `grvSec_sandbox_` key; on any other key it
   is hidden from the tool list and refused by name before any request.
 - A confirm step for tools that cannot be undone but move no money: `deleteSavedCard`,

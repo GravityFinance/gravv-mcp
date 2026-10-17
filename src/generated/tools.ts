@@ -372,7 +372,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Open your card account — Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. An end customer's ID is refused, and so is a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or get the account until it is `active`, before you activate cards with it. This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.\n\nONLY for your business's one card account. Open every other account with createAccountV2. A business has one card account: look first with listAccounts (account_type card). bank is `lead_bank` or `cross_river_bank`. It is ready at account.activated, when getAccount shows `active`. After a failed call, fix the request and leave idempotency_key out.",
+    "description": "Open your card account — Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. The API refuses an end customer's ID and a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or read the account until it is `active`, before you activate cards with it. This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.\n\nONLY for your business's one card account. Open every other account with createAccountV2. A business has one card account: look first with listAccounts (account_type card). bank is `lead_bank` or `cross_river_bank`. It is ready at account.activated, when getAccount shows `active`. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -401,7 +401,7 @@ export const TOOLS: GeneratedTool[] = [
         "customer_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Your business's own customer ID: the `customer_id` on your account whose `category` is `main`",
+          "description": "Your business's own customer ID. It is the `customer_id` on your account whose `category` is `main`.",
           "example": "550e8400-e29b-41d4-a716-446655440178"
         },
         "blockchain_network": {
@@ -467,14 +467,14 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v2/accounts",
-    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.\n\nThe body takes one of these shapes. Wallet-backed USD account: also requires network or wallet_id. Wallet-backed EUR or GBP account: also requires network or wallet_id. USD account in the US (no wallet): also requires bank_code. EUR or GBP account with its own IBAN: also requires bank_code. NGN account: nothing more is required. Account held in Kenya: nothing more is required.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "customer_id": {
           "type": "string",
+          "description": "An existing customer whose KYC is completed. The API checks it before every other field.",
           "format": "uuid",
-          "description": "An existing customer whose KYC is completed. It is checked before every other field.",
           "example": "0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33"
         },
         "customer_type": {
@@ -493,8 +493,18 @@ export const TOOLS: GeneratedTool[] = [
         },
         "currency": {
           "type": "string",
-          "pattern": "^[A-Za-z]{3}$",
-          "description": "Three-letter ISO 4217 code",
+          "description": "Three-letter ISO 4217 code. The API also accepts lower case.",
+          "enum": [
+            "USD",
+            "EUR",
+            "GBP",
+            "NGN",
+            "KES",
+            "TZS",
+            "UGX",
+            "CNY",
+            "RWF"
+          ],
           "example": "USD"
         },
         "category": {
@@ -506,7 +516,7 @@ export const TOOLS: GeneratedTool[] = [
             "multi_currency"
           ],
           "example": "main",
-          "description": "Defaults to `multi_currency` for NGN and `main` for other currencies."
+          "description": "Defaults to `main`. Use `sub_account` for a customer's account."
         },
         "label": {
           "type": "string",
@@ -515,12 +525,12 @@ export const TOOLS: GeneratedTool[] = [
         },
         "bank_code": {
           "type": "string",
-          "description": "A `bank_code` from `GET /v1/accounts/capabilities`. Leave it out to use the highest-priority bank that fits.",
+          "description": "A `bank_code` from `GET /v1/accounts/capabilities` whose option has a non-empty `token_wallets`. Leave it out to use the default USD option, the highest-priority bank that fits.",
           "example": "cross_river_bank"
         },
         "network": {
           "type": "string",
-          "description": "Network for the account's token wallet. Required when the bank offers token wallets, unless you send `wallet_id`. Otherwise it is refused. It must be one of the bank's `token_options`, and one of stellar, polygon, ethereum, avalanche_c_chain or solana.",
+          "description": "Network for the account's token wallet. Send `network` or `wallet_id`, never both. It must be one of the networks in the option's `token_wallets` (`token_options` on the requirements form), and one of stellar, polygon, ethereum, avalanche_c_chain or solana.",
           "enum": [
             "stellar",
             "polygon",
@@ -532,35 +542,454 @@ export const TOOLS: GeneratedTool[] = [
         },
         "wallet_id": {
           "type": "string",
-          "description": "An existing wallet of yours to use instead of `network`. Send one, not both."
-        },
-        "account_structure": {
-          "type": "string",
-          "description": "For banks that offer FBO accounts only",
-          "enum": [
-            "fbo_account",
-            "subledger"
-          ]
-        },
-        "parent_account_id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "The FBO account, with `account_structure` `subledger`"
+          "description": "An existing wallet of yours to use instead of `network`. Gravv takes the network from the wallet, and the option must offer that network. Send one, not both."
         },
         "data": {
           "type": "object",
-          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`. Gravv fills in the fields that the customer record already answers.",
+          "description": "The form from `GET /v2/accounts/requirements`. Put `root` scope fields in `data.root`, party fields in `data.parties[]`, and documents in `data.documents[]` or a party's `documents`.",
           "properties": {
             "root": {
               "type": "object",
-              "description": "Applicant fields for an individual, or business fields for a business. Include `citizenship_country` or `incorporation_country`, which routing reads. Do not put `network` or `wallet_id` here.",
-              "additionalProperties": true
+              "description": "The root fields of the option's form from `GET /v2/accounts/requirements`, which is the full and current list. The fields below are those the forms of this kind of account ask for. Gravv fills in the fields the customer record already answers. Three forms apply: one for the default USD option, one for the USD, EUR and GBP option, and one for the EUR and USD option. Include `citizenship_country` for a person or `incorporation_country` for a business, because Gravv routes by it. Do not put `network` or `wallet_id` here.",
+              "additionalProperties": true,
+              "properties": {
+                "first_name": {
+                  "type": "string",
+                  "description": "Person, every form",
+                  "example": "Jane"
+                },
+                "middle_name": {
+                  "type": "string",
+                  "description": "Person, optional"
+                },
+                "last_name": {
+                  "type": "string",
+                  "description": "Person, every form",
+                  "example": "Doe"
+                },
+                "date_of_birth": {
+                  "type": "string",
+                  "description": "Person, every form. YYYY-MM-DD.",
+                  "example": "1990-04-02"
+                },
+                "email": {
+                  "type": "string",
+                  "description": "Person, every form. Business, on the USD, EUR and GBP option.",
+                  "example": "jane@example.com"
+                },
+                "phone_daytime": {
+                  "type": "string",
+                  "description": "Phone number in E.164 format. Person, on the default USD option and the EUR and USD option. Business, on the USD, EUR and GBP option.",
+                  "example": "+447700900123"
+                },
+                "gender": {
+                  "type": "string",
+                  "description": "Person, on the default USD option",
+                  "enum": [
+                    "female",
+                    "male"
+                  ]
+                },
+                "citizenship_country": {
+                  "type": "string",
+                  "description": "Person, every form. Alpha-2 code. Gravv routes a person by it.",
+                  "example": "GB"
+                },
+                "tax_residence_country": {
+                  "type": "string",
+                  "description": "Person. Alpha-2 code. Required on the default USD option and the EUR and USD option, and on the USD, EUR and GBP option for anyone who is not a US citizen.",
+                  "example": "GB"
+                },
+                "permanent_address": {
+                  "type": "object",
+                  "properties": {
+                    "address_line": {
+                      "type": "string",
+                      "description": "Street address",
+                      "example": "1 High St"
+                    },
+                    "city": {
+                      "type": "string",
+                      "example": "London"
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "State or region as an ISO 3166-2 code, such as `GB-LND` or `US-CA`",
+                      "example": "GB-LND"
+                    },
+                    "postal_code": {
+                      "type": "string",
+                      "example": "EC1A 1BB"
+                    },
+                    "country": {
+                      "type": "string",
+                      "description": "Country as an alpha-2 code",
+                      "example": "GB"
+                    }
+                  },
+                  "description": "Person's home address, every form. Send `state`."
+                },
+                "tax_id_type": {
+                  "type": "string",
+                  "description": "Person: on the default USD option, `ssn` for a US citizen; on the USD, EUR and GBP option, `ssn` once you send `tax_id_number`. Business: `ein` for a US company, and only `ein` on the default USD option. Required for a business on the default USD option and the USD, EUR and GBP option.",
+                  "enum": [
+                    "ssn",
+                    "ein",
+                    "tin"
+                  ]
+                },
+                "tax_id_number": {
+                  "type": "string",
+                  "description": "Write-only. The number of `tax_id_type`. A US citizen sends it on the default USD option. A business sends it on the default USD option and the USD, EUR and GBP option."
+                },
+                "immigration_status": {
+                  "type": "string",
+                  "description": "Person who is not a US citizen, on the USD, EUR and GBP option",
+                  "enum": [
+                    "permanent_resident",
+                    "non_permanent_resident",
+                    "non_resident"
+                  ]
+                },
+                "international_supplement": {
+                  "type": "object",
+                  "description": "A person who is not a US citizen, on the USD, EUR and GBP option. Four yes or no questions. When an answer is true, also send its details field.",
+                  "properties": {
+                    "has_us_bank_account": {
+                      "type": "boolean",
+                      "description": "Whether the person has a US bank account"
+                    },
+                    "has_denied_bank_account": {
+                      "type": "boolean",
+                      "description": "Whether a bank has refused the person an account"
+                    },
+                    "denial_details": {
+                      "type": "string",
+                      "description": "Required when `has_denied_bank_account` is true"
+                    },
+                    "has_regulatory_action": {
+                      "type": "boolean",
+                      "description": "Whether a regulator has taken action against the person"
+                    },
+                    "regulatory_action_details": {
+                      "type": "string",
+                      "description": "Required when `has_regulatory_action` is true"
+                    },
+                    "is_politically_exposed": {
+                      "type": "boolean",
+                      "description": "Whether the person is politically exposed"
+                    },
+                    "pep_details": {
+                      "type": "string",
+                      "description": "Required when `is_politically_exposed` is true"
+                    }
+                  }
+                },
+                "expected_activity": {
+                  "type": "object",
+                  "description": "Person, on the USD, EUR and GBP option, for every currency. Other channels, such as `ach_out` and `wire_domestic_in`, are optional.",
+                  "additionalProperties": true,
+                  "properties": {
+                    "expected_avg_daily_balance": {
+                      "description": "Expected average daily balance, in the account currency. Required."
+                    },
+                    "ach_in": {
+                      "type": "object",
+                      "description": "Expected incoming ACH payments. Required, and `0` is a valid count.",
+                      "properties": {
+                        "monthly_count": {
+                          "type": "integer",
+                          "description": "Payments a month"
+                        },
+                        "monthly_amount": {
+                          "description": "Total a month, in the account currency"
+                        }
+                      }
+                    }
+                  }
+                },
+                "source_of_income": {
+                  "type": "string",
+                  "description": "Person, on the EUR and USD option",
+                  "enum": [
+                    "salary",
+                    "pension",
+                    "investment",
+                    "property",
+                    "friends_and_family",
+                    "benefits"
+                  ]
+                },
+                "employment_status": {
+                  "type": "string",
+                  "description": "Person, on the EUR and USD option",
+                  "enum": [
+                    "employed",
+                    "homemaker",
+                    "retired",
+                    "self_employed",
+                    "student",
+                    "unemployed"
+                  ]
+                },
+                "work_industry": {
+                  "type": "string",
+                  "description": "Person, on the EUR and USD option. One of the form's `options`."
+                },
+                "annual_deposit_range": {
+                  "type": "string",
+                  "description": "Person, on the EUR and USD option",
+                  "enum": [
+                    "less_than_5k",
+                    "from_5k_to_50k",
+                    "from_50k_to_150k",
+                    "more_than_150k"
+                  ]
+                },
+                "transaction_frequency": {
+                  "type": "string",
+                  "description": "Person, on the EUR and USD option",
+                  "enum": [
+                    "once_per_year",
+                    "once_every_few_months",
+                    "a_few_times_per_month",
+                    "once_per_week",
+                    "more_than_once_per_week"
+                  ]
+                },
+                "legal_name": {
+                  "type": "string",
+                  "description": "Business, every form",
+                  "example": "Acme Exports Ltd"
+                },
+                "dba_name": {
+                  "type": "string",
+                  "description": "Business. Trading name, required on the USD, EUR and GBP option."
+                },
+                "business_type": {
+                  "type": "string",
+                  "description": "Business, on the default USD option and the USD, EUR and GBP option"
+                },
+                "business_description": {
+                  "type": "string",
+                  "description": "Business, on the default USD option and the USD, EUR and GBP option"
+                },
+                "registration_number": {
+                  "type": "string",
+                  "description": "Business, on the default USD option and the EUR and USD option"
+                },
+                "industry": {
+                  "type": "string",
+                  "description": "Business, on the default USD option and the EUR and USD option. One of the form's `options`."
+                },
+                "incorporation_country": {
+                  "type": "string",
+                  "description": "Business, every form. Alpha-2 code. Gravv routes a business by it.",
+                  "example": "GB"
+                },
+                "incorporation_date": {
+                  "type": "string",
+                  "description": "Business, on the default USD option and the EUR and USD option. YYYY-MM-DD."
+                },
+                "website": {
+                  "type": "string",
+                  "description": "Business. Required on the EUR and USD option, starting with `http://` or `https://`."
+                },
+                "business_address": {
+                  "type": "object",
+                  "properties": {
+                    "address_line": {
+                      "type": "string",
+                      "description": "Street address",
+                      "example": "1 High St"
+                    },
+                    "city": {
+                      "type": "string",
+                      "example": "London"
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "State or region as an ISO 3166-2 code, such as `GB-LND` or `US-CA`",
+                      "example": "GB-LND"
+                    },
+                    "postal_code": {
+                      "type": "string",
+                      "example": "EC1A 1BB"
+                    },
+                    "country": {
+                      "type": "string",
+                      "description": "Country as an alpha-2 code",
+                      "example": "GB"
+                    }
+                  },
+                  "description": "Business address, every form. Send `state`, except on the USD, EUR and GBP option, which needs it only for an address in the US."
+                },
+                "source_of_funds": {
+                  "description": "Business, on the EUR and USD option: required, one of `revenue`, `trading_income`, `investments`, `loans_credits`, `crypto_mining` or `client_funds`. On the default USD option, an optional object of questions about the money in the account."
+                },
+                "legal_entity_type": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. One of the form's `options`, such as `limited_liability_company`."
+                },
+                "business_tax_id": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. Write-only. The company's tax ID."
+                },
+                "business_ownership_type": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. One of the form's `options`, such as `private`."
+                },
+                "estimated_monthly_turnover": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. One of the form's `options`, such as `up_to_50k`."
+                },
+                "estimated_transaction_value": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. One of the form's `options`, such as `up_to_15k`."
+                },
+                "monthly_transaction_frequency": {
+                  "type": "string",
+                  "description": "Business, on the EUR and USD option. One of the form's `options`, such as `up_to_20`."
+                },
+                "mailing_address": {
+                  "type": "object",
+                  "properties": {
+                    "address_line": {
+                      "type": "string",
+                      "description": "Street address",
+                      "example": "1 High St"
+                    },
+                    "city": {
+                      "type": "string",
+                      "example": "London"
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "State or region as an ISO 3166-2 code, such as `GB-LND` or `US-CA`",
+                      "example": "GB-LND"
+                    },
+                    "postal_code": {
+                      "type": "string",
+                      "example": "EC1A 1BB"
+                    },
+                    "country": {
+                      "type": "string",
+                      "description": "Country as an alpha-2 code",
+                      "example": "GB"
+                    }
+                  },
+                  "required": [],
+                  "description": "Optional mailing address, for a person or a business"
+                },
+                "employer_info": {
+                  "type": "object",
+                  "description": "Person, when `employment_status` is `employed`",
+                  "properties": {
+                    "current_employer": {
+                      "type": "string",
+                      "description": "Name of the employer"
+                    },
+                    "occupation": {
+                      "type": "string",
+                      "description": "The person's occupation"
+                    },
+                    "permanent_address": {
+                      "type": "object",
+                      "properties": {
+                        "address_line": {
+                          "type": "string",
+                          "description": "Street address",
+                          "example": "1 High St"
+                        },
+                        "city": {
+                          "type": "string",
+                          "example": "London"
+                        },
+                        "state": {
+                          "type": "string",
+                          "description": "State or region as an ISO 3166-2 code, such as `GB-LND` or `US-CA`",
+                          "example": "GB-LND"
+                        },
+                        "postal_code": {
+                          "type": "string",
+                          "example": "EC1A 1BB"
+                        },
+                        "country": {
+                          "type": "string",
+                          "description": "Country as an alpha-2 code",
+                          "example": "GB"
+                        }
+                      },
+                      "required": [],
+                      "description": "The employer's address"
+                    }
+                  }
+                },
+                "income_source": {
+                  "type": "string",
+                  "description": "Person, when you send no `employer_info.current_employer`"
+                },
+                "state_incorporated": {
+                  "type": "string",
+                  "description": "Business, optional. State of incorporation."
+                },
+                "business_status": {
+                  "type": "string",
+                  "description": "Business",
+                  "enum": [
+                    "operating",
+                    "non_operating"
+                  ]
+                },
+                "business_entity_type": {
+                  "type": "string",
+                  "description": "Business",
+                  "enum": [
+                    "corporation",
+                    "llc",
+                    "partnership",
+                    "unincorporated_business",
+                    "international"
+                  ]
+                },
+                "corporation_taxed_as": {
+                  "type": "string",
+                  "description": "Business, when `business_entity_type` is `corporation`",
+                  "enum": [
+                    "c_corp",
+                    "s_corp"
+                  ]
+                },
+                "llc_taxed_as": {
+                  "type": "string",
+                  "description": "Business, when `business_entity_type` is `llc`",
+                  "enum": [
+                    "c_corp",
+                    "s_corp",
+                    "partnership"
+                  ]
+                },
+                "birth_place": {
+                  "type": "string",
+                  "description": "Person. The town or city of birth."
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "Required. Phone number in E.164 format.",
+                  "example": "+2348031234567"
+                },
+                "bank_verification_number": {
+                  "type": "string",
+                  "description": "Required and write-only. The 11-digit Bank Verification Number. Gravv checks it against the national registry. The API accepts the old name `bvn`, but never both."
+                }
+              }
             },
             "parties": {
               "type": "array",
-              "description": "Business only. Refused for individuals. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record.",
+              "description": "Business only. The API refuses it for individuals. Declare 1 to 10 people. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record. Every form asks for names, `date_of_birth`, `email`, `phone_daytime`, `has_ownership`, `has_control` and `is_signer`, and `ownership_percentage` for an owner. The default USD option adds `citizenship_country` and `residential_address`, and a tax ID for a US citizen. The USD, EUR and GBP option adds `citizenship_country` and `is_director`, and needs `ownership_percentage` from 1 to 100, and at least 25 for a person with control. The EUR and USD option adds `tax_residence_country` and `residential_address`.",
               "items": {
                 "type": "object",
+                "description": "A person declared on a business account: an associated person on the customer record by `id`, with any changes, or a new person with the new-party fields.",
                 "additionalProperties": true,
                 "properties": {
                   "id": {
@@ -658,7 +1087,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "documents": {
               "type": "array",
-              "description": "Root documents. When you send none, Gravv uses the documents on the customer record.",
+              "description": "Root documents. When you send none, Gravv uses the documents on the customer record. A person sends one identity document and a `proof_of_address`. A business sends `articles_of_incorporation`, `ownership_document` and `proof_of_address`, plus `control_structure` on the default USD option and the EUR and USD option. Each party sends an identity document in its own `documents`, and a `proof_of_address` too on the default USD option.",
               "items": {
                 "type": "object",
                 "description": "A document. Send `id` to reuse a document already on file, or `content` to upload a new one, never both.",
@@ -772,8 +1201,6 @@ export const TOOLS: GeneratedTool[] = [
       "bank_code",
       "network",
       "wallet_id",
-      "account_structure",
-      "parent_account_id",
       "data"
     ],
     "alsoInBody": [],
@@ -1874,10 +2301,23 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "post",
     "path": "/v1/external-accounts",
-    "description": "Add an external account — Adds a bank account or mobile wallet that a customer pays out to. Use `GET /v1/external-accounts/institutions` for `institution_id`, and `POST /v1/external-accounts/verify` to check the holder's name first. `bank_account` and `mobile_money` return 200 with status `active`. `swift`, `sepa`, `ach_wire` and `fps` return 202 with status `pending` while setup runs. Get the account until it is `active` or `setup_failed`, or wait for the `external_account.active` or `external_account.setup_failed` webhook. A duplicate (same customer, holder name, and account and bank) is a 400 with code `ERROR_CODE_DUPLICATE_PAYEE` and the existing `payee_id`. Deleted and failed accounts count as duplicates.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
+    "description": "Add an external account — Adds a bank account or mobile wallet that a customer pays out to. Use `GET /v1/external-accounts/institutions` for `institution_id`, and `POST /v1/external-accounts/verify` to check the holder's name first. `bank_account` and `mobile_money` return 200 with status `active`. `swift`, `sepa`, `ach_wire` and `fps` return 202 with status `pending` while setup runs. Get the account until it is `active` or `setup_failed`, or wait for the `external_account.active` or `external_account.setup_failed` webhook. A duplicate (same customer, holder name, and account and bank) is a 400 with code `ERROR_CODE_DUPLICATE_PAYEE` and the existing `payee_id`. Deleted and failed accounts count as duplicates.\n\nReturns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).\n\nThe body takes one of these shapes. African bank account (NGN, GHS, KES, XOF, XAF): nothing more is required. Moroccan bank account (MAD): also requires institution_id. Mexican bank account (MXN): nothing more is required. Brazilian account (BRL): nothing more is required. Colombian bank account (COP): nothing more is required. Indian bank account (INR): nothing more is required. Hong Kong bank account (HKD): nothing more is required. Bank account in another currency: nothing more is required. Mobile money wallet: also requires phone_number. US bank account (ACH, wire, RTP): also requires account_number, routing_number, payment_rail, account_owner_type, bank_name, address. SWIFT (USD): also requires account_number, bic, account_owner_type, address, bank_address_line_1, bank_city, bank_state, bank_postal_code, bank_country. SEPA (EUR): also requires iban, account_owner_type, bank_name, address. Faster Payments (GBP): also requires account_number, routing_number, account_owner_type, bank_name, address.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "payee_type": {
+          "type": "string",
+          "description": "Leave it out to detect the type from the fields you send.",
+          "enum": [
+            "bank_account",
+            "mobile_money",
+            "ach_wire",
+            "swift",
+            "sepa",
+            "fps"
+          ],
+          "example": "bank_account"
+        },
         "customer_id": {
           "type": "string",
           "format": "uuid",
@@ -1887,72 +2327,22 @@ export const TOOLS: GeneratedTool[] = [
         "currency": {
           "type": "string",
           "description": "Three-letter ISO 4217 code of the currency paid out",
-          "example": "USD"
+          "example": "NGN"
         },
         "account_name": {
           "type": "string",
           "description": "Account holder's name. Unaccented letters, spaces and `' - . , & / ( )` only, starting with a letter, with no digits. It comes back in upper case, and may be replaced by the name the bank holds.",
           "example": "Jane Doe"
         },
-        "payee_type": {
-          "type": "string",
-          "description": "Leave it out to detect the type from the fields you send. Send it for a Mexican CLABE paid in MXN, which is otherwise read as `ach_wire`.",
-          "enum": [
-            "bank_account",
-            "mobile_money",
-            "swift",
-            "sepa",
-            "ach_wire",
-            "fps"
-          ],
-          "example": "bank_account"
-        },
         "account_number": {
           "type": "string",
-          "description": "4 to 34 letters and digits, with no spaces. Some countries have their own rule: 10 digits in Nigeria, 10 to 16 digits in Ghana, and 8 to 20 characters in Kenya.",
-          "example": "000123456789"
-        },
-        "iban": {
-          "type": "string",
-          "description": "IBAN, checked with mod 97. Required for `sepa`.",
-          "example": "DE89370400440532013000"
-        },
-        "bic": {
-          "type": "string",
-          "description": "BIC of 8 or 11 characters. Required for `swift`. The bank must be in the SWIFT directory. Gravv fills in its `institution_id` and `bank_name` for you.",
-          "example": "DEUTDEFF"
-        },
-        "routing_number": {
-          "type": "string",
-          "description": "For `ach_wire`, a 9-digit ABA routing number. For `fps`, the sort code. For India, the IFSC.",
-          "example": "021000021"
-        },
-        "payment_rail": {
-          "type": "string",
-          "description": "Required for `ach_wire`. There is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
-          "enum": [
-            "ach",
-            "wire",
-            "rtp"
-          ],
-          "example": "wire"
-        },
-        "bank_account_type": {
-          "type": "string",
-          "enum": [
-            "checking",
-            "savings"
-          ]
-        },
-        "phone_number": {
-          "type": "string",
-          "description": "Mobile money number with the country code. Required for `mobile_money`.",
-          "example": "+256772123456"
+          "description": "Letters and digits, with no spaces. Each country has its own rule: 10 digits in Nigeria (NUBAN), 10 to 16 digits in Ghana, 8 to 20 characters in Kenya, 24 characters in the WAEMU zone (the RIB) and 23 digits in the CEMAC zone. Needed to pay this payee.",
+          "example": "0123456789"
         },
         "institution_id": {
           "type": "string",
           "format": "uuid",
-          "description": "An `id` from `GET /v1/external-accounts/institutions`. Required for MAD payouts and filled in from `bic` for `swift`."
+          "description": "An `id` from `GET /v1/external-accounts/institutions`. Gravv saves a payee without one, but cannot pay it."
         },
         "institution_country_iso_code": {
           "type": "string",
@@ -1961,61 +2351,11 @@ export const TOOLS: GeneratedTool[] = [
         },
         "account_owner_type": {
           "type": "string",
-          "description": "Required for `swift`, `sepa`, `ach_wire` and `fps`",
+          "description": "`individual` for a person, `business` for a company",
           "enum": [
             "individual",
             "business"
           ]
-        },
-        "bank_name": {
-          "type": "string",
-          "description": "Required for `sepa`, `ach_wire` and `fps`",
-          "example": "Example Bank"
-        },
-        "bank_address_line_1": {
-          "type": "string",
-          "description": "Required for `swift`"
-        },
-        "bank_city": {
-          "type": "string",
-          "description": "Required for `swift`"
-        },
-        "bank_state": {
-          "type": "string",
-          "description": "Required for `swift`"
-        },
-        "bank_postal_code": {
-          "type": "string",
-          "description": "Required for `swift`. Checked against `bank_country`."
-        },
-        "bank_country": {
-          "type": "string",
-          "description": "Required for `swift`"
-        },
-        "intermediary_financial_institution": {
-          "type": "string",
-          "description": "Optional intermediary bank for `swift`. Send all the intermediary fields or none. Only `intermediary_bank_address2` is optional."
-        },
-        "intermediary_bank_routing_number": {
-          "type": "string"
-        },
-        "intermediary_bank_address1": {
-          "type": "string"
-        },
-        "intermediary_bank_address2": {
-          "type": "string"
-        },
-        "intermediary_bank_city": {
-          "type": "string"
-        },
-        "intermediary_bank_state": {
-          "type": "string"
-        },
-        "intermediary_bank_zip_code": {
-          "type": "string"
-        },
-        "intermediary_bank_country": {
-          "type": "string"
         },
         "address": {
           "type": "object",
@@ -2062,31 +2402,115 @@ export const TOOLS: GeneratedTool[] = [
           "format": "uuid",
           "description": "Your account that pays this external account"
         },
+        "iban": {
+          "type": "string",
+          "description": "IBAN, for a bank whose `account_number_type` is `iban`. Gravv checks it with mod 97."
+        },
         "national_id": {
           "type": "string",
           "maxLength": 64,
-          "description": "The holder's national ID. Send it with `national_id_type`. Some payout corridors need it, such as CURP or RFC for Mexico and CPF or CNPJ for Brazil."
+          "description": "The holder's CURP or RFC. Send it with `national_id_type`. Needed to pay this payee.",
+          "example": "GODE561231HDFRRN09"
         },
         "national_id_type": {
           "type": "string",
+          "description": "A Mexican payee takes `CURP` or `RFC` only.",
           "enum": [
             "CURP",
             "RFC",
             "CPF",
             "CNPJ",
-            "NIT",
             "CC",
-            "PAN",
-            "BVN",
-            "NIN",
-            "OTHER"
-          ]
+            "NIT"
+          ],
+          "example": "CURP"
         },
         "pix_key": {
           "type": "string",
           "minLength": 1,
           "maxLength": 77,
-          "description": "PIX key, for payouts to Brazil"
+          "description": "PIX key, with no spaces. Needed to pay this payee.",
+          "example": "maria.souza@example.com"
+        },
+        "bank_account_type": {
+          "type": "string",
+          "description": "Needed to pay this payee",
+          "enum": [
+            "checking",
+            "savings"
+          ]
+        },
+        "routing_number": {
+          "type": "string",
+          "description": "The IFSC. Needed to pay this payee.",
+          "example": "HDFC0000123"
+        },
+        "bank_name": {
+          "type": "string",
+          "description": "The bank's name, used when you send no `institution_id`"
+        },
+        "phone_number": {
+          "type": "string",
+          "description": "Mobile money number with the country code",
+          "example": "+256772123456"
+        },
+        "payment_rail": {
+          "type": "string",
+          "description": "There is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
+          "enum": [
+            "ach",
+            "wire",
+            "rtp"
+          ],
+          "example": "wire"
+        },
+        "bic": {
+          "type": "string",
+          "description": "BIC of 8 or 11 characters. The bank must be in the SWIFT directory. Gravv fills in its `institution_id` and `bank_name` for you.",
+          "example": "DEUTDEFF"
+        },
+        "bank_address_line_1": {
+          "type": "string",
+          "description": "The bank's street address"
+        },
+        "bank_city": {
+          "type": "string"
+        },
+        "bank_state": {
+          "type": "string"
+        },
+        "bank_postal_code": {
+          "type": "string",
+          "description": "Checked against `bank_country`"
+        },
+        "bank_country": {
+          "type": "string",
+          "description": "The bank's country as an alpha-2 code"
+        },
+        "intermediary_financial_institution": {
+          "type": "string",
+          "description": "Optional intermediary bank. Send all the intermediary fields or none. Only `intermediary_bank_address2` is optional."
+        },
+        "intermediary_bank_routing_number": {
+          "type": "string"
+        },
+        "intermediary_bank_address1": {
+          "type": "string"
+        },
+        "intermediary_bank_address2": {
+          "type": "string"
+        },
+        "intermediary_bank_city": {
+          "type": "string"
+        },
+        "intermediary_bank_state": {
+          "type": "string"
+        },
+        "intermediary_bank_zip_code": {
+          "type": "string"
+        },
+        "intermediary_bank_country": {
+          "type": "string"
         },
         "idempotency_key": {
           "type": "string",
@@ -2107,21 +2531,26 @@ export const TOOLS: GeneratedTool[] = [
     "queryParams": [],
     "bodyMode": "inline",
     "bodyProps": [
+      "payee_type",
       "customer_id",
       "currency",
       "account_name",
-      "payee_type",
       "account_number",
-      "iban",
-      "bic",
-      "routing_number",
-      "payment_rail",
-      "bank_account_type",
-      "phone_number",
       "institution_id",
       "institution_country_iso_code",
       "account_owner_type",
+      "address",
+      "internal_account_id",
+      "iban",
+      "national_id",
+      "national_id_type",
+      "pix_key",
+      "bank_account_type",
+      "routing_number",
       "bank_name",
+      "phone_number",
+      "payment_rail",
+      "bic",
       "bank_address_line_1",
       "bank_city",
       "bank_state",
@@ -2134,12 +2563,7 @@ export const TOOLS: GeneratedTool[] = [
       "intermediary_bank_city",
       "intermediary_bank_state",
       "intermediary_bank_zip_code",
-      "intermediary_bank_country",
-      "address",
-      "internal_account_id",
-      "national_id",
-      "national_id_type",
-      "pix_key"
+      "intermediary_bank_country"
     ],
     "alsoInBody": [],
     "closedBody": false,
@@ -3093,7 +3517,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/{account_id}",
-    "description": "Get your card account — Returns one account with its deposit details, balance and assets. Poll it after you create an account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with `internal account not found`.\n\nONLY for your business's one card account: poll it after createAccount until `active`. For every other account, use getAccountV2.",
+    "description": "Get your card account — Returns one account with its deposit details, balance and assets. Poll it after you create an account until `status` is `active`. Deposit details appear only then. An unknown ID returns a 400 with `internal account not found`.\n\nONLY for your business's one card account: poll it after createAccount until `active`. For every other account, use getAccountV2.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3160,7 +3584,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/capabilities",
-    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account. Send `customer_id`, or `country` with `customer_type`. If you send `customer_id` without `customer_type`, the response lists options for both types. The route is under `/v1`, but it is the first step of a v2 account. Unknown query parameters are rejected.\n\nCall first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account. Send `customer_id`, or `country` with `customer_type`. If you send `customer_id` without `customer_type`, the response lists options for both types. The route is under `/v1`, but it is the first step of a v2 account. The API rejects unknown query parameters.\n\nCall first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3216,7 +3640,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/requirements",
-    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that the same bank as create is chosen. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.\n\nBuild createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
+    "description": "Get account requirements — Returns the form that create checks for one bank, currency and customer type: fields, documents, party rules and token networks. Send `customer_id` to see the values already on file, and `country` so that this call chooses the same bank as create. A field is needed only when `required` is true and its `applies_when` and `required_when` conditions hold. When `has_existing_ref` is true, send no `data.root` on create. When `existing_application` is present, finish that application instead.\n\nBuild createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4173,7 +4597,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts/applications",
-    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total. Page until `count` is less than `limit`. A misspelt `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
+    "description": "List account applications — Lists your account applications, newest first, without status reasons. `count` is the number on this page, not a total. Page until `count` is less than `limit`. A misspelled `status` returns an empty list.\n\nUse getAccountApplicationV2 for the status reason and the required fields and documents.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4297,7 +4721,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v2/accounts",
-    "description": "List accounts — Lists all your accounts, newest first, with bank details and balances. Status reasons are only on the single read. Unknown query parameters are rejected with a 400. A bad filter value is an error, not an empty page.",
+    "description": "List accounts — Lists all your accounts, newest first, with bank details and balances. Only the single-account read returns status reasons. The API rejects unknown query parameters with a 400. A bad filter value is an error, not an empty page.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4376,7 +4800,7 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 1,
           "maximum": 200,
           "default": 50,
-          "description": "Page size, 1 to 200. Values out of range give 50."
+          "description": "Page size, 1 to 200. The API uses 50 for a value out of range."
         },
         "offset": {
           "type": "integer",
@@ -4827,7 +5251,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "status": {
           "type": "string",
-          "description": "An order made with an API key starts as `pending`, and Gravv debits its source at once. It then becomes `completed`, or `cancelled` if the debit fails. `waiting_approval` is for orders made in the dashboard.",
+          "description": "An order made with an API key starts as `pending`, and Gravv debits its source at once. It then becomes `completed`, or `cancelled` if the debit fails. `waiting_approval` is for orders made in the Dashboard.",
           "enum": [
             "waiting_approval",
             "pending",
@@ -4862,7 +5286,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "get",
     "path": "/v1/fx/orders/pending-approvals",
-    "description": "List orders waiting for approval — Lists orders in `waiting_approval`, newest first. Only orders made in the dashboard wait for approval, so orders made with an API key never appear here. A scoped key needs `fx:order_approve`. You approve and reject orders in the dashboard.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
+    "description": "List orders waiting for approval — Lists orders in `waiting_approval`, newest first. Only orders made in the Dashboard wait for approval, so orders made with an API key never appear here. A scoped key needs `fx:order_approve`. You approve and reject orders in the Dashboard.\n\nOnly orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5555,7 +5979,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "sandbox",
     "method": "post",
     "path": "/v2/accounts/simulate/deposit",
-    "description": "Simulate a deposit — Sandbox only. A live key gets a 403. Sends a test bank deposit to an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means the deposit was accepted, not settled. Wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
+    "description": "Simulate a deposit — Sandbox only. A live key gets a 403. Sends a test bank deposit to an account through the normal deposit flow, with fees, ledger entries and webhooks. The account must be `active` with bank details. A 200 means Gravv accepted the deposit, not that it settled. Wait for the `transfer.inflow.completed` or `transfer.inflow.deposit_settled` webhook. Each new Idempotency-Key makes a new deposit.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5790,7 +6214,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "patch",
     "path": "/v2/accounts/applications/{application_id}",
-    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call. A partial answer stays `blocked`. This route takes no Idempotency-Key, so a retry uploads again. The response leaves out the status reason fields. Get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
+    "description": "Update an account application — Sends the data or documents the bank asked for, and resumes opening the account. Get the application first. It must be `blocked`, or `manual_review` for documents. Send every requested item in one call. After a partial answer, the application stays `blocked`. This route takes no Idempotency-Key, so a retry uploads again. The response leaves out the status reason fields. Get the application again to see what is still needed. For terms or verification, send the customer to `required_action_url` instead.\n\nPREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5806,7 +6230,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "customer": {
           "type": "object",
-          "description": "Changes to the customer record. They are saved on the customer, not only on this application.",
+          "description": "Changes to the customer record. Gravv saves them on the customer, not only on this application.",
           "properties": {
             "first_name": {
               "type": "string"
@@ -5884,7 +6308,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "parties": {
           "type": "array",
-          "description": "Party changes, in the create shape. Only on `draft` or `blocked`.",
+          "description": "Party changes, in the create shape. Send them only on a `draft` or `blocked` application.",
           "items": {
             "type": "object",
             "additionalProperties": true
@@ -5892,7 +6316,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "documents": {
           "type": "array",
-          "description": "Documents to upload. Only on `draft`, `blocked` or `manual_review`. Upload every requested type in this one call.",
+          "description": "Documents to upload. Send them only on a `draft`, `blocked` or `manual_review` application. Upload every requested type in this one call.",
           "items": {
             "type": "object",
             "required": [
