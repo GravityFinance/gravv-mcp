@@ -34,6 +34,7 @@ import {
   needsIdempotencyKey,
   isSandboxOnly,
   SANDBOX_ONLY,
+  FLATTEN_BODY_VARIANTS,
   UPLOADS,
   DOWNLOADS,
   type Toolset,
@@ -238,6 +239,54 @@ function slim(schema: any, depth = 0): any {
   return out;
 }
 
+/**
+ * Turns a request body whose `oneOf` lists object shapes into one object: every property
+ * any shape declares, required only where every shape requires it. An enum stays only when
+ * every shape that declares the property has one, as the union of their values. The
+ * returned text names each shape and the fields it requires, for the tool description.
+ * Returns undefined for any other body. Only tools in FLATTEN_BODY_VARIANTS use it.
+ */
+function flattenVariants(body: Json): { body: Json; shapes: string } | undefined {
+  const variants = body?.oneOf as Json[] | undefined;
+  if (!Array.isArray(variants) || !variants.every((v) => v?.type === "object" && v.properties)) return undefined;
+  const properties: Json = { ...((body.properties as Json) ?? {}) };
+  const enumless = new Set<string>();
+  for (const v of variants) {
+    for (const [k, s] of Object.entries(v.properties as Json)) {
+      const prev = properties[k] as Json | undefined;
+      const incoming = s as Json;
+      if (!prev) {
+        properties[k] = incoming;
+        if (!Array.isArray(incoming?.enum)) enumless.add(k);
+        continue;
+      }
+      if (Array.isArray(prev.enum) && Array.isArray(incoming?.enum)) {
+        properties[k] = { ...prev, enum: [...new Set([...(prev.enum as unknown[]), ...(incoming.enum as unknown[])])] };
+      } else if (Array.isArray(prev.enum) || Array.isArray(incoming?.enum)) {
+        enumless.add(k);
+      }
+    }
+  }
+  for (const k of enumless) {
+    const { enum: _dropped, ...rest } = properties[k] as Json;
+    properties[k] = rest;
+  }
+  const requiredSets = variants.map((v) => new Set<string>((v.required as string[]) ?? []));
+  const inEvery = [...requiredSets[0]!].filter((r) => requiredSets.every((set) => set.has(r)));
+  const required = [...new Set([...((body.required as string[]) ?? []), ...inEvery])];
+  const shapes =
+    "The body takes one of these shapes. " +
+    variants
+      .map((v, i) => {
+        const own = ((v.required as string[]) ?? []).filter((r) => !inEvery.includes(r));
+        return `${v.title ?? `Shape ${i + 1}`}: ${own.length ? `also requires ${own.join(", ")}` : "nothing more is required"}.`;
+      })
+      .join(" ");
+  const flat: Json = { type: "object", properties, required };
+  if (variants.every((v) => v.additionalProperties === false)) flat.additionalProperties = false;
+  return { body: flat, shapes };
+}
+
 interface Generated {
   name: string;
   toolset: Toolset;
@@ -350,7 +399,14 @@ for (const file of readdirSync(SPECS).filter((f) => f.endsWith(".yaml")).sort())
       }
       const bodySchemaRaw = bodyContent?.["application/json"]?.schema;
       if (bodySchemaRaw) {
-        const body = slim(deref(bodySchemaRaw, doc));
+        let body = slim(deref(bodySchemaRaw, doc));
+        // One shape per kind of account or payee in the spec (the docs show a tab for
+        // each) stays one flat argument set in the tool, with the shapes named.
+        const flat = FLATTEN_BODY_VARIANTS.has(curated.name) ? flattenVariants(body) : undefined;
+        if (flat) {
+          body = flat.body;
+          description += `\n\n${flat.shapes}`;
+        }
 
         if (body?.type === "object" && body.properties && !body.oneOf && !body.anyOf) {
           // Plain object: inline its properties so the model fills one flat argument set.

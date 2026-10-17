@@ -569,6 +569,14 @@ export const CONFIRM_OPS = new Set<string>([
  * advertised, and are refused before any request, unless the key starts exactly
  * `grvSec_sandbox_`. An unrecognised key counts as live, as everywhere else.
  */
+/**
+ * Tools whose spec request body is a `oneOf` of object shapes (one per kind of account or
+ * payee, shown as tabs in the docs) but whose arguments stay one flat set. The generator
+ * merges the shapes and names them in the description. createCustomer is not listed: its
+ * individual and business shapes stay under one `body` argument.
+ */
+export const FLATTEN_BODY_VARIANTS = new Set<string>(["createAccountV2", "createExternalAccount"]);
+
 export const SANDBOX_ONLY = new Set<string>(["POST /v2/accounts/simulate/deposit"]);
 
 export function isSandboxOnly(method: string, path: string): boolean {
