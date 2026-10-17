@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Gravv API Gateway
   description: |
-    The API gateway for Gravv services.
+    Open bank accounts at a chosen bank, read them with balances and status reasons, and send what the bank asks for.
     Send your API key in the `Api-Key` header to authenticate.
   version: 1.0.0
 servers:
@@ -19,8 +19,8 @@ components:
       in: header
       required: true
       description: >-
-        Required for POST requests. 1 to 255 printable ASCII characters. A
-        retry with the same key within 24 hours returns the first response, so
+        Required for POST requests. The key is 1 to 255 printable ASCII
+        characters. A retry with the same key within 24 hours returns the first response, so
         reuse the key when you retry the same request.
       schema:
         type: string
@@ -88,8 +88,8 @@ components:
           type: object
           description: >-
             Field problems, keyed by field path. Each value is `CODE: message`,
-            such as `REQUIRED: Customer ID is required`. Several problems on one
-            field are joined with `; `.
+            such as `REQUIRED: Customer ID is required`. The API joins several
+            problems on one field with `; `.
           additionalProperties:
             type: string
     IdempotencyErrorResponse:
@@ -175,130 +175,1550 @@ components:
           type: string
           description: Expiry date as YYYY-MM-DD. Required for identity documents.
           example: '2030-01-14'
-    CreateAccountV2Request:
+    AccountAddress:
       type: object
-      required:
-        - customer_id
-        - currency
-      additionalProperties: false
+      description: A street address. The API refuses a P.O. Box.
       properties:
-        customer_id:
+        address_line:
           type: string
-          format: uuid
-          description: >-
-            An existing customer whose KYC is completed. It is checked before
-            every other field.
-          example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
-        customer_type:
+          description: Street address
+          example: 1 High St
+        city:
           type: string
-          description: >-
-            `individual` or `business`. Always send it, because bank choice and
-            routing use the value you send. Defaults to the customer's profile
-            type.
-          enum:
-            - individual
-            - business
-          example: individual
-        account_type:
+          example: London
+        state:
           type: string
           description: >-
-            Account type from the capabilities, such as `operating`, `yield` or
-            `revenue`. Defaults to `operating`.
-          example: operating
-        currency:
+            State or region as an ISO 3166-2 code, such as `GB-LND` or `US-CA`
+          example: GB-LND
+        postal_code:
           type: string
-          pattern: ^[A-Za-z]{3}$
-          description: Three-letter ISO 4217 code
-          example: USD
-        category:
-          description: Defaults to `multi_currency` for NGN and `main` for other currencies.
-          allOf:
-            - $ref: '#/components/schemas/Category'
-        label:
+          example: EC1A 1BB
+        country:
           type: string
-          description: Your label for the account, at most 255 bytes
-          example: Jane USD
-        bank_code:
+          description: Country as an alpha-2 code
+          example: GB
+    CreateAccountParty:
+      type: object
+      description: >-
+        A person declared on a business account: an associated person on the
+        customer record by `id`, with any changes, or a new person with the
+        new-party fields.
+      additionalProperties: true
+      properties:
+        id:
           type: string
+          description: ID of an associated person on the customer record
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentUpload'
+    CreateAccountV2Request:
+      description: >-
+        Choose the tab for the kind of account. Each kind takes different
+        top-level fields and a different form in `data`.
+      oneOf:
+        - title: Wallet-backed USD account
           description: >-
-            A `bank_code` from `GET /v1/accounts/capabilities`. Leave it out to
-            use the highest-priority bank that fits.
-          example: cross_river_bank
-        network:
-          description: >-
-            Network for the account's token wallet. Required when the bank
-            offers token wallets, unless you send `wallet_id`. Otherwise it is
-            refused. It must be one of the bank's `token_options`, and one of
-            stellar, polygon, ethereum, avalanche_c_chain or solana.
-          allOf:
-            - $ref: '#/components/schemas/Network'
-        wallet_id:
-          type: string
-          description: An existing wallet of yours to use instead of `network`. Send one, not both.
-        account_structure:
-          type: string
-          description: For banks that offer FBO accounts only
-          enum:
-            - fbo_account
-            - subledger
-        parent_account_id:
-          type: string
-          format: uuid
-          description: The FBO account, with `account_structure` `subledger`
-        data:
+            A USD account with US bank details whose deposits arrive as USDC in
+            the account's own wallet. Choose an option whose `token_wallets` is
+            not empty, then send `network` or `wallet_id`.
           type: object
-          description: >-
-            The form from `GET /v2/accounts/requirements`. Put `root` scope
-            fields in `data.root`, party fields in `data.parties[]`, and
-            documents in `data.documents[]` or a party's `documents`. Gravv
-            fills in the fields that the customer record already answers.
+          required:
+            - customer_id
+            - currency
+          anyOf:
+            - required:
+                - network
+            - required:
+                - wallet_id
+          additionalProperties: false
           properties:
-            root:
+            customer_id:
+              type: string
+              description: >-
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
+              description: >-
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the capabilities, such as `operating`, `yield`
+                or `revenue`. Defaults to `operating`.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case.
+              enum:
+                - USD
+              example: USD
+            category:
+              description: >-
+                Defaults to `main`. Use `sub_account` for a customer's account.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                A `bank_code` from `GET /v1/accounts/capabilities` whose option
+                has a non-empty `token_wallets`. Leave it out to use the default
+                USD option, the highest-priority bank that fits.
+              example: cross_river_bank
+            network:
+              description: >-
+                Network for the account's token wallet. Send `network` or
+                `wallet_id`, never both. It must be one of the networks in the
+                option's `token_wallets` (`token_options` on the requirements
+                form), and one of stellar, polygon, ethereum, avalanche_c_chain
+                or solana.
+              allOf:
+                - $ref: '#/components/schemas/Network'
+            wallet_id:
+              type: string
+              description: >-
+                An existing wallet of yours to use instead of `network`. Gravv
+                takes the network from the wallet, and the option must offer
+                that network. Send one, not both.
+            data:
               type: object
               description: >-
-                Applicant fields for an individual, or business fields for a
-                business. Include `citizenship_country` or
-                `incorporation_country`, which routing reads. Do not put
-                `network` or `wallet_id` here.
-              additionalProperties: true
+                The form from `GET /v2/accounts/requirements`. Put `root` scope
+                fields in `data.root`, party fields in `data.parties[]`, and
+                documents in `data.documents[]` or a party's `documents`.
               properties:
-                autofill_tax_form:
-                  type: boolean
-                  x-not-yet-live: true
+                root:
+                  type: object
                   description: >-
-                    Not yet live. Lets a non-US applicant ask the bank to fill
-                    the tax form. Production rejects this field as unknown, so
-                    do not send it there.
-            parties:
-              type: array
+                    The root fields of the option's form from `GET
+                    /v2/accounts/requirements`, which is the full and current
+                    list. The fields below are those the forms of this kind of
+                    account ask for. Gravv fills in the fields the customer
+                    record already answers. Three forms apply: one for the
+                    default USD option, one for the USD, EUR and GBP option, and
+                    one for the EUR and USD option. Include
+                    `citizenship_country` for a person or
+                    `incorporation_country` for a business, because Gravv routes
+                    by it. Do not put `network` or `wallet_id` here.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: Person, every form
+                      example: Jane
+                    middle_name:
+                      type: string
+                      description: Person, optional
+                    last_name:
+                      type: string
+                      description: Person, every form
+                      example: Doe
+                    date_of_birth:
+                      type: string
+                      description: Person, every form. YYYY-MM-DD.
+                      example: '1990-04-02'
+                    email:
+                      type: string
+                      description: >-
+                        Person, every form. Business, on the USD, EUR and GBP
+                        option.
+                      example: jane@example.com
+                    phone_daytime:
+                      type: string
+                      description: >-
+                        Phone number in E.164 format. Person, on the default USD
+                        option and the EUR and USD option. Business, on the USD,
+                        EUR and GBP option.
+                      example: '+447700900123'
+                    gender:
+                      type: string
+                      description: Person, on the default USD option
+                      enum:
+                        - female
+                        - male
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Person, every form. Alpha-2 code. Gravv routes a person
+                        by it.
+                      example: GB
+                    tax_residence_country:
+                      type: string
+                      description: >-
+                        Person. Alpha-2 code. Required on the default USD option
+                        and the EUR and USD option, and on the USD, EUR and GBP
+                        option for anyone who is not a US citizen.
+                      example: GB
+                    permanent_address:
+                      description: >-
+                        Person's home address, every form. Send `state`.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    tax_id_type:
+                      type: string
+                      description: >-
+                        Person: on the default USD option, `ssn` for a US
+                        citizen; on the USD, EUR and GBP option, `ssn` once you
+                        send `tax_id_number`. Business: `ein` for a US company,
+                        and only `ein` on the default USD option. Required for a
+                        business on the default USD option and the USD, EUR and
+                        GBP option.
+                      enum:
+                        - ssn
+                        - ein
+                        - tin
+                    tax_id_number:
+                      type: string
+                      description: >-
+                        Write-only. The number of `tax_id_type`. A US citizen
+                        sends it on the default USD option. A business sends it
+                        on the default USD option and the USD, EUR and GBP
+                        option.
+                    immigration_status:
+                      type: string
+                      description: >-
+                        Person who is not a US citizen, on the USD, EUR and GBP
+                        option
+                      enum:
+                        - permanent_resident
+                        - non_permanent_resident
+                        - non_resident
+                    international_supplement:
+                      type: object
+                      description: >-
+                        A person who is not a US citizen, on the USD, EUR and
+                        GBP option. Four yes or no questions. When an answer is
+                        true, also send its details field.
+                      properties:
+                        has_us_bank_account:
+                          type: boolean
+                          description: >-
+                            Whether the person has a US bank account
+                        has_denied_bank_account:
+                          type: boolean
+                          description: >-
+                            Whether a bank has refused the person an account
+                        denial_details:
+                          type: string
+                          description: >-
+                            Required when `has_denied_bank_account` is true
+                        has_regulatory_action:
+                          type: boolean
+                          description: >-
+                            Whether a regulator has taken action against the
+                            person
+                        regulatory_action_details:
+                          type: string
+                          description: >-
+                            Required when `has_regulatory_action` is true
+                        is_politically_exposed:
+                          type: boolean
+                          description: >-
+                            Whether the person is politically exposed
+                        pep_details:
+                          type: string
+                          description: >-
+                            Required when `is_politically_exposed` is true
+                    expected_activity:
+                      type: object
+                      description: >-
+                        Person, on the USD, EUR and GBP option, for every
+                        currency. Other channels, such as `ach_out` and
+                        `wire_domestic_in`, are optional.
+                      additionalProperties: true
+                      properties:
+                        expected_avg_daily_balance:
+                          description: >-
+                            Expected average daily balance, in the account
+                            currency. Required.
+                        ach_in:
+                          type: object
+                          description: >-
+                            Expected incoming ACH payments. Required, and `0` is
+                            a valid count.
+                          properties:
+                            monthly_count:
+                              type: integer
+                              description: Payments a month
+                            monthly_amount:
+                              description: >-
+                                Total a month, in the account currency
+                    source_of_income:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - salary
+                        - pension
+                        - investment
+                        - property
+                        - friends_and_family
+                        - benefits
+                    employment_status:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - employed
+                        - homemaker
+                        - retired
+                        - self_employed
+                        - student
+                        - unemployed
+                    work_industry:
+                      type: string
+                      description: >-
+                        Person, on the EUR and USD option. One of the form's
+                        `options`.
+                    annual_deposit_range:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - less_than_5k
+                        - from_5k_to_50k
+                        - from_50k_to_150k
+                        - more_than_150k
+                    transaction_frequency:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - once_per_year
+                        - once_every_few_months
+                        - a_few_times_per_month
+                        - once_per_week
+                        - more_than_once_per_week
+                    legal_name:
+                      type: string
+                      description: Business, every form
+                      example: Acme Exports Ltd
+                    dba_name:
+                      type: string
+                      description: >-
+                        Business. Trading name, required on the USD, EUR and GBP
+                        option.
+                    business_type:
+                      type: string
+                      description: >-
+                        Business, on the default USD option and the USD, EUR and
+                        GBP option
+                    business_description:
+                      type: string
+                      description: >-
+                        Business, on the default USD option and the USD, EUR and
+                        GBP option
+                    registration_number:
+                      type: string
+                      description: >-
+                        Business, on the default USD option and the EUR and USD
+                        option
+                    industry:
+                      type: string
+                      description: >-
+                        Business, on the default USD option and the EUR and USD
+                        option. One of the form's `options`.
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Business, every form. Alpha-2 code. Gravv routes a
+                        business by it.
+                      example: GB
+                    incorporation_date:
+                      type: string
+                      description: >-
+                        Business, on the default USD option and the EUR and USD
+                        option. YYYY-MM-DD.
+                    website:
+                      type: string
+                      description: >-
+                        Business. Required on the EUR and USD option, starting
+                        with `http://` or `https://`.
+                    business_address:
+                      description: >-
+                        Business address, every form. Send `state`, except on
+                        the USD, EUR and GBP option, which needs it only for an
+                        address in the US.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    source_of_funds:
+                      description: >-
+                        Business, on the EUR and USD option: required, one of
+                        `revenue`, `trading_income`, `investments`,
+                        `loans_credits`, `crypto_mining` or `client_funds`. On
+                        the default USD option, an optional object of questions
+                        about the money in the account.
+                    legal_entity_type:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `limited_liability_company`.
+                    business_tax_id:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. Write-only. The
+                        company's tax ID.
+                    business_ownership_type:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `private`.
+                    estimated_monthly_turnover:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_50k`.
+                    estimated_transaction_value:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_15k`.
+                    monthly_transaction_frequency:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_20`.
+                parties:
+                  type: array
+                  description: >-
+                    Business only. The API refuses it for individuals. Declare 1
+                    to 10 people. Each entry is an associated person from the
+                    customer record (`id` plus any changes) or a new person with
+                    the new-party fields. Leave it out to declare every
+                    associated person on the record. Every form asks for names,
+                    `date_of_birth`, `email`, `phone_daytime`, `has_ownership`,
+                    `has_control` and `is_signer`, and `ownership_percentage`
+                    for an owner. The default USD option adds
+                    `citizenship_country` and `residential_address`, and a tax
+                    ID for a US citizen. The USD, EUR and GBP option adds
+                    `citizenship_country` and `is_director`, and needs
+                    `ownership_percentage` from 1 to 100, and at least 25 for a
+                    person with control. The EUR and USD option adds
+                    `tax_residence_country` and `residential_address`.
+                  items:
+                    $ref: '#/components/schemas/CreateAccountParty'
+                documents:
+                  type: array
+                  description: >-
+                    Root documents. When you send none, Gravv uses the documents
+                    on the customer record. A person sends one identity document
+                    and a `proof_of_address`. A business sends
+                    `articles_of_incorporation`, `ownership_document` and
+                    `proof_of_address`, plus `control_structure` on the default
+                    USD option and the EUR and USD option. Each party sends an
+                    identity document in its own `documents`, and a
+                    `proof_of_address` too on the default USD option.
+                  items:
+                    $ref: '#/components/schemas/DocumentUpload'
+        - title: Wallet-backed EUR or GBP account
+          description: >-
+            A EUR account with an IBAN or a GBP account with a sort code, whose
+            deposits arrive as USDC in the account's own wallet. Two options
+            offer EUR and one offers GBP.
+          type: object
+          required:
+            - customer_id
+            - currency
+          anyOf:
+            - required:
+                - network
+            - required:
+                - wallet_id
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
               description: >-
-                Business only. Refused for individuals. Each entry is an
-                associated person from the customer record (`id` plus any
-                changes) or a new person with the new-party fields. Leave it out
-                to declare every associated person on the record.
-              items:
-                type: object
-                additionalProperties: true
-                properties:
-                  id:
-                    type: string
-                    description: ID of an associated person on the customer record
-                  documents:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/DocumentUpload'
-            documents:
-              type: array
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
               description: >-
-                Root documents. When you send none, Gravv uses the documents on
-                the customer record.
-              items:
-                $ref: '#/components/schemas/DocumentUpload'
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the capabilities, such as `operating`, `yield`
+                or `revenue`. Defaults to `operating`.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case. The
+                EUR and USD option does not offer GBP.
+              enum:
+                - EUR
+                - GBP
+              example: EUR
+            category:
+              description: >-
+                Defaults to `main`. Use `sub_account` for a customer's account.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                A `bank_code` from `GET /v1/accounts/capabilities` whose option
+                has a non-empty `token_wallets`. Leave it out to use the USD,
+                EUR and GBP option, the highest-priority bank that fits.
+              example: lead_bank
+            network:
+              description: >-
+                Network for the account's token wallet. Send `network` or
+                `wallet_id`, never both. It must be one of the networks in the
+                option's `token_wallets` (`token_options` on the requirements
+                form), and one of stellar, polygon, ethereum, avalanche_c_chain
+                or solana.
+              allOf:
+                - $ref: '#/components/schemas/Network'
+            wallet_id:
+              type: string
+              description: >-
+                An existing wallet of yours to use instead of `network`. Gravv
+                takes the network from the wallet, and the option must offer
+                that network. Send one, not both.
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`. Put `root` scope
+                fields in `data.root`, party fields in `data.parties[]`, and
+                documents in `data.documents[]` or a party's `documents`.
+              properties:
+                root:
+                  type: object
+                  description: >-
+                    The root fields of the option's form from `GET
+                    /v2/accounts/requirements`, which is the full and current
+                    list. The fields below are those the forms of this kind of
+                    account ask for. Gravv fills in the fields the customer
+                    record already answers. Two forms apply: one for the USD,
+                    EUR and GBP option and one for the EUR and USD option. Each
+                    option uses its USD form for EUR and GBP. Include
+                    `citizenship_country` for a person or
+                    `incorporation_country` for a business, because Gravv routes
+                    by it. Do not put `network` or `wallet_id` here.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: Person, both forms
+                      example: Jane
+                    middle_name:
+                      type: string
+                      description: Person, optional
+                    last_name:
+                      type: string
+                      description: Person, both forms
+                      example: Doe
+                    date_of_birth:
+                      type: string
+                      description: Person, both forms. YYYY-MM-DD.
+                      example: '1990-04-02'
+                    email:
+                      type: string
+                      description: >-
+                        Person, both forms. Business, on the USD, EUR and GBP
+                        option.
+                      example: jane@example.com
+                    phone_daytime:
+                      type: string
+                      description: >-
+                        Phone number in E.164 format. Person, on the EUR and USD
+                        option. Business, on the USD, EUR and GBP option.
+                      example: '+447700900123'
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Person, both forms. Alpha-2 code. Gravv routes a person
+                        by it.
+                      example: GB
+                    tax_residence_country:
+                      type: string
+                      description: >-
+                        Person. Alpha-2 code. Required on the EUR and USD
+                        option, and on the USD, EUR and GBP option for anyone
+                        who is not a US citizen.
+                      example: GB
+                    permanent_address:
+                      description: >-
+                        Person's home address, both forms. Send `state`.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    tax_id_type:
+                      type: string
+                      description: >-
+                        On the USD, EUR and GBP option. Person: `ssn` once you
+                        send `tax_id_number`. Business: required, and `ein` for
+                        a US company.
+                      enum:
+                        - ssn
+                        - ein
+                        - tin
+                    tax_id_number:
+                      type: string
+                      description: >-
+                        Write-only. The number of `tax_id_type`. Required for a
+                        business on the USD, EUR and GBP option.
+                    immigration_status:
+                      type: string
+                      description: >-
+                        Person who is not a US citizen, on the USD, EUR and GBP
+                        option
+                      enum:
+                        - permanent_resident
+                        - non_permanent_resident
+                        - non_resident
+                    international_supplement:
+                      type: object
+                      description: >-
+                        A person who is not a US citizen, on the USD, EUR and
+                        GBP option. Four yes or no questions. When an answer is
+                        true, also send its details field.
+                      properties:
+                        has_us_bank_account:
+                          type: boolean
+                          description: >-
+                            Whether the person has a US bank account
+                        has_denied_bank_account:
+                          type: boolean
+                          description: >-
+                            Whether a bank has refused the person an account
+                        denial_details:
+                          type: string
+                          description: >-
+                            Required when `has_denied_bank_account` is true
+                        has_regulatory_action:
+                          type: boolean
+                          description: >-
+                            Whether a regulator has taken action against the
+                            person
+                        regulatory_action_details:
+                          type: string
+                          description: >-
+                            Required when `has_regulatory_action` is true
+                        is_politically_exposed:
+                          type: boolean
+                          description: >-
+                            Whether the person is politically exposed
+                        pep_details:
+                          type: string
+                          description: >-
+                            Required when `is_politically_exposed` is true
+                    expected_activity:
+                      type: object
+                      description: >-
+                        Person, on the USD, EUR and GBP option, for every
+                        currency. Other channels, such as `ach_out` and
+                        `wire_domestic_in`, are optional.
+                      additionalProperties: true
+                      properties:
+                        expected_avg_daily_balance:
+                          description: >-
+                            Expected average daily balance, in the account
+                            currency. Required.
+                        ach_in:
+                          type: object
+                          description: >-
+                            Expected incoming ACH payments. Required, and `0` is
+                            a valid count.
+                          properties:
+                            monthly_count:
+                              type: integer
+                              description: Payments a month
+                            monthly_amount:
+                              description: >-
+                                Total a month, in the account currency
+                    source_of_income:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - salary
+                        - pension
+                        - investment
+                        - property
+                        - friends_and_family
+                        - benefits
+                    employment_status:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - employed
+                        - homemaker
+                        - retired
+                        - self_employed
+                        - student
+                        - unemployed
+                    work_industry:
+                      type: string
+                      description: >-
+                        Person, on the EUR and USD option. One of the form's
+                        `options`.
+                    annual_deposit_range:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - less_than_5k
+                        - from_5k_to_50k
+                        - from_50k_to_150k
+                        - more_than_150k
+                    transaction_frequency:
+                      type: string
+                      description: Person, on the EUR and USD option
+                      enum:
+                        - once_per_year
+                        - once_every_few_months
+                        - a_few_times_per_month
+                        - once_per_week
+                        - more_than_once_per_week
+                    legal_name:
+                      type: string
+                      description: Business, both forms
+                      example: Acme Exports Ltd
+                    dba_name:
+                      type: string
+                      description: >-
+                        Business. Trading name, required on the USD, EUR and GBP
+                        option.
+                    business_type:
+                      type: string
+                      description: Business, on the USD, EUR and GBP option
+                    business_description:
+                      type: string
+                      description: Business, on the USD, EUR and GBP option
+                    registration_number:
+                      type: string
+                      description: Business, on the EUR and USD option
+                    industry:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`.
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Business, both forms. Alpha-2 code. Gravv routes a
+                        business by it.
+                      example: GB
+                    incorporation_date:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. YYYY-MM-DD.
+                    website:
+                      type: string
+                      description: >-
+                        Business. Required on the EUR and USD option, starting
+                        with `http://` or `https://`.
+                    business_address:
+                      description: >-
+                        Business address, both forms. Send `state`, except on
+                        the USD, EUR and GBP option, which needs it only for an
+                        address in the US.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    source_of_funds:
+                      type: string
+                      description: Business, on the EUR and USD option
+                      enum:
+                        - revenue
+                        - trading_income
+                        - investments
+                        - loans_credits
+                        - crypto_mining
+                        - client_funds
+                    legal_entity_type:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `limited_liability_company`.
+                    business_tax_id:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. Write-only. The
+                        company's tax ID.
+                    business_ownership_type:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `private`.
+                    estimated_monthly_turnover:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_50k`.
+                    estimated_transaction_value:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_15k`.
+                    monthly_transaction_frequency:
+                      type: string
+                      description: >-
+                        Business, on the EUR and USD option. One of the form's
+                        `options`, such as `up_to_20`.
+                parties:
+                  type: array
+                  description: >-
+                    Business only. The API refuses it for individuals. Declare 1
+                    to 10 people. Each entry is an associated person from the
+                    customer record (`id` plus any changes) or a new person with
+                    the new-party fields. Leave it out to declare every
+                    associated person on the record. Both forms ask for names,
+                    `date_of_birth`, `email`, `phone_daytime`, `has_ownership`,
+                    `has_control` and `is_signer`, and `ownership_percentage`
+                    for an owner. The USD, EUR and GBP option adds
+                    `citizenship_country` and `is_director`, and needs
+                    `ownership_percentage` from 1 to 100, and at least 25 for a
+                    person with control. The EUR and USD option adds
+                    `tax_residence_country` and `residential_address`.
+                  items:
+                    $ref: '#/components/schemas/CreateAccountParty'
+                documents:
+                  type: array
+                  description: >-
+                    Root documents. When you send none, Gravv uses the documents
+                    on the customer record. A person sends one identity document
+                    and a `proof_of_address`. A business sends
+                    `articles_of_incorporation`, `ownership_document` and
+                    `proof_of_address`, plus `control_structure` on the EUR and
+                    USD option. Each party sends an identity document in its own
+                    `documents`.
+                  items:
+                    $ref: '#/components/schemas/DocumentUpload'
+        - title: USD account in the US (no wallet)
+          description: >-
+            A fiat-only USD account at a US bank, for a person whose
+            `citizenship_country` is US or a company incorporated in the US.
+            Deposits stay in dollars and the account has no wallet. The option
+            usually allows one account per customer.
+          type: object
+          required:
+            - customer_id
+            - currency
+            - bank_code
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
+              description: >-
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
+              description: >-
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the option's `account_types`. Defaults to
+                `operating`, the type this option offers.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case.
+              enum:
+                - USD
+              example: USD
+            category:
+              description: >-
+                Defaults to `main`. Use `sub_account` for a customer's account.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                The `bank_code` of the US option, from capabilities with
+                `country=US` and an empty `token_wallets`. Required here:
+                without it, a USD request goes to the default USD option, which
+                is wallet-backed and asks for `network`.
+            account_structure:
+              type: string
+              description: >-
+                Not yet live. Only for an option that offers FBO accounts, and
+                no live option does yet. `fbo_account` opens another account in
+                the customer's own name, and `subledger` opens one beneath their
+                FBO account. Leave it out, and the customer's first account at
+                the bank is an FBO account and each later one is a subledger.
+                The API refuses it at any other option.
+              enum:
+                - fbo_account
+                - subledger
+              x-not-yet-live: true
+            parent_account_id:
+              type: string
+              description: >-
+                Not yet live. The customer's FBO account that a subledger opens
+                beneath. Leave it out to use their oldest one. Do not send it
+                with `account_structure` `fbo_account`.
+              format: uuid
+              x-not-yet-live: true
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`. Put `root` scope
+                fields in `data.root`, party fields in `data.parties[]`, and
+                documents in `data.documents[]` or a party's `documents`.
+              properties:
+                root:
+                  type: object
+                  description: >-
+                    The root fields of the option's form from `GET
+                    /v2/accounts/requirements`, which is the full and current
+                    list. The fields below are those the forms of this kind of
+                    account ask for. Gravv fills in the fields the customer
+                    record already answers. Include `citizenship_country` for a
+                    person or `incorporation_country` for a business, because
+                    Gravv routes by it.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: Person
+                      example: Jane
+                    middle_name:
+                      type: string
+                      description: Person, optional
+                    last_name:
+                      type: string
+                      description: Person
+                      example: Doe
+                    date_of_birth:
+                      type: string
+                      description: Person. YYYY-MM-DD.
+                    email:
+                      type: string
+                      description: Person and business
+                    phone_daytime:
+                      type: string
+                      description: Person. Phone number in E.164 format.
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Person. Gravv routes a person by it, and this option
+                        serves only US citizens.
+                      enum:
+                        - US
+                    permanent_address:
+                      description: Person's home address, with `state`
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    mailing_address:
+                      description: >-
+                        Optional mailing address, for a person or a business
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    employment_status:
+                      type: string
+                      description: Person
+                      enum:
+                        - employed
+                        - homemaker
+                        - retired
+                        - self_employed
+                        - student
+                        - unemployed
+                    employer_info:
+                      type: object
+                      description: >-
+                        Person, when `employment_status` is `employed`
+                      properties:
+                        current_employer:
+                          type: string
+                          description: Name of the employer
+                        occupation:
+                          type: string
+                          description: The person's occupation
+                        permanent_address:
+                          description: The employer's address
+                          allOf:
+                            - $ref: '#/components/schemas/AccountAddress'
+                    income_source:
+                      type: string
+                      description: >-
+                        Person, when you send no
+                        `employer_info.current_employer`
+                    tax_id_type:
+                      type: string
+                      description: >-
+                        Person: required, `ssn` for a US citizen. Business:
+                        required, `ein` for a US company.
+                      enum:
+                        - ssn
+                        - ein
+                        - tin
+                    tax_id_number:
+                      type: string
+                      description: >-
+                        Required and write-only. The number of `tax_id_type`.
+                    expected_activity:
+                      type: object
+                      description: >-
+                        Person and business. Other channels, such as `ach_out`,
+                        `wire_domestic_in` and `check_deposits`, are optional.
+                      additionalProperties: true
+                      properties:
+                        expected_avg_daily_balance:
+                          description: >-
+                            Expected average daily balance, in the account
+                            currency. Required.
+                        ach_in:
+                          type: object
+                          description: >-
+                            Expected incoming ACH payments. Required, and `0` is
+                            a valid count.
+                          properties:
+                            monthly_count:
+                              type: integer
+                              description: Payments a month
+                            monthly_amount:
+                              description: >-
+                                Total a month, in the account currency
+                    legal_name:
+                      type: string
+                      description: Business
+                      example: Rocky Mountain Bakery LLC
+                    dba_name:
+                      type: string
+                      description: Business. Trading name, optional.
+                    registration_number:
+                      type: string
+                      description: Business
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Business. Gravv routes a business by it, and this option
+                        serves only US companies.
+                      enum:
+                        - US
+                    incorporation_date:
+                      type: string
+                      description: Business. YYYY-MM-DD.
+                    state_incorporated:
+                      type: string
+                      description: Business, optional. State of incorporation.
+                    industry:
+                      type: string
+                      description: >-
+                        Business. One of the form's `options`, such as
+                        `manufacturing`.
+                    website:
+                      type: string
+                      description: Business, optional
+                    business_status:
+                      type: string
+                      description: Business
+                      enum:
+                        - operating
+                        - non_operating
+                    business_entity_type:
+                      type: string
+                      description: Business
+                      enum:
+                        - corporation
+                        - llc
+                        - partnership
+                        - unincorporated_business
+                        - international
+                    corporation_taxed_as:
+                      type: string
+                      description: >-
+                        Business, when `business_entity_type` is `corporation`
+                      enum:
+                        - c_corp
+                        - s_corp
+                    llc_taxed_as:
+                      type: string
+                      description: >-
+                        Business, when `business_entity_type` is `llc`
+                      enum:
+                        - c_corp
+                        - s_corp
+                        - partnership
+                    business_address:
+                      description: Business address, with `state`
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    autofill_tax_form:
+                      type: boolean
+                      x-not-yet-live: true
+                      description: >-
+                        Not yet live. Lets a non-US applicant ask the bank to
+                        fill the tax form. Production rejects this field as
+                        unknown, so do not send it there.
+                parties:
+                  type: array
+                  description: >-
+                    Business only. The API refuses it for individuals. Declare 1
+                    to 10 people. Each entry is an associated person from the
+                    customer record (`id` plus any changes) or a new person with
+                    the new-party fields. Each needs names, `email`,
+                    `party_role` (such as `primary` or `authorized_individual`),
+                    `date_of_birth`, `citizenship_country`, `permanent_address`
+                    and `mailing_address`, and `ownership_percentage` for an
+                    owner. A US citizen also needs `tax_id_type` `ssn` and
+                    `tax_id_number`. A person who is not a US citizen also needs
+                    `immigration_status` and `tax_residence_country`.
+                  items:
+                    $ref: '#/components/schemas/CreateAccountParty'
+                documents:
+                  type: array
+                  description: >-
+                    Root documents. When you send none, Gravv uses the documents
+                    on the customer record. A person sends one identity document
+                    and a `proof_of_address`. A business sends
+                    `articles_of_incorporation`, `ownership_document`,
+                    `proof_of_address` and `control_structure`, and each party
+                    sends an identity document in its own `documents`.
+                  items:
+                    $ref: '#/components/schemas/DocumentUpload'
+        - title: EUR or GBP account with its own IBAN
+          description: >-
+            A fiat-only EUR or GBP account with an IBAN in the customer's own
+            name. The money stays in that currency and the account has no
+            wallet. The bank issues one IBAN per customer, so the customer can
+            hold one account here, in EUR or in GBP.
+          type: object
+          required:
+            - customer_id
+            - currency
+            - bank_code
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
+              description: >-
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
+              description: >-
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the option's `account_types`. Defaults to
+                `operating`, the type this option offers.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case. EUR
+                and GBP use the same form.
+              enum:
+                - EUR
+                - GBP
+              example: EUR
+            category:
+              description: >-
+                Defaults to `main`. Use `sub_account` for a customer's account.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                The `bank_code` of the IBAN option, from capabilities, with
+                `token_wallets: []` and `max_accounts_per_customer: 1`. Required
+                here: without it, a EUR or GBP request goes to the wallet-backed
+                USD, EUR and GBP option.
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`. Put `root` scope
+                fields in `data.root`, party fields in `data.parties[]`, and
+                documents in `data.documents[]` or a party's `documents`.
+              properties:
+                root:
+                  type: object
+                  description: >-
+                    The root fields of the option's form from `GET
+                    /v2/accounts/requirements`, which is the full and current
+                    list. The fields below are those the forms of this kind of
+                    account ask for. Gravv fills in the fields the customer
+                    record already answers. Include `citizenship_country` for a
+                    person or `incorporation_country` for a business, because
+                    Gravv routes by it.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: Person
+                      example: Jane
+                    middle_name:
+                      type: string
+                      description: Person, optional
+                    last_name:
+                      type: string
+                      description: Person
+                      example: Doe
+                    date_of_birth:
+                      type: string
+                      description: Person. YYYY-MM-DD.
+                    birth_place:
+                      type: string
+                      description: Person. The town or city of birth.
+                    email:
+                      type: string
+                      description: Person
+                    phone_daytime:
+                      type: string
+                      description: Person. Phone number in E.164 format.
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Person. Alpha-2 code. Gravv routes a person by it.
+                      example: GB
+                    tax_residence_country:
+                      type: string
+                      description: >-
+                        Person, optional. The country of tax residence, if it
+                        differs.
+                    tax_id_type:
+                      type: string
+                      description: >-
+                        Person. Required when the person pays tax in the US or
+                        you send `tax_id_number`: `ssn` in the US, `tin`
+                        anywhere else.
+                      enum:
+                        - ssn
+                        - tin
+                    tax_id_number:
+                      type: string
+                      description: >-
+                        Person. Write-only. Required with `tax_id_type`.
+                    permanent_address:
+                      description: >-
+                        Person's home address. `state` is optional. UK and
+                        Nigerian postal codes must be valid for their country.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                    legal_name:
+                      type: string
+                      description: Business
+                      example: Northwind Design Ltd
+                    dba_name:
+                      type: string
+                      description: Business. Trading name, optional.
+                    registration_number:
+                      type: string
+                      description: Business
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Business. Alpha-2 code. Gravv routes a business by it.
+                      example: GB
+                    incorporation_date:
+                      type: string
+                      description: Business. YYYY-MM-DD.
+                    business_description:
+                      type: string
+                      description: Business
+                    industry:
+                      type: string
+                      description: >-
+                        Business, optional. One of the form's `options`.
+                    website:
+                      type: string
+                      description: Business
+                    business_tax_id:
+                      type: string
+                      description: >-
+                        Business. Write-only. Required for a company
+                        incorporated in the US.
+                    business_address:
+                      description: >-
+                        Business address. `state` is optional. UK and Nigerian
+                        postal codes must be valid for their country.
+                      allOf:
+                        - $ref: '#/components/schemas/AccountAddress'
+                parties:
+                  type: array
+                  description: >-
+                    Business only. The API refuses it for individuals. Declare 1
+                    to 10 people. Each entry is an associated person from the
+                    customer record (`id` plus any changes) or a new person with
+                    the new-party fields. Each needs names, `email` and
+                    `party_role`. An owner (`has_ownership: true`) also needs
+                    `date_of_birth` and `ownership_percentage`. Declare at least
+                    one owner.
+                  items:
+                    $ref: '#/components/schemas/CreateAccountParty'
+                documents:
+                  type: array
+                  description: >-
+                    Root documents. When you send none, Gravv uses the documents
+                    on the customer record. A person sends one identity document
+                    and a `proof_of_address`. A business sends
+                    `articles_of_incorporation` and `proof_of_address`, and each
+                    party sends an identity document in its own `documents`.
+                  items:
+                    $ref: '#/components/schemas/DocumentUpload'
+        - title: NGN account
+          description: >-
+            A naira account with a 10-digit Nigerian account number, for a
+            person or a business in Nigeria. Gravv checks the BVN before it
+            opens the account. The account has no wallet.
+          type: object
+          required:
+            - customer_id
+            - currency
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
+              description: >-
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
+              description: >-
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the option's `account_types`. Defaults to
+                `operating`, the type this option offers.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case.
+              enum:
+                - NGN
+              example: NGN
+            category:
+              description: >-
+                Always send it, such as `sub_account`. Left out, it defaults to
+                `multi_currency`, which this option does not list.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                The NGN option's `bank_code` from `GET /v1/accounts/capabilities`.
+                You can leave it out, because there is only one NGN option.
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`. It has no parties
+                and no documents.
+              properties:
+                root:
+                  type: object
+                  description: >-
+                    The root fields of the NGN form from `GET
+                    /v2/accounts/requirements`. A person and a business use the
+                    same form. Gravv fills in the fields the customer record
+                    already answers.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: Required. Exactly as on the BVN record.
+                      example: Chidi
+                    middle_name:
+                      type: string
+                      description: Required. Exactly as on the BVN record.
+                    last_name:
+                      type: string
+                      description: Required. Exactly as on the BVN record.
+                      example: Okafor
+                    phone:
+                      type: string
+                      description: Required. Phone number in E.164 format.
+                      example: '+2348031234567'
+                    phone_daytime:
+                      type: string
+                      description: Optional
+                    bank_verification_number:
+                      type: string
+                      description: >-
+                        Required and write-only. The 11-digit Bank Verification
+                        Number. Gravv checks it against the national registry.
+                        The API accepts the old name `bvn`, but never both.
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Optional. Gravv routes a person by it, and this option
+                        serves only NG.
+                      enum:
+                        - NG
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Optional. Gravv routes a business by it, and this option
+                        serves only NG.
+                      enum:
+                        - NG
+        - title: Account held in Kenya
+          description: >-
+            A fiat-only account at a Kenyan bank, in KES, TZS, UGX, CNY, RWF,
+            USD, EUR or GBP, for a person or a company in Kenya. The account has
+            no wallet.
+          type: object
+          required:
+            - customer_id
+            - currency
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
+              description: >-
+                An existing customer whose KYC is completed. The API checks it
+                before every other field.
+              format: uuid
+              example: 0b6f3c1e-2a4d-4c8e-9f10-7d2a6b5e4c33
+            customer_type:
+              type: string
+              description: >-
+                `individual` or `business`. Always send it, because bank choice
+                and routing use the value you send. Defaults to the customer's
+                profile type.
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: >-
+                Account type from the option's `account_types`. Defaults to
+                `operating`, the type this option offers.
+              example: operating
+            currency:
+              type: string
+              description: >-
+                Three-letter ISO 4217 code. The API also accepts lower case.
+              enum:
+                - KES
+                - TZS
+                - UGX
+                - CNY
+                - RWF
+                - USD
+                - EUR
+                - GBP
+              example: KES
+            category:
+              description: >-
+                Defaults to `main`. Use `sub_account` for a customer's account.
+              allOf:
+                - $ref: '#/components/schemas/Category'
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Jane USD
+            bank_code:
+              type: string
+              description: >-
+                The `bank_code` of the Kenyan option, from capabilities with
+                `country=KE`. Send it for USD, EUR and GBP, which other options
+                also offer. For KES, TZS, UGX, CNY and RWF you can leave it out.
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`. It has no parties
+                and no documents.
+              properties:
+                root:
+                  type: object
+                  description: >-
+                    The root fields of the form from `GET
+                    /v2/accounts/requirements`. The form is short, and Gravv
+                    fills it from the customer when you leave fields out.
+                  additionalProperties: true
+                  properties:
+                    first_name:
+                      type: string
+                      description: >-
+                        Person, optional. Gravv fills it from the customer.
+                      example: Wanjiru
+                    last_name:
+                      type: string
+                      description: >-
+                        Person, optional. Gravv fills it from the customer.
+                      example: Kamau
+                    legal_name:
+                      type: string
+                      description: >-
+                        Business, optional. Gravv fills it from the customer.
+                      example: Savanna Traders Ltd
+                    citizenship_country:
+                      type: string
+                      description: >-
+                        Person. Gravv routes a person by it, and this option
+                        serves only KE.
+                      enum:
+                        - KE
+                    incorporation_country:
+                      type: string
+                      description: >-
+                        Business. Gravv routes a business by it, and this option
+                        serves only KE.
+                      enum:
+                        - KE
     AccountV2:
       type: object
       description: >-
-        An account. Empty fields are left out. Accounts not opened with `POST
-        /v2/accounts` are returned too, without the v2 fields.
+        An account. The API leaves out empty fields. It also returns accounts
+        not opened with `POST /v2/accounts`, without the v2 fields.
       properties:
         id:
           type: string
@@ -349,7 +1769,7 @@ components:
           type: string
           description: >-
             `pending` while opening, then `active`. `rejected` means the bank
-            declined and `failed` means it could not be opened. `deleted` and
+            declined and `failed` means opening failed. `deleted` and
             `manual_review` appear only on older accounts.
           enum:
             - pending
@@ -369,7 +1789,8 @@ components:
             customer to `required_action_url`, and on
             `awaiting_customer_document` and `awaiting_customer_data` by
             updating the application. Other codes need no action, or mean the
-            account cannot be opened. Returned only on the single account read.
+            account cannot be opened. The API returns it only when you read a
+            single account.
           example: awaiting_customer_document
         status_message:
           type: string
@@ -415,9 +1836,10 @@ components:
         balance:
           type: string
           description: >-
-            Balance in major units. It comes from the wallet, else the bank's
-            last known figure, else the ledger. `balance_source` says which.
-            Omitted when there is no figure, which means unknown, not zero.
+            Balance in major units. Gravv takes it from the wallet first, then
+            the bank's last known figure, then the ledger. `balance_source` says
+            which. The API omits it when there is no figure, which means
+            unknown, not zero.
           example: '1250.00'
         balance_source:
           type: string
@@ -496,7 +1918,7 @@ components:
               type: string
         virtual_account_bank_name:
           type: string
-          description: Deposit bank name. Some banks leave it out. Use `bank_name` then.
+          description: Deposit bank name. Some banks leave it out. In that case, use `bank_name`.
         virtual_account_bank_address:
           type: string
         virtual_account_bank_beneficiary_address:
@@ -628,7 +2050,7 @@ components:
           format: date-time
         status_reason:
           type: string
-          description: Same codes as on the account. Only on the single read.
+          description: Same codes as on the account. The API returns it only when you read a single application.
         status_message:
           type: string
         required_documents:
@@ -645,7 +2067,7 @@ components:
           type: boolean
         validation:
           type: object
-          description: Returned by the update when data was checked
+          description: The update returns it when it checks the data you sent
           properties:
             ok:
               type: boolean
@@ -670,7 +2092,7 @@ components:
       properties:
         name:
           type: string
-          description: Field key. Nested keys are dotted, such as `permanent_address.city`.
+          description: Field key. Nested keys use dots, such as `permanent_address.city`.
           example: first_name
         type:
           type: string
@@ -692,7 +2114,7 @@ components:
             - ''
         scope:
           type: string
-          description: '`root` goes in `data.root`; `party[*]` goes in each `data.parties[i]`.'
+          description: '`root` goes in `data.root`. `party[*]` goes in each `data.parties[i]`.'
           example: root
         group:
           type: string
@@ -712,7 +2134,7 @@ components:
           additionalProperties: true
         write_only:
           type: boolean
-          description: True for secret values that are never returned
+          description: True for secret values, which the API never returns
         enum:
           type: string
           description: Name of the value list
@@ -753,8 +2175,8 @@ components:
               type: object
               x-not-yet-live: true
               description: >-
-                Not yet live. Values that form conditions read. Production
-                never returns it.
+                Not yet live. Values that the form's conditions read.
+                Production never returns it.
               additionalProperties: true
             documents:
               type: array
@@ -768,7 +2190,7 @@ components:
                       type: string
                   scope:
                     type: string
-                    description: '`root` goes in `data.documents`; `party[*]` in each party''s `documents`.'
+                    description: '`root` goes in `data.documents`. `party[*]` goes in each party''s `documents`.'
                   required:
                     type: boolean
                   required_when:
@@ -815,8 +2237,8 @@ components:
             has_existing_ref:
               type: boolean
               description: >-
-                True when the bank already knows this customer. Root fields are
-                then left out, and create must not send `data.root`.
+                True when the bank already knows this customer. The form then
+                leaves out root fields, and create must not send `data.root`.
             new_party_fields:
               type: array
               description: Fields a new business party needs
@@ -852,8 +2274,8 @@ components:
         customer:
           type: object
           description: >-
-            Changes to the customer record. They are saved on the customer, not
-            only on this application.
+            Changes to the customer record. Gravv saves them on the customer,
+            not only on this application.
           properties:
             first_name:
               type: string
@@ -905,14 +2327,15 @@ components:
                 additionalProperties: true
         parties:
           type: array
-          description: Party changes, in the create shape. Only on `draft` or `blocked`.
+          description: Party changes, in the create shape. Send them only on a `draft` or `blocked` application.
           items:
             type: object
             additionalProperties: true
         documents:
           type: array
           description: >-
-            Documents to upload. Only on `draft`, `blocked` or `manual_review`.
+            Documents to upload. Send them only on a `draft`, `blocked` or
+            `manual_review` application.
             Upload every requested type in this one call.
           items:
             type: object
@@ -1080,7 +2503,7 @@ components:
               type: boolean
         token_wallets:
           type: array
-          description: Wallets opened with the account
+          description: Wallets that Gravv opens with the account
           items:
             type: object
             properties:
@@ -1147,7 +2570,7 @@ components:
             data: null
             error: 'invalid request payload: unknown field "sort"'
     NotFound:
-      description: Not found, or not in your tenant
+      description: Not found, or not in your business
       content:
         application/json:
           schema:
@@ -1181,7 +2604,7 @@ paths:
 
 
         The route is under `/v1`, but it is the first step of a v2 account.
-        Unknown query parameters are rejected.
+        The API rejects unknown query parameters.
       parameters:
         - in: query
           name: customer_id
@@ -1288,7 +2711,7 @@ paths:
                   a customer country is required: supply country (ISO-3166
                   alpha-2) or a customer_id whose profile has an address
         '503':
-          description: The customer profile could not be read. Retry.
+          description: Gravv could not read the customer profile. Retry.
         '504':
           description: The request took more than 10 seconds. Retry.
   /v2/accounts:
@@ -1307,8 +2730,8 @@ paths:
         The response has only `account_id` and `status: pending`. Get the
         account for `application_id` and `status_reason`, and poll until it is
         `active`, or wait for the `applications.accounts.completed` webhook.
-        v2 accounts do not send `account.activated`. Unknown fields are
-        rejected. When you retry, reuse the same Idempotency-Key.
+        Gravv does not send `account.activated` for v2 accounts. The API
+        rejects unknown fields. When you retry, reuse the same Idempotency-Key.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1356,6 +2779,265 @@ paths:
                         issuing_country: GB
                         filename: bill.pdf
                         content: <base64>
+              BusinessUSDWithWallet:
+                summary: Business USD account backed by an existing wallet
+                value:
+                  customer_id: 9a1e4c77-2f3b-4d8e-b6a0-5c3e8f9d1b22
+                  customer_type: business
+                  currency: USD
+                  account_type: operating
+                  category: sub_account
+                  bank_code: cross_river_bank
+                  wallet_id: 3f2e1d0c-9b8a-4765-8432-10fedcba9876
+                  label: Acme USD
+                  data:
+                    root:
+                      legal_name: Acme Exports Ltd
+                      business_type: private limited company
+                      industry: wholesale_trade
+                      registration_number: '12345678'
+                      incorporation_country: GB
+                      incorporation_date: '2015-03-01'
+                      tax_id_type: ein
+                      tax_id_number: '981234567'
+                      business_description: >-
+                        Exports industrial pumps to buyers in North America
+                      business_address:
+                        address_line: 1 Finsbury Avenue
+                        city: London
+                        state: GB-LND
+                        postal_code: EC2M 2PF
+                        country: GB
+                    parties:
+                      - id: c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f
+                        has_ownership: true
+                        ownership_percentage: 60
+                        has_control: true
+                        is_signer: true
+                        documents:
+                          - document_type: passport
+                            issuing_country: GB
+                            number: '123456789'
+                            issued_date: '2020-01-15'
+                            expiration_date: '2030-01-14'
+                            filename: owner-passport.jpg
+                            content: '<base64>'
+                          - document_type: proof_of_address
+                            issuing_country: GB
+                            filename: owner-bill.pdf
+                            content: '<base64>'
+                    documents:
+                      - document_type: articles_of_incorporation
+                        issuing_country: GB
+                        filename: articles.pdf
+                        content: '<base64>'
+                      - document_type: ownership_document
+                        issuing_country: GB
+                        filename: shareholders.pdf
+                        content: '<base64>'
+                      - document_type: proof_of_address
+                        issuing_country: GB
+                        filename: company-bill.pdf
+                        content: '<base64>'
+                      - document_type: control_structure
+                        issuing_country: GB
+                        filename: org-chart.pdf
+                        content: '<base64>'
+              IndividualEURWallet:
+                summary: Individual EUR account with a polygon wallet
+                value:
+                  customer_id: 7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f
+                  customer_type: individual
+                  currency: EUR
+                  account_type: operating
+                  category: sub_account
+                  bank_code: lead_bank
+                  network: polygon
+                  label: Lucas EUR
+                  data:
+                    root:
+                      first_name: Lucas
+                      last_name: Ferreira
+                      date_of_birth: '1993-08-21'
+                      email: lucas.ferreira@example.com
+                      citizenship_country: PT
+                      tax_residence_country: PT
+                      immigration_status: non_resident
+                      permanent_address:
+                        address_line: Rua Augusta 100
+                        city: Lisboa
+                        state: PT-11
+                        postal_code: 1100-053
+                        country: PT
+                      international_supplement:
+                        has_us_bank_account: false
+                        has_denied_bank_account: false
+                        has_regulatory_action: false
+                        is_politically_exposed: false
+                      expected_activity:
+                        expected_avg_daily_balance: 3000
+                        ach_in:
+                          monthly_count: 0
+                          monthly_amount: 0
+                    documents:
+                      - document_type: national_id
+                        document_type_side: front
+                        issuing_country: PT
+                        number: 123456789ZZ1
+                        issued_date: '2021-02-01'
+                        expiration_date: '2031-02-01'
+                        filename: id-front.jpg
+                        content: '<base64>'
+                      - document_type: proof_of_address
+                        issuing_country: PT
+                        filename: bill.pdf
+                        content: '<base64>'
+              BusinessUSDUnitedStates:
+                summary: US company USD account with no wallet
+                value:
+                  customer_id: 4b7d1e2a-9c3f-4a5b-8d6e-0f1a2b3c4d5e
+                  customer_type: business
+                  currency: USD
+                  account_type: operating
+                  category: sub_account
+                  bank_code: '<bank_code>'
+                  label: Rocky Mountain Bakery USD
+                  data:
+                    root:
+                      legal_name: Rocky Mountain Bakery LLC
+                      email: accounts@rockymountainbakery.example
+                      registration_number: '20151234567'
+                      incorporation_country: US
+                      incorporation_date: '2015-06-01'
+                      tax_id_type: ein
+                      tax_id_number: '841234567'
+                      industry: manufacturing
+                      business_status: operating
+                      business_entity_type: llc
+                      llc_taxed_as: partnership
+                      business_address:
+                        address_line: 1600 Pearl Street
+                        city: Denver
+                        state: US-CO
+                        postal_code: '80202'
+                        country: US
+                      expected_activity:
+                        expected_avg_daily_balance: 25000
+                        ach_in:
+                          monthly_count: 40
+                          monthly_amount: 60000
+                    parties:
+                      - id: e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b
+                        party_role: primary
+                        date_of_birth: '1984-11-02'
+                        citizenship_country: US
+                        has_ownership: true
+                        ownership_percentage: 100
+                        tax_id_type: ssn
+                        tax_id_number: '123456780'
+                        permanent_address:
+                          address_line: 88 Elm Avenue
+                          city: Denver
+                          state: US-CO
+                          postal_code: '80203'
+                          country: US
+                        mailing_address:
+                          address_line: 88 Elm Avenue
+                          city: Denver
+                          state: US-CO
+                          postal_code: '80203'
+                          country: US
+                        documents:
+                          - document_type: drivers_license
+                            document_type_side: front
+                            issuing_country: US
+                            number: D1234567
+                            issued_date: '2022-04-10'
+                            expiration_date: '2030-04-10'
+                            filename: dl-front.jpg
+                            content: '<base64>'
+                    documents:
+                      - document_type: articles_of_incorporation
+                        issuing_country: US
+                        filename: articles.pdf
+                        content: '<base64>'
+                      - document_type: ownership_document
+                        issuing_country: US
+                        filename: operating-agreement.pdf
+                        content: '<base64>'
+                      - document_type: proof_of_address
+                        issuing_country: US
+                        filename: lease.pdf
+                        content: '<base64>'
+                      - document_type: control_structure
+                        issuing_country: US
+                        filename: control.pdf
+                        content: '<base64>'
+              IndividualGBPIban:
+                summary: Individual GBP account with its own IBAN
+                value:
+                  customer_id: 2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f
+                  customer_type: individual
+                  currency: GBP
+                  account_type: operating
+                  category: sub_account
+                  bank_code: '<bank_code>'
+                  label: Jane GBP
+                  data:
+                    root:
+                      first_name: Jane
+                      last_name: Doe
+                      date_of_birth: '1990-04-02'
+                      birth_place: Leeds
+                      email: jane@example.com
+                      phone_daytime: '+447700900123'
+                      citizenship_country: GB
+                      permanent_address:
+                        address_line: 1 High St
+                        city: London
+                        postal_code: EC1A 1BB
+                        country: GB
+                    documents:
+                      - document_type: passport
+                        issuing_country: GB
+                        number: '123456789'
+                        issued_date: '2020-01-15'
+                        expiration_date: '2030-01-14'
+                        filename: passport.jpg
+                        content: '<base64>'
+                      - document_type: proof_of_address
+                        issuing_country: GB
+                        filename: bill.pdf
+                        content: '<base64>'
+              IndividualNGN:
+                summary: Individual NGN account
+                value:
+                  customer_id: 5b0f6c1e-2a8f-4c39-9d0e-0c7e3b9a1f42
+                  customer_type: individual
+                  currency: NGN
+                  account_type: operating
+                  category: sub_account
+                  label: Chidi NGN
+                  data:
+                    root:
+                      first_name: Chidi
+                      middle_name: Emeka
+                      last_name: Okafor
+                      phone: '+2348031234567'
+                      bank_verification_number: '22123456789'
+              BusinessKES:
+                summary: Kenyan company KES account
+                value:
+                  customer_id: 8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b
+                  customer_type: business
+                  currency: KES
+                  account_type: operating
+                  category: sub_account
+                  label: Savanna KES
+                  data:
+                    root:
+                      legal_name: Savanna Traders Ltd
+                      incorporation_country: KE
       responses:
         '200':
           description: Account opening started
@@ -1412,7 +3094,7 @@ paths:
                       date_of_birth: 'required: is required'
                       permanent_address.city: 'required: is required'
                 NetworkRequired:
-                  summary: The bank offers token wallets and no network was sent
+                  summary: The bank offers token wallets and you sent no network
                   value:
                     data: null
                     error: network is required for account options that support wallet integration
@@ -1433,13 +3115,13 @@ paths:
                   this customer already holds the maximum number of USD accounts
                   permitted for this account type (5)
         '422':
-          description: The Idempotency-Key was used before with a different body.
+          description: You used the Idempotency-Key before with a different body.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/IdempotencyErrorResponse'
         '503':
-          description: The customer record could not be read. Retry with the same key.
+          description: Gravv could not read the customer record. Retry with the same key.
           content:
             application/json:
               schema:
@@ -1451,8 +3133,8 @@ paths:
       operationId: listAccountsV2
       description: >-
         Lists all your accounts, newest first, with bank details and
-        balances. Status reasons are only on the single read. Unknown query
-        parameters are rejected with a 400. A bad filter value is an error, not
+        balances. Only the single-account read returns status reasons. The API
+        rejects unknown query parameters with a 400. A bad filter value is an error, not
         an empty page.
       parameters:
         - in: query
@@ -1529,7 +3211,7 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
-          description: Page size, 1 to 200. Values out of range give 50.
+          description: Page size, 1 to 200. The API uses 50 for a value out of range.
         - in: query
           name: offset
           schema:
@@ -1574,7 +3256,7 @@ paths:
         Returns the form that create checks for one bank, currency and
         customer type: fields, documents, party rules and token networks. Send
         `customer_id` to see the values already on file, and `country` so that
-        the same bank as create is chosen.
+        this call chooses the same bank as create.
 
 
         A field is needed only when `required` is true and its `applies_when`
@@ -1703,7 +3385,7 @@ paths:
       description: >-
         Lists your account applications, newest first, without status reasons.
         `count` is the number on this page, not a total. Page until `count` is
-        less than `limit`. A misspelt `status` returns an empty list.
+        less than `limit`. A misspelled `status` returns an empty list.
       parameters:
         - in: query
           name: customer_id
@@ -1805,8 +3487,8 @@ paths:
       description: >-
         Sends the data or documents the bank asked for, and resumes opening the
         account. Get the application first. It must be `blocked`, or
-        `manual_review` for documents. Send every requested item in one call. A
-        partial answer stays `blocked`.
+        `manual_review` for documents. Send every requested item in one call.
+        After a partial answer, the application stays `blocked`.
 
 
         This route takes no Idempotency-Key, so a retry uploads again. The
@@ -1937,7 +3619,7 @@ paths:
         webhooks. The account must be `active` with bank details.
 
 
-        A 200 means the deposit was accepted, not settled. Wait for the
+        A 200 means Gravv accepted the deposit, not that it settled. Wait for the
         `transfer.inflow.completed` or `transfer.inflow.deposit_settled`
         webhook. Each new Idempotency-Key makes a new deposit.
       parameters:

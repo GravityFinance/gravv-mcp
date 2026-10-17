@@ -18,7 +18,7 @@ paths:
       - Card account
       summary: Open your card account
       description: |-
-        Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. An end customer's ID is refused, and so is a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or get the account until it is `active`, before you activate cards with it.
+        Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. The API refuses an end customer's ID and a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or read the account until it is `active`, before you activate cards with it.
 
         This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.
       parameters:
@@ -132,8 +132,8 @@ paths:
       summary: Get your card account
       description: >-
         Returns one account with its deposit details, balance and assets. Poll it after you create an
-        account until `status` is `active`; deposit details appear only then. An unknown ID is a 400 with
-        `internal account not found`.
+        account until `status` is `active`. Deposit details appear only then. An unknown ID returns a 400
+        with `internal account not found`.
       parameters:
       - in: path
         name: account_id
@@ -162,7 +162,7 @@ components:
       in: header
       required: true
       description: >-
-        Required for POST requests. 1 to 255 printable ASCII characters. A retry with the same key and
+        Required for POST requests. The key is 1 to 255 printable ASCII characters. A retry with the same key and
         body within 24 hours returns the first response, including a 400. After you fix a failed request,
         send a new key.
       schema:
@@ -194,8 +194,8 @@ components:
     Account:
       type: object
       description: >-
-        An internal account. Empty fields are left out. Accounts opened with `/v2/accounts` are returned
-        here too, without their v2-only fields.
+        An internal account. The API leaves out empty fields. It also returns accounts opened with
+        `/v2/accounts`, without their v2-only fields.
       properties:
         id:
           type: string
@@ -287,10 +287,10 @@ components:
         balance:
           type: string
           description: >-
-            Balance as a decimal string in major units. For USD it is the USDC balance; for EUR it is
-            that balance converted to EUR; for NGN it is the token balance. For other currencies it is
-            the USDC amount, not converted. Omitted when it cannot be read, so treat a missing value as
-            unknown, not zero.
+            Balance as a decimal string in major units. For USD it is the USDC balance. For EUR it is
+            that balance converted to EUR. For NGN it is the token balance. For other currencies it is
+            the USDC amount, not converted. The API omits it when it cannot read the balance, so treat a
+            missing value as unknown, not zero.
           example: '0.00'
         is_tokenized:
           type: boolean
@@ -417,7 +417,8 @@ components:
           type: string
           format: uuid
           description: >-
-            Your business's own customer ID: the `customer_id` on your account whose `category` is `main`
+            Your business's own customer ID. It is the `customer_id` on your account whose `category` is
+            `main`.
           example: 550e8400-e29b-41d4-a716-446655440178
         blockchain_network:
           type: string
