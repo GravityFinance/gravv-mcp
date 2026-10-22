@@ -62,12 +62,24 @@ components:
       example: polygon
     Category:
       type: string
+      description: >-
+        `main` is your business's own account. `sub_account` is an account for
+        one of your customers. These are the only two categories you can open.
+      enum:
+        - main
+        - sub_account
+      example: sub_account
+    AccountCategory:
+      type: string
+      description: >-
+        `main` or `sub_account`. Older accounts can also show `virtual` or
+        `multi_currency`. You cannot open an account in those two.
       enum:
         - main
         - sub_account
         - virtual
         - multi_currency
-      example: main
+      example: sub_account
     ErrorResponse:
       type: object
       required:
@@ -254,8 +266,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the capabilities, such as `operating`, `yield`
-                or `revenue`. Defaults to `operating`.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -266,7 +279,9 @@ components:
               example: USD
             category:
               description: >-
-                Defaults to `main`. Use `sub_account` for a customer's account.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -335,9 +350,14 @@ components:
                     email:
                       type: string
                       description: >-
-                        Person, every form. Business, on the USD, EUR and GBP
-                        option.
+                        Person, every form. Business, on the default USD option
+                        (the business email) and the USD, EUR and GBP option.
                       example: jane@example.com
+                    phone:
+                      type: string
+                      description: >-
+                        Business, on the default USD option. The business phone
+                        number with its country code, such as `+442071234567`.
                     phone_daytime:
                       type: string
                       description: >-
@@ -374,21 +394,26 @@ components:
                       description: >-
                         Person: on the default USD option, `ssn` for a US
                         citizen; on the USD, EUR and GBP option, `ssn` once you
-                        send `tax_id_number`. Business: `ein` for a US company,
-                        and only `ein` on the default USD option. Required for a
-                        business on the default USD option and the USD, EUR and
-                        GBP option.
+                        send `tax_id_number`. Business: required on the default
+                        USD option and the USD, EUR and GBP option, and `ein`
+                        for a company incorporated in the US. On the default USD
+                        option a business sends `ein`, `ssn`, `tin`, `vat` or
+                        `utr`.
                       enum:
                         - ssn
                         - ein
                         - tin
+                        - vat
+                        - utr
                     tax_id_number:
                       type: string
                       description: >-
-                        Write-only. The number of `tax_id_type`. A US citizen
-                        sends it on the default USD option. A business sends it
-                        on the default USD option and the USD, EUR and GBP
-                        option.
+                        Write-only. The number of `tax_id_type`, in any format.
+                        Gravv sends only its letters and digits to the bank. A
+                        US citizen sends it on the default USD option. A
+                        business sends it on the default USD option and the
+                        USD, EUR and GBP option. If the business has no tax ID
+                        for a valid reason, send `999999999`.
                     immigration_status:
                       type: string
                       description: >-
@@ -543,8 +568,9 @@ components:
                     website:
                       type: string
                       description: >-
-                        Business. Required on the EUR and USD option, starting
-                        with `http://` or `https://`.
+                        Business. Required on the default USD option and the
+                        EUR and USD option, starting with `http://` or
+                        `https://`.
                     business_address:
                       description: >-
                         Business address, every form. Send `state`, except on
@@ -558,7 +584,10 @@ components:
                         `revenue`, `trading_income`, `investments`,
                         `loans_credits`, `crypto_mining` or `client_funds`. On
                         the default USD option, an optional object of questions
-                        about the money in the account.
+                        about the money in the account. In that object,
+                        `expected_monthly_payments_usd` is an amount, a number
+                        or a decimal string such as `"25000"`. The API refuses
+                        the old ranges, such as `under_5k`.
                     legal_entity_type:
                       type: string
                       description: >-
@@ -600,8 +629,11 @@ components:
                     `date_of_birth`, `email`, `phone_daytime`, `has_ownership`,
                     `has_control` and `is_signer`, and `ownership_percentage`
                     for an owner. The default USD option adds
-                    `citizenship_country` and `residential_address`, and a tax
-                    ID for a US citizen. The USD, EUR and GBP option adds
+                    `citizenship_country`, the person's own
+                    `residential_address`, and `tax_id_type` and
+                    `tax_id_number` for every party: `ssn` for a US citizen,
+                    otherwise `tin` (a national tax or identity number) or
+                    `utr`, or `999999999` for a person who has none. The USD, EUR and GBP option adds
                     `citizenship_country` and `is_director`, and needs
                     `ownership_percentage` from 1 to 100, and at least 25 for a
                     person with control. The EUR and USD option adds
@@ -657,8 +689,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the capabilities, such as `operating`, `yield`
-                or `revenue`. Defaults to `operating`.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -671,7 +704,9 @@ components:
               example: EUR
             category:
               description: >-
-                Defaults to `main`. Use `sub_account` for a customer's account.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -1040,8 +1075,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the option's `account_types`. Defaults to
-                `operating`, the type this option offers.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -1052,7 +1088,9 @@ components:
               example: USD
             category:
               description: >-
-                Defaults to `main`. Use `sub_account` for a customer's account.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -1339,8 +1377,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the option's `account_types`. Defaults to
-                `operating`, the type this option offers.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -1353,7 +1392,9 @@ components:
               example: EUR
             category:
               description: >-
-                Defaults to `main`. Use `sub_account` for a customer's account.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -1530,8 +1571,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the option's `account_types`. Defaults to
-                `operating`, the type this option offers.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -1542,8 +1584,9 @@ components:
               example: NGN
             category:
               description: >-
-                Always send it, such as `sub_account`. Left out, it defaults to
-                `multi_currency`, which this option does not list.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -1639,8 +1682,9 @@ components:
             account_type:
               type: string
               description: >-
-                Account type from the option's `account_types`. Defaults to
-                `operating`, the type this option offers.
+                Account type from the option's `account_types`: `operating`,
+                `regular`, `card` or `default`. Defaults to `operating`. Only
+                your business's own customer can hold `card` or `default`.
               example: operating
             currency:
               type: string
@@ -1658,7 +1702,9 @@ components:
               example: KES
             category:
               description: >-
-                Defaults to `main`. Use `sub_account` for a customer's account.
+                `main` for your business's own account, `sub_account` for a
+                customer's account. Defaults to `main` for your business's own
+                customer and `sub_account` for any other customer.
               allOf:
                 - $ref: '#/components/schemas/Category'
             label:
@@ -1818,7 +1864,7 @@ components:
             enum:
               - negative_balance
         category:
-          $ref: '#/components/schemas/Category'
+          $ref: '#/components/schemas/AccountCategory'
         account_structure:
           type: string
           enum:
@@ -2443,7 +2489,10 @@ components:
                 $ref: '#/components/schemas/CapabilityOption'
             suggestion:
               type: string
-              description: Present when you did not send `customer_id`
+              description: >-
+                Present when you did not send `customer_id`. It tells you to
+                send one, so the response includes any limit set for that
+                customer.
         error:
           type: 'null'
           example: null
@@ -2469,22 +2518,28 @@ components:
             - business
         account_types:
           type: array
-          description: Account types you can send as `account_type`
+          description: >-
+            Account types you can send as `account_type`. Every option offers
+            `operating`, `regular`, `card` and `default`. Only your business's
+            own customer can hold `card` (one per customer) or `default` (one
+            per business, with `category` `main`).
           items:
             type: string
             enum:
               - operating
-              - yield
-              - revenue
+              - regular
+              - card
+              - default
         categories:
           type: array
+          description: >-
+            Categories you can send as `category`: `main` for your business's
+            own account, `sub_account` for a customer's account.
           items:
             type: string
             enum:
               - main
               - sub_account
-              - virtual
-              - multi_currency
         features:
           type: object
           description: Features that accounts of this option support
@@ -2512,12 +2567,17 @@ components:
                 example: polygon
               asset:
                 type: string
-                example: USDC
+                description: Lower case
+                example: usdc
         max_accounts_per_customer:
           type:
             - integer
             - 'null'
-          description: The maximum number of accounts one customer can open. Null means no limit.
+          description: >-
+            How many live (`pending` or `active`) accounts one customer can hold
+            at this option with the same currency and the same `account_type`.
+            Null means no limit. With `customer_id`, it includes any limit set
+            for that customer. With `account_type` `card` or `default`, it is 1.
         requires_customer_record:
           type: boolean
           description: True when the customer must first be registered with the bank
@@ -2600,7 +2660,9 @@ paths:
         limit. Call it before you create an account. Send
         `customer_id`, or `country` with `customer_type`. If you send
         `customer_id` without `customer_type`, the response lists options for
-        both types.
+        both types. The accepted query parameters are `customer_id`,
+        `country`, `subdivision`, `customer_type`, `currency` and
+        `account_type`.
 
 
         The route is under `/v1`, but it is the first step of a v2 account.
@@ -2642,6 +2704,19 @@ paths:
             type: string
           description: Three-letter ISO 4217 code to filter by
           example: USD
+        - in: query
+          name: account_type
+          schema:
+            type: string
+            enum:
+              - operating
+              - regular
+              - card
+              - default
+          description: >-
+            Keeps only the options that offer this account type. With `card` or
+            `default`, each option reports `max_accounts_per_customer` 1.
+          example: operating
       responses:
         '200':
           description: Account options
@@ -2660,6 +2735,9 @@ paths:
                       currency: USD
                       account_types:
                         - operating
+                        - regular
+                        - card
+                        - default
                       categories:
                         - main
                         - sub_account
@@ -2672,7 +2750,7 @@ paths:
                         fbo_account: false
                       token_wallets:
                         - network: polygon
-                          asset: USDC
+                          asset: usdc
                       max_accounts_per_customer: null
                       requires_customer_record: true
                       rails:
@@ -2748,6 +2826,7 @@ paths:
                   customer_type: individual
                   currency: USD
                   account_type: operating
+                  category: sub_account
                   bank_code: cross_river_bank
                   network: polygon
                   label: Jane USD
@@ -2798,8 +2877,11 @@ paths:
                       registration_number: '12345678'
                       incorporation_country: GB
                       incorporation_date: '2015-03-01'
-                      tax_id_type: ein
-                      tax_id_number: '981234567'
+                      tax_id_type: utr
+                      tax_id_number: '1234567890'
+                      email: finance@acme-exports.example
+                      phone: '+442071234567'
+                      website: https://acme-exports.example
                       business_description: >-
                         Exports industrial pumps to buyers in North America
                       business_address:
@@ -2814,6 +2896,14 @@ paths:
                         ownership_percentage: 60
                         has_control: true
                         is_signer: true
+                        tax_id_type: tin
+                        tax_id_number: QQ123456C
+                        residential_address:
+                          address_line: 22 Baker Street
+                          city: London
+                          state: GB-LND
+                          postal_code: NW1 6XE
+                          country: GB
                         documents:
                           - document_type: passport
                             issuing_country: GB
@@ -3066,7 +3156,15 @@ paths:
         '400':
           description: >-
             Invalid request, a customer that does not exist or has not completed
-            KYC, or no bank fits the request
+            KYC, or no bank fits the request. The machine code is in
+            `details.<field>`, such as `ACCOUNT_TYPE_RESERVED_FOR_TENANT` on
+            `account_type` (`card` or `default` for a customer other than your
+            business), `DEFAULT_REQUIRES_MAIN_CATEGORY` on `category`, or, with
+            `bank_code`, `UNKNOWN_BANK`, `BANK_NOT_AVAILABLE`,
+            `ACCOUNT_TYPE_NOT_SUPPORTED`, `CURRENCY_NOT_SUPPORTED`,
+            `CATEGORY_NOT_SUPPORTED`, `CUSTOMER_TYPE_NOT_SUPPORTED`,
+            `COUNTRY_NOT_SERVED` or `SUBDIVISION_NOT_SERVED`. Without
+            `bank_code`, the same problems return `UNSUPPORTED_COMBINATION`.
           content:
             application/json:
               schema:
@@ -3102,7 +3200,12 @@ paths:
           description: >-
             The customer is at the account limit, the bank is disabled for this
             account, an application is already in progress at this bank, or a
-            request with the same Idempotency-Key is still running
+            request with the same Idempotency-Key is still running. Also
+            `CARD_ACCOUNT_ALREADY_EXISTS` (a second card account for the
+            customer), `DEFAULT_ACCOUNT_ALREADY_EXISTS` (a second default
+            account for your business), `MAIN_ACCOUNT_ALREADY_EXISTS` (a second
+            main default account) and `WALLET_ALREADY_ASSIGNED` (the wallet
+            already backs another account).
           content:
             application/json:
               schema:
@@ -3162,8 +3265,11 @@ paths:
               - manual_review
         - in: query
           name: category
+          description: >-
+            Filter by category. `virtual` and `multi_currency` find older
+            accounts only.
           schema:
-            $ref: '#/components/schemas/Category'
+            $ref: '#/components/schemas/AccountCategory'
         - in: query
           name: currency
           schema:
@@ -3211,7 +3317,9 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
-          description: Page size, 1 to 200. The API uses 50 for a value out of range.
+          description: >-
+            Page size, 1 to 200. A `limit` that is not a whole number returns
+            400. A whole number outside 1 to 200 becomes 50.
         - in: query
           name: offset
           schema:
@@ -3363,7 +3471,11 @@ paths:
                   has_existing_ref: false
                 error: null
         '400':
-          description: Missing parameters, or no bank fits the request
+          description: >-
+            Missing parameters, or no bank fits the request
+            (`UNSUPPORTED_COMBINATION`). A `bank_code` that does not exist
+            returns `UNKNOWN_BANK`. `category` accepts only `main` and
+            `sub_account`.
           content:
             application/json:
               schema:
@@ -3599,7 +3711,7 @@ paths:
                   required_documents:
                     - proof_of_address
                   requires_user_action: true
-                  category: main
+                  category: sub_account
                   bank_name: Example Bank
                   bank_code: cross_river_bank
                   settlement_enabled: false
