@@ -60,6 +60,11 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Changed
 
+- The accounts tools follow the corrected accounts reference: `account_type` is `operating`,
+  `regular`, `card` or `default`; `category` takes only `main` and `sub_account` when you open
+  an account; `getAccountCapabilities` takes `account_type`; and `createAccount` (card account)
+  makes `bank` optional.
+
 - `createAccount`, `getAccount` and `listAccounts` stay, only for the business's one card
   account: v2 cannot open a working card account yet. Their descriptions say so, and that
   every other account is opened with `createAccountV2`. `createAccount` takes `type`

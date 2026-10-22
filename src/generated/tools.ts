@@ -372,7 +372,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v1/accounts",
-    "description": "Open your card account — Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. The API refuses an end customer's ID and a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or read the account until it is `active`, before you activate cards with it. This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.\n\nONLY for your business's one card account. Open every other account with createAccountV2. A business has one card account: look first with listAccounts (account_type card). bank is `lead_bank` or `cross_river_bank`. It is ready at account.activated, when getAccount shows `active`. After a failed call, fix the request and leave idempotency_key out.",
+    "description": "Open your card account — Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. The API refuses an end customer's ID and a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or read the account until it is `active`, before you activate cards with it. `POST /v1/accounts` opens card accounts only at `lead_bank` and `cross_river_bank`, in USD. Leave `bank` out and Gravv tries `lead_bank` first, then `cross_river_bank`. Gravv sets `category` itself: `main` for your business's own customer. v1 reads your business's KYC from its customer record and takes no KYC data in the body. This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account, for any bank, currency or country, with `POST /v2/accounts`. Every error is HTTP 400, for example: - `failed to create internal account: card accounts cannot be created for this customer — this account type is reserved for the tenant`: you sent an end customer's ID. - `failed to create internal account: card account already exists for customer (account_id: <id>)`: use that card account. A `deleted`, `frozen` or `failed` card account does not count. - `failed to create internal account: kyc validation failed: no KYC information found for the customer`: your business's `basic` KYC is not `completed`. - `failed to create internal account: account issuance for the requested currency USD and network <network> is not supported`: a `bank` other than `lead_bank` or `cross_river_bank`. - `missing idempotency key in request headers`: send an `Idempotency-Key`.\n\nONLY for your business's one card account. Open every other account with createAccountV2. A business has one card account: look first with listAccounts (account_type card). bank is `lead_bank` or `cross_river_bank`. It is ready at account.activated, when getAccount shows `active`. After a failed call, fix the request and leave idempotency_key out.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -422,7 +422,7 @@ export const TOOLS: GeneratedTool[] = [
             "lead_bank",
             "cross_river_bank"
           ],
-          "description": "Bank that holds the card account",
+          "description": "Bank that holds the card account. Leave it out and Gravv tries `lead_bank` first, then `cross_river_bank`. Any other value is refused.",
           "example": "cross_river_bank"
         },
         "idempotency_key": {
@@ -438,8 +438,7 @@ export const TOOLS: GeneratedTool[] = [
         "type",
         "label",
         "customer_id",
-        "blockchain_network",
-        "bank"
+        "blockchain_network"
       ],
       "additionalProperties": true
     },
@@ -488,7 +487,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "account_type": {
           "type": "string",
-          "description": "Account type from the capabilities, such as `operating`, `yield` or `revenue`. Defaults to `operating`.",
+          "description": "Account type from the option's `account_types`: `operating`, `regular`, `card` or `default`. Defaults to `operating`. Only your business's own customer can hold `card` or `default`.",
           "example": "operating"
         },
         "currency": {
@@ -509,14 +508,12 @@ export const TOOLS: GeneratedTool[] = [
         },
         "category": {
           "type": "string",
+          "description": "`main` for your business's own account, `sub_account` for a customer's account. Defaults to `main` for your business's own customer and `sub_account` for any other customer.",
           "enum": [
             "main",
-            "sub_account",
-            "virtual",
-            "multi_currency"
+            "sub_account"
           ],
-          "example": "main",
-          "description": "Defaults to `main`. Use `sub_account` for a customer's account."
+          "example": "sub_account"
         },
         "label": {
           "type": "string",
@@ -574,8 +571,12 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "email": {
                   "type": "string",
-                  "description": "Person, every form. Business, on the USD, EUR and GBP option.",
+                  "description": "Person, every form. Business, on the default USD option (the business email) and the USD, EUR and GBP option.",
                   "example": "jane@example.com"
+                },
+                "phone": {
+                  "type": "string",
+                  "description": "Business, on the default USD option. The business phone number with its country code, such as `+442071234567`."
                 },
                 "phone_daytime": {
                   "type": "string",
@@ -631,16 +632,18 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "tax_id_type": {
                   "type": "string",
-                  "description": "Person: on the default USD option, `ssn` for a US citizen; on the USD, EUR and GBP option, `ssn` once you send `tax_id_number`. Business: `ein` for a US company, and only `ein` on the default USD option. Required for a business on the default USD option and the USD, EUR and GBP option.",
+                  "description": "Person: on the default USD option, `ssn` for a US citizen; on the USD, EUR and GBP option, `ssn` once you send `tax_id_number`. Business: required on the default USD option and the USD, EUR and GBP option, and `ein` for a company incorporated in the US. On the default USD option a business sends `ein`, `ssn`, `tin`, `vat` or `utr`.",
                   "enum": [
                     "ssn",
                     "ein",
-                    "tin"
+                    "tin",
+                    "vat",
+                    "utr"
                   ]
                 },
                 "tax_id_number": {
                   "type": "string",
-                  "description": "Write-only. The number of `tax_id_type`. A US citizen sends it on the default USD option. A business sends it on the default USD option and the USD, EUR and GBP option."
+                  "description": "Write-only. The number of `tax_id_type`, in any format. Gravv sends only its letters and digits to the bank. A US citizen sends it on the default USD option. A business sends it on the default USD option and the USD, EUR and GBP option. If the business has no tax ID for a valid reason, send `999999999`."
                 },
                 "immigration_status": {
                   "type": "string",
@@ -793,7 +796,7 @@ export const TOOLS: GeneratedTool[] = [
                 },
                 "website": {
                   "type": "string",
-                  "description": "Business. Required on the EUR and USD option, starting with `http://` or `https://`."
+                  "description": "Business. Required on the default USD option and the EUR and USD option, starting with `http://` or `https://`."
                 },
                 "business_address": {
                   "type": "object",
@@ -825,7 +828,7 @@ export const TOOLS: GeneratedTool[] = [
                   "description": "Business address, every form. Send `state`, except on the USD, EUR and GBP option, which needs it only for an address in the US."
                 },
                 "source_of_funds": {
-                  "description": "Business, on the EUR and USD option: required, one of `revenue`, `trading_income`, `investments`, `loans_credits`, `crypto_mining` or `client_funds`. On the default USD option, an optional object of questions about the money in the account."
+                  "description": "Business, on the EUR and USD option: required, one of `revenue`, `trading_income`, `investments`, `loans_credits`, `crypto_mining` or `client_funds`. On the default USD option, an optional object of questions about the money in the account. In that object, `expected_monthly_payments_usd` is an amount, a number or a decimal string such as `\"25000\"`. The API refuses the old ranges, such as `under_5k`."
                 },
                 "legal_entity_type": {
                   "type": "string",
@@ -973,11 +976,6 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "description": "Person. The town or city of birth."
                 },
-                "phone": {
-                  "type": "string",
-                  "description": "Required. Phone number in E.164 format.",
-                  "example": "+2348031234567"
-                },
                 "bank_verification_number": {
                   "type": "string",
                   "description": "Required and write-only. The 11-digit Bank Verification Number. Gravv checks it against the national registry. The API accepts the old name `bvn`, but never both."
@@ -986,7 +984,7 @@ export const TOOLS: GeneratedTool[] = [
             },
             "parties": {
               "type": "array",
-              "description": "Business only. The API refuses it for individuals. Declare 1 to 10 people. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record. Every form asks for names, `date_of_birth`, `email`, `phone_daytime`, `has_ownership`, `has_control` and `is_signer`, and `ownership_percentage` for an owner. The default USD option adds `citizenship_country` and `residential_address`, and a tax ID for a US citizen. The USD, EUR and GBP option adds `citizenship_country` and `is_director`, and needs `ownership_percentage` from 1 to 100, and at least 25 for a person with control. The EUR and USD option adds `tax_residence_country` and `residential_address`.",
+              "description": "Business only. The API refuses it for individuals. Declare 1 to 10 people. Each entry is an associated person from the customer record (`id` plus any changes) or a new person with the new-party fields. Leave it out to declare every associated person on the record. Every form asks for names, `date_of_birth`, `email`, `phone_daytime`, `has_ownership`, `has_control` and `is_signer`, and `ownership_percentage` for an owner. The default USD option adds `citizenship_country`, the person's own `residential_address`, and `tax_id_type` and `tax_id_number` for every party: `ssn` for a US citizen, otherwise `tin` (a national tax or identity number) or `utr`, or `999999999` for a person who has none. The USD, EUR and GBP option adds `citizenship_country` and `is_director`, and needs `ownership_percentage` from 1 to 100, and at least 25 for a person with control. The EUR and USD option adds `tax_residence_country` and `residential_address`.",
               "items": {
                 "type": "object",
                 "description": "A person declared on a business account: an associated person on the customer record by `id`, with any changes, or a new person with the new-party fields.",
@@ -3584,7 +3582,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "get",
     "path": "/v1/accounts/capabilities",
-    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account. Send `customer_id`, or `country` with `customer_type`. If you send `customer_id` without `customer_type`, the response lists options for both types. The route is under `/v1`, but it is the first step of a v2 account. The API rejects unknown query parameters.\n\nCall first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
+    "description": "Get account capabilities — Lists the accounts a customer can open from their country: bank, currency, account types, token wallets, rails and the per-customer limit. Call it before you create an account. Send `customer_id`, or `country` with `customer_type`. If you send `customer_id` without `customer_type`, the response lists options for both types. The accepted query parameters are `customer_id`, `country`, `subdivision`, `customer_type`, `currency` and `account_type`. The route is under `/v1`, but it is the first step of a v2 account. The API rejects unknown query parameters.\n\nCall first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3612,6 +3610,16 @@ export const TOOLS: GeneratedTool[] = [
         "currency": {
           "type": "string",
           "description": "Three-letter ISO 4217 code to filter by"
+        },
+        "account_type": {
+          "type": "string",
+          "enum": [
+            "operating",
+            "regular",
+            "card",
+            "default"
+          ],
+          "description": "Keeps only the options that offer this account type. With `card` or `default`, each option reports `max_accounts_per_customer` 1."
         }
       },
       "required": [],
@@ -3623,7 +3631,8 @@ export const TOOLS: GeneratedTool[] = [
       "country",
       "subdivision",
       "customer_type",
-      "currency"
+      "currency",
+      "account_type"
     ],
     "bodyMode": "none",
     "bodyProps": [],
@@ -3664,13 +3673,12 @@ export const TOOLS: GeneratedTool[] = [
         },
         "category": {
           "type": "string",
+          "description": "`main` is your business's own account. `sub_account` is an account for one of your customers. These are the only two categories you can open.",
           "enum": [
             "main",
-            "sub_account",
-            "virtual",
-            "multi_currency"
+            "sub_account"
           ],
-          "example": "main"
+          "example": "sub_account"
         },
         "country": {
           "type": "string",
@@ -4748,13 +4756,14 @@ export const TOOLS: GeneratedTool[] = [
         },
         "category": {
           "type": "string",
+          "description": "Filter by category. `virtual` and `multi_currency` find older accounts only.",
           "enum": [
             "main",
             "sub_account",
             "virtual",
             "multi_currency"
           ],
-          "example": "main"
+          "example": "sub_account"
         },
         "currency": {
           "type": "string",
@@ -4800,7 +4809,7 @@ export const TOOLS: GeneratedTool[] = [
           "minimum": 1,
           "maximum": 200,
           "default": 50,
-          "description": "Page size, 1 to 200. The API uses 50 for a value out of range."
+          "description": "Page size, 1 to 200. A `limit` that is not a whole number returns 400. A whole number outside 1 to 200 becomes 50."
         },
         "offset": {
           "type": "integer",

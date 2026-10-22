@@ -20,7 +20,15 @@ paths:
       description: |-
         Opens your business's one card account, which backs every card you issue. Send `type` `card`, `currency` `USD` and your business's own customer ID, which is the `customer_id` on your account whose `category` is `main`. The API refuses an end customer's ID and a second card account. The account starts `pending`. Wait for the `account.activated` webhook, or read the account until it is `active`, before you activate cards with it.
 
-        This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account with `POST /v2/accounts`. Every error is HTTP 400.
+        `POST /v1/accounts` opens card accounts only at `lead_bank` and `cross_river_bank`, in USD. Leave `bank` out and Gravv tries `lead_bank` first, then `cross_river_bank`. Gravv sets `category` itself: `main` for your business's own customer. v1 reads your business's KYC from its customer record and takes no KYC data in the body.
+
+        This is the only use of `POST /v1/accounts` that Gravv documents. Open every other account, for any bank, currency or country, with `POST /v2/accounts`. Every error is HTTP 400, for example:
+
+        - `failed to create internal account: card accounts cannot be created for this customer — this account type is reserved for the tenant`: you sent an end customer's ID.
+        - `failed to create internal account: card account already exists for customer (account_id: <id>)`: use that card account. A `deleted`, `frozen` or `failed` card account does not count.
+        - `failed to create internal account: kyc validation failed: no KYC information found for the customer`: your business's `basic` KYC is not `completed`.
+        - `failed to create internal account: account issuance for the requested currency USD and network <network> is not supported`: a `bank` other than `lead_bank` or `cross_river_bank`.
+        - `missing idempotency key in request headers`: send an `Idempotency-Key`.
       parameters:
       - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -63,7 +71,7 @@ paths:
                   tenant_name: Acme Payments
                   tenant_id: b8b2f7f4-3c2a-4f3e-9d61-0c5a7d1e2f33
                   status: pending
-                  category: sub_account
+                  category: main
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -216,7 +224,9 @@ components:
           example: polygon
         type:
           type: string
-          description: Type of account.
+          description: >-
+            Type of account. Your card account is `card`. `operating` is a v2 type, so `POST /v1/accounts`
+            refuses it.
           enum:
           - regular
           - savings
@@ -279,7 +289,9 @@ components:
           description: Why the account is not active. Omitted for active accounts.
         category:
           type: string
-          description: '`main` for your own accounts, `sub_account` for your customers'' accounts.'
+          description: >-
+            `main` for your own accounts, `sub_account` for your customers' accounts. Gravv sets it on
+            `POST /v1/accounts` and ignores any `category` you send. A card account is always `main`.
           enum:
           - main
           - sub_account
@@ -394,7 +406,6 @@ components:
       - label
       - customer_id
       - blockchain_network
-      - bank
       properties:
         currency:
           type: string
@@ -435,5 +446,7 @@ components:
           enum:
           - lead_bank
           - cross_river_bank
-          description: Bank that holds the card account
+          description: >-
+            Bank that holds the card account. Leave it out and Gravv tries `lead_bank` first, then
+            `cross_river_bank`. Any other value is refused.
           example: cross_river_bank
