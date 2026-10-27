@@ -1783,9 +1783,7 @@ components:
               example: b140f51d-2598-410a-a583-e1cb7a871443
             customer_type:
               type: string
-              description: >-
-                The customer's type. Send it: without it the request finds no
-                account option and answers 400
+              description: The customer's type, as the customer record has it
               enum:
                 - individual
                 - business

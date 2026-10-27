@@ -769,7 +769,7 @@ export const PROMPTS: GoalPrompt[] = [
         steps: [
           "getCustomer: the `kyc` entry with type `basic` must be `completed`.",
           "listAccountsV2 with customer_id: a customer holds one savings account (category `savings`). If one exists, use it.",
-          "createAccountV2 with customer_id, customer_type, currency USD and category `savings`. customer_type is required: without it the call answers 400 \"no account option is available\". Leave out wallet_id; leave out network and account_type, or send `avalanche_c_chain` and `regular`. Show the summary and ask first.",
+          "createAccountV2 with customer_id, customer_type, currency USD and category `savings`. customer_type is required. Leave out wallet_id; leave out network and account_type, or send `avalanche_c_chain` and `regular`. Show the summary and ask first.",
           "Poll getAccountV2 until `active`. Its id is the savings id for every later step.",
         ],
       },
