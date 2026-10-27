@@ -72,11 +72,12 @@ components:
     AccountCategory:
       type: string
       description: >-
-        `main` or `sub_account`. Older accounts can also show `virtual` or
-        `multi_currency`. You cannot open an account in those two.
+        `main`, `sub_account` or `savings`. Older accounts can also show
+        `virtual` or `multi_currency`. You cannot open an account in those two.
       enum:
         - main
         - sub_account
+        - savings
         - virtual
         - multi_currency
       example: sub_account
@@ -1760,6 +1761,68 @@ components:
                         serves only KE.
                       enum:
                         - KE
+        - title: Savings account
+          description: >-
+            A USD account with US bank details, tied to the customer's savings.
+            Money that arrives is available, and the customer moves it into
+            savings with `POST /v1/transfer`. One per customer, USD only, and
+            the customer's KYC must be completed. See
+            [How savings works](/platform/savings/overview).
+          type: object
+          required:
+            - customer_id
+            - currency
+            - category
+          additionalProperties: false
+          properties:
+            customer_id:
+              type: string
+              description: An existing customer whose KYC is completed
+              format: uuid
+              example: b140f51d-2598-410a-a583-e1cb7a871443
+            customer_type:
+              type: string
+              enum:
+                - individual
+                - business
+              example: individual
+            account_type:
+              type: string
+              description: Leave it out, or send `regular`
+              enum:
+                - regular
+            currency:
+              type: string
+              enum:
+                - USD
+              example: USD
+            category:
+              type: string
+              description: Send `savings` to open a savings account
+              enum:
+                - savings
+            label:
+              type: string
+              description: Your label for the account, at most 255 bytes
+              example: Ada savings
+            bank_code:
+              type: string
+              description: >-
+                A `bank_code` from `GET /v1/accounts/capabilities` whose option
+                lists `savings` in `categories`. Leave it out to use the default.
+              example: lead_bank
+            network:
+              type: string
+              description: >-
+                Leave it out, or send `avalanche_c_chain`. The savings wallet is
+                always on that network.
+              enum:
+                - avalanche_c_chain
+            data:
+              type: object
+              description: >-
+                The form from `GET /v2/accounts/requirements`, when it asks for
+                fields the customer record does not already answer
     AccountV2:
       type: object
       description: >-
@@ -1995,6 +2058,15 @@ components:
                 type: string
         wallet_uuid:
           type: string
+        savings_wallet_id:
+          type: string
+          format: uuid
+          description: >-
+            On a savings account, the savings wallet behind it. Read the savings
+            with `GET /v1/savings/{id}` and the account id.
+        savings_wallet_address:
+          type: string
+          description: On a savings account, the savings wallet's address
         settlement_enabled:
           type: boolean
           description: Whether a settlement wallet is attached. Always present.
@@ -2534,12 +2606,14 @@ components:
           type: array
           description: >-
             Categories you can send as `category`: `main` for your business's
-            own account, `sub_account` for a customer's account.
+            own account, `sub_account` for a customer's account, and `savings`
+            where this option can open a savings account.
           items:
             type: string
             enum:
               - main
               - sub_account
+              - savings
         features:
           type: object
           description: Features that accounts of this option support
@@ -2810,6 +2884,11 @@ paths:
         `active`, or wait for the `applications.accounts.completed` webhook.
         Gravv does not send `account.activated` for v2 accounts. The API
         rejects unknown fields. When you retry, reuse the same Idempotency-Key.
+
+
+        For a savings account send `category: savings`, `currency: USD`, and
+        no `wallet_id`. A customer can hold one savings account. It cannot have
+        a settlement wallet and cannot be closed yet.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2933,6 +3012,13 @@ paths:
                         issuing_country: GB
                         filename: org-chart.pdf
                         content: '<base64>'
+              SavingsUSD:
+                summary: Savings account for a person
+                value:
+                  customer_id: b140f51d-2598-410a-a583-e1cb7a871443
+                  currency: USD
+                  category: savings
+                  label: Ada savings
               IndividualEURWallet:
                 summary: Individual EUR account with a polygon wallet
                 value:
@@ -3165,6 +3251,11 @@ paths:
             `CATEGORY_NOT_SUPPORTED`, `CUSTOMER_TYPE_NOT_SUPPORTED`,
             `COUNTRY_NOT_SERVED` or `SUBDIVISION_NOT_SERVED`. Without
             `bank_code`, the same problems return `UNSUPPORTED_COMBINATION`.
+            A savings account returns `SAVINGS_CURRENCY_NOT_SUPPORTED` on
+            `currency` (not USD), `SAVINGS_ACCOUNT_TYPE_NOT_SUPPORTED` on
+            `account_type` (not `regular`), `SAVINGS_NETWORK_NOT_SUPPORTED` on
+            `network` (not `avalanche_c_chain`) or `SAVINGS_WALLET_NOT_ACCEPTED`
+            on `wallet_id`.
           content:
             application/json:
               schema:
@@ -3204,8 +3295,9 @@ paths:
             `CARD_ACCOUNT_ALREADY_EXISTS` (a second card account for the
             customer), `DEFAULT_ACCOUNT_ALREADY_EXISTS` (a second default
             account for your business), `MAIN_ACCOUNT_ALREADY_EXISTS` (a second
-            main default account) and `WALLET_ALREADY_ASSIGNED` (the wallet
-            already backs another account).
+            main default account), `WALLET_ALREADY_ASSIGNED` (the wallet
+            already backs another account) and `SAVINGS_ACCOUNT_ALREADY_EXISTS`
+            (a second savings account for the customer).
           content:
             application/json:
               schema:
@@ -3474,8 +3566,8 @@ paths:
           description: >-
             Missing parameters, or no bank fits the request
             (`UNSUPPORTED_COMBINATION`). A `bank_code` that does not exist
-            returns `UNKNOWN_BANK`. `category` accepts only `main` and
-            `sub_account`.
+            returns `UNKNOWN_BANK`. `category` accepts only `main`,
+            `sub_account` and `savings`.
           content:
             application/json:
               schema:

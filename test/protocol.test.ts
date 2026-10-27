@@ -223,9 +223,9 @@ describe("tools/list", () => {
 });
 
 describe("prompts", () => {
-  test("prompts/list returns the ten goal prompts", async () => {
+  test("prompts/list returns the eleven goal prompts", async () => {
     const prompts = (await s.request("prompts/list")).result.prompts as any[];
-    assert.equal(prompts.length, 10);
+    assert.equal(prompts.length, 11);
     for (const p of prompts) {
       assert.match(p.name, /^[a-z-]+$/);
       assert.ok(p.description, `${p.name} needs a description`);

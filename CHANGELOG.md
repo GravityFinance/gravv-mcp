@@ -7,10 +7,18 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 ## 0.4.0 (unreleased)
 
 This release brings the tools in line with the current API reference. API tools go from 72
-to 83, all in the default load (82 on a live key, which hides the sandbox tool). Every
+to 89, all in the default load (87 on a live key, which hides the two sandbox tools). Every
 documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
+
+- Savings, sandbox only for now (a live key gets 501 until savings opens in live). A
+  `savings` toolset with `getSavingsRate`, `getSavings` and `getSavingsStatement`;
+  `simulateSavingsInterest` in `sandbox`, sandbox keys only; and the `set-up-savings` goal
+  prompt. Saving and withdrawing are `createTransfer` with a `savings` side, so they keep its
+  confirm step. `createAccountV2` takes `category: savings`.
+- `verifyWireRoutingNumber` and `verifyRtpRoutingNumber` in `external-accounts`: check that a
+  US routing number takes wires or instant payments before you add the payee.
 
 - `data/gravv-shared.json` (`npm run export-data`): the error fixes, money-moving and
   sandbox-only routes, goal prompts and scenario requests, for the Gravv CLI to embed.

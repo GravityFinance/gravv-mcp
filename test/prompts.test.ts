@@ -31,7 +31,7 @@ function textsOf(p: GoalPrompt): string[] {
 const full = (p: GoalPrompt) => renderPrompt(p, {}, { hasApiKey: true, loadedTools: ALL_LOADED });
 
 describe("prompt set", () => {
-  test("the ten goals, each named once", () => {
+  test("the eleven goals, each named once", () => {
     assert.deepEqual(
       PROMPTS.map((p) => p.name),
       [
@@ -43,6 +43,7 @@ describe("prompt set", () => {
         "convert-currency",
         "issue-card",
         "collect-payment",
+        "set-up-savings",
         "reconcile",
         "fix-stuck-transfer",
       ],
@@ -197,7 +198,7 @@ describe("prompts over MCP", () => {
     try {
       assert.ok(client.getServerCapabilities()?.prompts);
       const { prompts } = await client.listPrompts();
-      assert.equal(prompts.length, 10);
+      assert.equal(prompts.length, 11);
       for (const p of prompts) {
         assert.ok(p.title && p.description, p.name);
         assert.equal(p.arguments?.length, 1, p.name);
@@ -238,7 +239,7 @@ describe("prompts over MCP", () => {
   test("prompts are offered without a key, and say the API tools need one", async () => {
     const client = await connect(undefined);
     try {
-      assert.equal((await client.listPrompts()).prompts.length, 10);
+      assert.equal((await client.listPrompts()).prompts.length, 11);
       const got = await client.getPrompt({ name: "issue-card" });
       const content = got.messages[0]!.content;
       assert.match(content.type === "text" ? content.text : "", /This session has no API key/);

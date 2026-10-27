@@ -231,10 +231,10 @@ describe("sandbox-only tools", () => {
     }
   });
 
-  test("only the deposit simulator is sandbox-only", () => {
+  test("only the deposit and interest simulators are sandbox-only", () => {
     assert.deepEqual(
-      [...TOOLS_BY_NAME.values()].filter((t) => t.sandboxOnly).map((t) => t.name),
-      ["simulateDeposit"],
+      [...TOOLS_BY_NAME.values()].filter((t) => t.sandboxOnly).map((t) => t.name).sort(),
+      ["simulateDeposit", "simulateSavingsInterest"],
     );
   });
 });

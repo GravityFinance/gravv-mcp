@@ -741,6 +741,80 @@ export const PROMPTS: GoalPrompt[] = [
 
   // ---------------------------------------------------------------------------
   {
+    name: "set-up-savings",
+    title: "Set up savings for a customer",
+    description:
+      "Open a savings account, save into it, withdraw from it, read interest and statements, and test it all in sandbox.",
+    scenarios: ["S-SAV-01"],
+    argument: {
+      name: "path",
+      kind: "path",
+      description: "Optional: open, move, read or test. Leave it out for every path.",
+    },
+    intro:
+      "Give a customer savings that earn a daily rate, in the order below. Savings is a USD account; money on it is available, and the customer moves it into savings and back with transfers.",
+    askFirst: [
+      "Which customer (customer_id). Their KYC must be completed.",
+      "For a save or a withdrawal, the amount in US dollars, with at most 2 decimal places.",
+    ],
+    labels: [
+      "Available: savings in sandbox.",
+      "Not yet available: savings with a live key (the savings tools answer 501 until savings opens in live).",
+    ],
+    paths: [
+      {
+        keys: ["open"],
+        title: "Open a savings account",
+        scenarios: ["S-SAV-01"],
+        steps: [
+          "getCustomer: the `kyc` entry with type `basic` must be `completed`.",
+          "listAccountsV2 with customer_id: a customer holds one savings account (category `savings`). If one exists, use it.",
+          "createAccountV2 with customer_id, currency USD and category `savings`. Leave out wallet_id; leave out network and account_type, or send `avalanche_c_chain` and `regular`. Show the summary and ask first.",
+          "Poll getAccountV2 until `active`. Its id is the savings id for every later step.",
+        ],
+      },
+      {
+        keys: ["move"],
+        title: "Save and withdraw",
+        scenarios: ["S-SAV-01"],
+        steps: [
+          "getSavingsRate for today's rate, to show the user.",
+          "To save: createTransfer with source {source_type: internal_account, id: <savings id>}, destination {destination_type: savings, id: <the same id>}, amount, customer_id and a client_reference. Confirm first: \"Save X USD into <name>'s savings?\"",
+          "To withdraw: the same, with source_type `savings` and destination_type `internal_account`. A withdrawal cannot be more than getSavings `saved_balance`.",
+          "The answer is `pending`. Wait for `transfer.status.completed`, then getSavings. `transfer.savings.awaiting_liquidity` on a withdrawal is not a failure: the money is safe and the withdrawal completes later.",
+        ],
+      },
+      {
+        keys: ["read"],
+        title: "Read the savings, interest and a statement",
+        scenarios: ["S-SAV-01"],
+        steps: [
+          "getSavings with the savings account id: `available_balance` is not saved yet, `saved_balance` earns, `earned_total` is all interest so far. Round to 2 places for the user.",
+          "Interest is added once a night in live, at about 01:30 UTC, with a `savings.interest.credited` webhook.",
+          "getSavingsStatement with from and to (YYYY-MM-DD, UTC, at most 92 days) for one row per day; format csv gives a file.",
+        ],
+      },
+      {
+        keys: ["test"],
+        title: "Test it all in sandbox",
+        scenarios: ["S-SAV-01"],
+        steps: [
+          "simulateDeposit on the savings account funds it. Each call makes a new deposit, so ask before repeating it.",
+          "Save, then simulateSavingsInterest with account_id and an amount such as \"0.25\" once the save is completed. It sends `savings.interest.credited`.",
+          "The cents choose a sandbox outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes and then completes, a withdrawal ending .14 fails and the money stays saved.",
+        ],
+      },
+    ],
+    rules: [
+      "Saving and withdrawing use the same savings account id on both sides of createTransfer.",
+      "Saves and withdrawals have no fee, no limits and no approval step. In live the smallest save is 1 USD.",
+      "A savings account cannot have a settlement wallet and cannot be closed yet.",
+    ],
+    docs: ["platform/savings/overview", "recipes/sandbox/test-savings-end-to-end"],
+  },
+
+  // ---------------------------------------------------------------------------
+  {
     name: "reconcile",
     title: "Reconcile money movements",
     description:

@@ -466,7 +466,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "accounts",
     "method": "post",
     "path": "/v2/accounts",
-    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2.\n\nThe body takes one of these shapes. Wallet-backed USD account: also requires network or wallet_id. Wallet-backed EUR or GBP account: also requires network or wallet_id. USD account in the US (no wallet): also requires bank_code. EUR or GBP account with its own IBAN: also requires bank_code. NGN account: nothing more is required. Account held in Kenya: nothing more is required.",
+    "description": "Create an account — Opens a bank account, with a token wallet where the bank offers one, for a customer whose KYC is completed. First call getAccountCapabilities to choose `bank_code`, `currency` and `account_type`, then getAccountRequirements to build `data`. The response has only `account_id` and `status: pending`. Get the account (getAccountV2) for `application_id` and `status_reason`, and poll until it is `active`, or wait for the `applications.accounts.completed` webhook. v2 accounts do not send `account.activated`. Unknown fields are rejected.\n\nPREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of at most 2 MB each; in sandbox, under 500 KB for all of one call's files) in place of base64 content. Then poll getAccountV2 until `active`, and act on status_reason with updateAccountApplicationV2. A SAVINGS account is category `savings`, currency USD, no wallet_id, account_type left out or `regular`, network left out or `avalanche_c_chain`; one per customer (409 SAVINGS_ACCOUNT_ALREADY_EXISTS). It is sandbox-only for now.\n\nThe body takes one of these shapes. Wallet-backed USD account: also requires network or wallet_id. Wallet-backed EUR or GBP account: also requires network or wallet_id. USD account in the US (no wallet): also requires bank_code. EUR or GBP account with its own IBAN: also requires bank_code. NGN account: nothing more is required. Account held in Kenya: nothing more is required. Savings account: also requires category.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -511,7 +511,8 @@ export const TOOLS: GeneratedTool[] = [
           "description": "`main` for your business's own account, `sub_account` for a customer's account. Defaults to `main` for your business's own customer and `sub_account` for any other customer.",
           "enum": [
             "main",
-            "sub_account"
+            "sub_account",
+            "savings"
           ],
           "example": "sub_account"
         },
@@ -2454,7 +2455,7 @@ export const TOOLS: GeneratedTool[] = [
         },
         "payment_rail": {
           "type": "string",
-          "description": "There is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments.",
+          "description": "There is no default. `wire` needs a routing number that takes wires, and `rtp` one that takes instant payments. Check it first with `GET /v1/external-accounts/routing-numbers/{routing_number}/wire` or `/rtp`.",
           "enum": [
             "ach",
             "wire",
@@ -2808,7 +2809,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Create a transfer — Sends money from a customer's account, crypto wallet or card to an account, crypto wallet, crypto address, card or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
+    "description": "Create a transfer — Sends money from a customer's account, crypto wallet, card or savings to an account, crypto wallet, crypto address, card, savings or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2821,17 +2822,18 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "source_type": {
               "type": "string",
-              "description": "A `card` source can only be withdrawn to its own card account.",
+              "description": "A `card` source can only be withdrawn to its own card account. A `savings` source withdraws from savings: send the savings account id, and the same id as an `internal_account` destination.",
               "enum": [
                 "internal_account",
                 "internal_crypto_wallet",
-                "card"
+                "card",
+                "savings"
               ]
             },
             "id": {
               "type": "string",
               "format": "uuid",
-              "description": "ID of the account, crypto wallet or card (UUID version 4)",
+              "description": "ID of the account, crypto wallet, card or savings account (UUID version 4)",
               "example": "b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8"
             },
             "currency": {
@@ -2994,6 +2996,27 @@ export const TOOLS: GeneratedTool[] = [
                   "type": "string",
                   "format": "uuid",
                   "description": "ID of the card to fund"
+                }
+              }
+            },
+            {
+              "title": "Savings",
+              "type": "object",
+              "required": [
+                "destination_type",
+                "id"
+              ],
+              "properties": {
+                "destination_type": {
+                  "type": "string",
+                  "enum": [
+                    "savings"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "The savings account id. The source is the same id as an `internal_account`. See [Save and withdraw](/platform/savings/save-and-withdraw)."
                 }
               }
             }
@@ -4225,6 +4248,120 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "collections.yaml"
   },
   {
+    "name": "getSavings",
+    "toolset": "savings",
+    "method": "get",
+    "path": "/v1/savings/{id}",
+    "description": "Get a customer's savings — Returns what is saved, what is still on the account, what is moving and what has been earned. Read it after a `transfer.status.completed` for a save or a withdrawal, or after `savings.interest.credited`.\n\nid is the savings account id (category `savings` on getAccountV2). The savings wallet id also works but its available_balance is the wallet's own, so prefer the account id. Amounts are USDC strings with 6 places: available_balance is not saved yet, saved_balance earns and is the most a withdrawal can take, pending_balance is negative while a withdrawal is on its way. Read it after transfer.status.completed for a save or withdrawal. A live key gets 501 for now.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The savings account id from `POST /v2/accounts`. The id of the savings wallet behind it also works, but its `available_balance` is the wallet's own, so use the account id."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "savings.yaml"
+  },
+  {
+    "name": "getSavingsRate",
+    "toolset": "savings",
+    "method": "get",
+    "path": "/v1/savings/rate",
+    "description": "Get the savings rate — Returns today's yearly savings rate. The rate moves once a day, so you can show it next to a save button. In sandbox it is fixed at 3.50 and `indicative` is true.\n\nToday's yearly rate in percent (apy) and basis points (apy_bps). In sandbox it is fixed at 3.50 with indicative true. Savings is sandbox-only for now: a live key gets 501.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "savings.yaml"
+  },
+  {
+    "name": "getSavingsStatement",
+    "toolset": "savings",
+    "method": "get",
+    "path": "/v1/savings/{id}/statement",
+    "description": "Get a savings statement — Returns one row per UTC day with the opening balance, what was saved, withdrawn and earned, and the closing balance. With `format=csv` the same rows download as a CSV file. A statement covers at most 92 days.\n\nfrom and to are YYYY-MM-DD in UTC; to cannot be after today, the range is at most 92 days, and leaving both out gives the last 30 days. One row per day: closing = opening + saved - withdrawn + interest, completed moves only. format=csv answers a CSV file. A live key gets 501 for now.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The savings account id from `POST /v2/accounts`. The id of the savings wallet behind it also works, but its `available_balance` is the wallet's own, so use the account id."
+        },
+        "from": {
+          "type": "string",
+          "format": "date",
+          "description": "First day, as YYYY-MM-DD in UTC. Defaults to 30 days before `to`."
+        },
+        "to": {
+          "type": "string",
+          "format": "date",
+          "description": "Last day, as YYYY-MM-DD in UTC. Defaults to today and cannot be after today."
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "description": "`json` (the default) or `csv`. A CSV comes back as a file download with the columns date, opening_balance, saved, withdrawn, interest, closing_balance and currency."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "id"
+    ],
+    "queryParams": [
+      "from",
+      "to",
+      "format"
+    ],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "savings.yaml"
+  },
+  {
     "name": "getSettlementInstruction",
     "toolset": "fx",
     "method": "get",
@@ -4760,6 +4897,7 @@ export const TOOLS: GeneratedTool[] = [
           "enum": [
             "main",
             "sub_account",
+            "savings",
             "virtual",
             "multi_currency"
           ],
@@ -6053,6 +6191,60 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "accounts-v2.yaml"
   },
   {
+    "name": "simulateSavingsInterest",
+    "toolset": "sandbox",
+    "method": "post",
+    "path": "/v1/savings/simulate/interest",
+    "description": "Simulate interest (sandbox) — Sandbox only. Adds interest to a savings now, as the nightly run does in live, and sends `savings.interest.credited` with `source` `simulated`. The savings must hold money first. Needs a key that can initiate transfers. A live key gets a 400.\n\nSANDBOX ONLY: this server shows and runs it only with a sandbox key. Adds interest now, as the nightly run does in live, and sends savings.interest.credited with source `simulated`. Send account_id (the savings account) or wallet_id, not both, and amount as a string from 0.000001 to 1000. PREREQUISITE: a completed save, or it answers 400 `nothing saved`. Reuse the same idempotency_key only to retry.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The savings account",
+          "example": "d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+        },
+        "wallet_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "A savings wallet with no account"
+        },
+        "amount": {
+          "type": "string",
+          "description": "The interest to add, from 0.000001 to 1000, with at most 6 decimal places",
+          "example": "0.25"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "account_id",
+      "wallet_id",
+      "amount"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": true,
+    "spec": "savings.yaml"
+  },
+  {
     "name": "startCardholderKyc",
     "toolset": "cards",
     "method": "post",
@@ -6721,7 +6913,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "external-accounts",
     "method": "patch",
     "path": "/v1/external-accounts/{external_account_id}",
-    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202. Get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its current state, so add a new one instead. This route needs no Idempotency-Key.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
+    "description": "Update an external account — Corrects an external account. Use it to fix the bank details of a `setup_failed` account, which runs setup again, or to add the national ID, PIX key or address that a payout corridor asks for. An empty body on a failed account retries setup. It always returns 202. Get the account until it is `active` or `setup_failed`. A 409 means the account cannot change in its current state, so add a new one instead. This route needs no Idempotency-Key. A change to `routing_number` or `payment_rail` that leaves a US account on `wire` or `rtp` gets the same routing check as POST.\n\nOnly for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7536,6 +7728,74 @@ export const TOOLS: GeneratedTool[] = [
       "phone",
       "clabe"
     ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "external-accounts.yaml"
+  },
+  {
+    "name": "verifyRtpRoutingNumber",
+    "toolset": "external-accounts",
+    "method": "get",
+    "path": "/v1/external-accounts/routing-numbers/{routing_number}/rtp",
+    "description": "Check a routing number for RTP — Checks whether a US routing number can receive instant payments through Gravv, before you add an `ach_wire` external account with `payment_rail` `rtp`. A bank can take some instant payments and still answer false. When `valid` is false, adding the account for `rtp` returns 400 with the code `ERROR_CODE_INVALID_RTP_ROUTING_NUMBER`, so add it for `ach` or `wire` instead. `valid: false` is a 200, not an error. A 503 means the check could not run, so retry it. This route needs no Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "routing_number": {
+          "type": "string",
+          "pattern": "^[0-9]{9}$",
+          "description": "A US ABA routing number, 9 digits"
+        }
+      },
+      "required": [
+        "routing_number"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "routing_number"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": false,
+    "sandboxOnly": false,
+    "spec": "external-accounts.yaml"
+  },
+  {
+    "name": "verifyWireRoutingNumber",
+    "toolset": "external-accounts",
+    "method": "get",
+    "path": "/v1/external-accounts/routing-numbers/{routing_number}/wire",
+    "description": "Check a routing number for wire — Checks whether a US routing number can receive wires, before you add an `ach_wire` external account with `payment_rail` `wire`. Some banks use one routing number for ACH and another for wires. When `valid` is false, adding the account for `wire` returns 400 with the code `ERROR_CODE_INVALID_WIRE_ROUTING_NUMBER`, so ask for the bank's wire routing number or add the account for `ach`. `valid: false` is a 200, not an error. A 503 means the check could not run, so retry it. This route needs no Idempotency-Key.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "routing_number": {
+          "type": "string",
+          "pattern": "^[0-9]{9}$",
+          "description": "A US ABA routing number, 9 digits"
+        }
+      },
+      "required": [
+        "routing_number"
+      ],
+      "additionalProperties": false
+    },
+    "pathParams": [
+      "routing_number"
+    ],
+    "queryParams": [],
+    "bodyMode": "none",
+    "bodyProps": [],
     "alsoInBody": [],
     "closedBody": false,
     "movesMoney": false,

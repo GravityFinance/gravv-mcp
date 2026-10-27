@@ -440,7 +440,11 @@ components:
           example: 89fa0d5e-3acf-4834-968f-6a9f0186ab59
         transaction_type:
           type: string
-          description: US payouts are `bank_account`; refunds are `transfer_refund`.
+          description: >-
+            US payouts are `bank_account`; refunds are `transfer_refund`. A save
+            or a withdrawal writes two rows of `savings_deposit` or
+            `savings_withdrawal`, one `out` and one `in`. Interest is one
+            `savings_interest` row.
           enum:
             - internal_transfer
             - crypto_transfer
@@ -467,6 +471,9 @@ components:
             - otc
             - transfer_refund
             - stablecoin_conversion
+            - savings_deposit
+            - savings_withdrawal
+            - savings_interest
           example: global_remittance
         tx_hash:
           type:

@@ -132,15 +132,19 @@ components:
       properties:
         source_type:
           type: string
-          description: A `card` source can only be withdrawn to its own card account.
+          description: >-
+            A `card` source can only be withdrawn to its own card account. A
+            `savings` source withdraws from savings: send the savings account
+            id, and the same id as an `internal_account` destination.
           enum:
             - internal_account
             - internal_crypto_wallet
             - card
+            - savings
         id:
           type: string
           format: uuid
-          description: ID of the account, crypto wallet or card (UUID version 4)
+          description: ID of the account, crypto wallet, card or savings account (UUID version 4)
           example: b9c2cb0d-e09a-496f-8655-d8c4b7aaf2f8
         currency:
           type: string
@@ -266,6 +270,23 @@ components:
           type: string
           format: uuid
           description: ID of the card to fund
+    SavingsDestination:
+      title: Savings
+      type: object
+      required:
+        - destination_type
+        - id
+      properties:
+        destination_type:
+          type: string
+          enum:
+            - savings
+        id:
+          type: string
+          format: uuid
+          description: >-
+            The savings account id. The source is the same id as an
+            `internal_account`. See [Save and withdraw](/platform/savings/save-and-withdraw).
     TransferRequest:
       type: object
       required:
@@ -284,6 +305,7 @@ components:
             - $ref: '#/components/schemas/InternalCryptoWalletDestination'
             - $ref: '#/components/schemas/CryptoWalletDestination'
             - $ref: '#/components/schemas/CardDestination'
+            - $ref: '#/components/schemas/SavingsDestination'
         amount:
           type: string
           description: >-
@@ -642,8 +664,9 @@ paths:
       summary: Create a transfer
       operationId: createTransfer
       description: >-
-        Sends money from a customer's account, crypto wallet or card to an
-        account, crypto wallet, crypto address, card or external account. The
+        Sends money from a customer's account, crypto wallet, card or savings
+        to an account, crypto wallet, crypto address, card, savings or external
+        account. The
         call returns once the transfer is recorded; it then runs in the
         background. Follow it with `GET /v1/transactions/{transaction_id}` or
         the `transfer.status.*` webhooks.
@@ -736,6 +759,30 @@ paths:
                   amount: '30.00'
                   customer_id: 04dfb2e5-1274-4214-b5fd-3415fde7dc18
                   client_reference: card-fund-1234
+              SaveIntoSavings:
+                summary: Save into a savings account
+                value:
+                  source:
+                    source_type: internal_account
+                    id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  destination:
+                    destination_type: savings
+                    id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  amount: '100.00'
+                  customer_id: b140f51d-2598-410a-a583-e1cb7a871443
+                  client_reference: save-0001
+              WithdrawFromSavings:
+                summary: Withdraw from a savings account
+                value:
+                  source:
+                    source_type: savings
+                    id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  destination:
+                    destination_type: internal_account
+                    id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  amount: '50.00'
+                  customer_id: b140f51d-2598-410a-a583-e1cb7a871443
+                  client_reference: withdraw-0001
       responses:
         '200':
           description: The transfer is recorded, or paused
