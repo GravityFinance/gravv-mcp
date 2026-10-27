@@ -493,7 +493,9 @@ paths:
           description: >-
             A date is not YYYY-MM-DD, `to` is after today, `from` is after
             `to`, the range is longer than 92 days, `format` is not `json` or
-            `csv`, or the id is not a savings one
+            `csv`, the id is not a savings one, or the range holds too many
+            movements (`too many savings movements for one statement; ask for a
+            shorter range`)
           content:
             application/json:
               schema:

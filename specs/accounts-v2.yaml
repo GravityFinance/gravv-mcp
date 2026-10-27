@@ -1771,6 +1771,7 @@ components:
           type: object
           required:
             - customer_id
+            - customer_type
             - currency
             - category
           additionalProperties: false
@@ -1782,6 +1783,9 @@ components:
               example: b140f51d-2598-410a-a583-e1cb7a871443
             customer_type:
               type: string
+              description: >-
+                The customer's type. Send it: without it the request finds no
+                account option and answers 400
               enum:
                 - individual
                 - business
@@ -3016,6 +3020,7 @@ paths:
                 summary: Savings account for a person
                 value:
                   customer_id: b140f51d-2598-410a-a583-e1cb7a871443
+                  customer_type: individual
                   currency: USD
                   category: savings
                   label: Ada savings
