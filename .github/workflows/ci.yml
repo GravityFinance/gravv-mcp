@@ -99,8 +99,8 @@ jobs:
             }
           }
           const prompts = lines.find((m) => m.id === 3);
-          if (!prompts || prompts.result?.prompts?.length !== 10) {
-            console.error("::error::prompts/list did not return the ten prompts");
+          if (!prompts || prompts.result?.prompts?.length !== 11) {
+            console.error("::error::prompts/list did not return the eleven prompts");
             process.exit(1);
           }
           console.log(`ok: ${names.length} tools and ${prompts.result.prompts.length} prompts advertised on node ${process.version}`);

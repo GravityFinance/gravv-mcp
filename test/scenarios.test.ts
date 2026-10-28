@@ -14,7 +14,7 @@ import type { GeneratedTool } from "../src/generated/tools.ts";
 const requests = loadRequests();
 
 describe("scenario fixtures", () => {
-  test("cover all 83 scenarios, with unique ids that name their scenario", () => {
+  test("cover all 84 scenarios, with unique ids that name their scenario", () => {
     const ids = new Set<string>();
     for (const r of requests) {
       assert.ok(!ids.has(r.id), `duplicate id ${r.id}`);
@@ -24,7 +24,7 @@ describe("scenario fixtures", () => {
       assert.match(r.path, /^\/v[12]\//);
       if (r.method === "GET") assert.equal(r.body, undefined, `${r.id} is a GET with a body`);
     }
-    assert.equal(new Set(requests.map((r) => r.scenario)).size, 83);
+    assert.equal(new Set(requests.map((r) => r.scenario)).size, 84);
   });
 
   test("no request lists by client_reference, which no list route filters on", () => {

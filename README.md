@@ -148,11 +148,12 @@ then paste a JSON-RPC frame on stdin:
 Gravv documentation, read from the docs site as it is published. They need **no API key**,
 so you can explore Gravv before you have credentials.
 
-**API tools** — 96 tools (84 load by default) covering customers, KYC, accounts,
-transfers, limits, cards, wallets, FX and settlement instructions, collections, webhooks,
-and a sandbox deposit simulator.
+**API tools** — 89 tools, all loaded by default (87 on a live key, which hides the two
+sandbox simulators), covering customers, KYC, accounts, transfers, limits, cards, wallets,
+savings, FX and settlement instructions, collections, webhooks, and sandbox deposit and
+savings interest simulators.
 
-**Prompts** — ten goal prompts, from opening an account to unsticking a transfer. Pick one
+**Prompts** — eleven goal prompts, from opening an account to unsticking a transfer. Pick one
 in your client and the assistant gets the questions to ask first, the tool order for each
 path, the confirm steps and the recovery rules ([Prompts](#prompts)).
 
@@ -188,14 +189,15 @@ same `idempotency_key` and when to leave it out.
 | `convert-currency` | quote and place an FX order; settlement instructions; follow or cancel | `path`: quote-and-order, settlement-instruction, manage |
 | `issue-card` | verify a cardholder and issue a card; fund, limit, freeze, close | `path`: hosted-kyc, own-kyc, fund, limit, freeze-or-block, close, another-card |
 | `collect-payment` | stablecoin deposits, bank deposits, bank transfers, card checkout, saved cards | `method`: stablecoin, bank-deposit, bank-transfer, card, saved-card |
+| `set-up-savings` | open a savings account, save and withdraw, interest and statements, test it in sandbox | `path`: open, move, read, test |
 | `reconcile` | transactions against the books, one transfer's webhooks, fees, missed events | `path`: transactions, trace, fees, webhooks |
 | `fix-stuck-transfer` | pending, paused, under review or failed, and how to answer a pause | `transaction_id` |
 
 The argument narrows the prompt to one path; leave it out to get them all. Route
 availability follows the docs: a route is Available, Not yet available (ask support to
 switch it on for your business), or Not supported. A prompt names any tool it uses that
-the session has not loaded (a toolset left out of `--toolsets`, or `simulateDeposit`,
-which needs a sandbox key), and says so when there is no API key.
+the session has not loaded (a toolset left out of `--toolsets`, or `simulateDeposit` and
+`simulateSavingsInterest`, which need a sandbox key), and says so when there is no API key.
 
 **Next steps and fix hints.** Results carry the same knowledge where a call answers. A 200
 that is not done, such as a paused transfer, a declined card or a file the card KYC
@@ -240,8 +242,8 @@ it charges the card at once; it asks for confirmation even when it only makes a 
 preview first and run only with `confirm: true`. They move no money, so they do not need
 `GRAVV_ALLOW_LIVE_WRITES`.
 
-**Sandbox-only tools stay in sandbox.** `simulateDeposit` is listed and runs only with a
-`grvSec_sandbox_` key. On any other key it is hidden, and a call by name is refused
+**Sandbox-only tools stay in sandbox.** `simulateDeposit` and `simulateSavingsInterest`
+are listed and run only with a `grvSec_sandbox_` key. On any other key they are hidden, and a call by name is refused
 before any request.
 
 **Files stay out of the conversation.** Upload tools take a local `file_path`: the
@@ -298,10 +300,11 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 | `kyc` | ✓ | KYC start, server-to-server, document upload and download, status |
 | `cards` | ✓ | issue, balance, status, withdraw, applications, card KYC, feature activation |
 | `wallets` | ✓ | blockchain wallet creation and lookup |
+| `savings` | ✓ | a customer's savings, the savings rate and daily statements (sandbox only for now) |
 | `fx` | ✓ | quotes, rates, OTC orders, settlement instructions |
 | `collections` | ✓ | card payment intents, saved cards, and bank transfer collections |
 | `webhooks` | ✓ | event history, delivery calls, retry |
-| `sandbox` | ✓ | the deposit simulator (sandbox keys only) |
+| `sandbox` | ✓ | the deposit and savings interest simulators (sandbox keys only) |
 
 The `approvals` and `payment-links` toolsets were removed in 0.3.2, and
 `account-applications` in 0.4.0. A configuration that still names them starts with a
@@ -339,7 +342,8 @@ take five networks: `polygon`, `ethereum`, `solana`, `stellar` and Avalanche
 
 **external-accounts** — recipients you pay out to
 `createExternalAccount` · `getExternalAccount` · `listExternalAccounts` ·
-`updateExternalAccount` · `verifyExternalAccount` · `listExternalAccountInstitutions`
+`updateExternalAccount` · `verifyExternalAccount` · `listExternalAccountInstitutions` ·
+`verifyWireRoutingNumber` · `verifyRtpRoutingNumber`
 
 **transfers**
 `createTransfer*` · `uploadTransferDocument` · `resumeTransfer*` · `getCustomerLimits` ·
@@ -362,6 +366,9 @@ In live, a card is issued with `activateFeature` and `feature_id: virtual_cards`
 **wallets**
 `createWallet` · `getWallet` · `listWallets`
 
+**savings** — saving and withdrawing are `createTransfer*`
+`getSavingsRate` · `getSavings` · `getSavingsStatement`
+
 **fx**
 `getFxQuote` · `listFxRates` · `listFxCurrencyPairs` · `createFxOrder*` · `getFxOrder` ·
 `listFxOrders` · `cancelFxOrder*` · `listFxPendingApprovals` · `listSettlementInstructions` ·
@@ -382,7 +389,7 @@ countries.
 `getWebhookHistory` · `getWebhookEventDetail` · `getWebhookCallHistory` · `retryWebhookEvent`
 
 **sandbox** — sandbox keys only
-`simulateDeposit`
+`simulateDeposit` · `simulateSavingsInterest`
 
 Each tool's description carries its own prerequisites — several operations depend on
 something else having happened first, and the assistant reads those before calling.

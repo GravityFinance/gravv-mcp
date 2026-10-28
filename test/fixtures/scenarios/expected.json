@@ -1387,6 +1387,46 @@
     "outcome": "ok",
     "tool": "getTransaction"
   },
+  "S-SAV-01.1": {
+    "outcome": "ok",
+    "tool": "getCustomer"
+  },
+  "S-SAV-01.2": {
+    "outcome": "ok",
+    "tool": "createAccountV2"
+  },
+  "S-SAV-01.3": {
+    "outcome": "ok",
+    "tool": "getAccountV2"
+  },
+  "S-SAV-01.4": {
+    "outcome": "ok",
+    "tool": "simulateDeposit"
+  },
+  "S-SAV-01.5": {
+    "outcome": "ok",
+    "tool": "getSavingsRate"
+  },
+  "S-SAV-01.6": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
+  "S-SAV-01.7": {
+    "outcome": "ok",
+    "tool": "simulateSavingsInterest"
+  },
+  "S-SAV-01.8": {
+    "outcome": "ok",
+    "tool": "getSavings"
+  },
+  "S-SAV-01.9": {
+    "outcome": "ok",
+    "tool": "getSavingsStatement"
+  },
+  "S-SAV-01.10": {
+    "outcome": "ok",
+    "tool": "createTransfer"
+  },
   "S-WAL-01.1": {
     "outcome": "ok",
     "tool": "getCustomer"

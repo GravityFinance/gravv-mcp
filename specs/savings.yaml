@@ -1,0 +1,592 @@
+openapi: 3.1.0
+info:
+  title: Gravv API Gateway
+  description: |
+    The API gateway for Gravv services.
+    Send your API key in the `Api-Key` header to authenticate.
+  version: 1.0.0
+servers:
+  - url: https://api.gravv.xyz
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Api-Key
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        1 to 255 printable ASCII characters. A retry with the same key within 24
+        hours returns the first response, including a 400. After you correct a
+        request, send a new key.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+      example: savings-interest-1
+    SavingsIdPath:
+      name: id
+      in: path
+      required: true
+      description: >-
+        The savings account id from `POST /v2/accounts`. The id of the savings
+        wallet behind it also works, but its `available_balance` is the
+        wallet's own, so use the account id.
+      schema:
+        type: string
+        format: uuid
+      example: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+  schemas:
+    Kind:
+      type: string
+      description: >-
+        `account` when the id is a savings account, `wallet` when it is a
+        savings wallet
+      enum:
+        - account
+        - wallet
+    Savings:
+      type: object
+      description: >-
+        One customer's savings. Amounts are USDC strings with 6 decimal places.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The id you asked for
+        kind:
+          $ref: '#/components/schemas/Kind'
+        account_id:
+          type: string
+          format: uuid
+          description: The savings account. Left out for a savings wallet with no account.
+        wallet_id:
+          type: string
+          format: uuid
+          description: The savings wallet behind the account
+        currency:
+          type: string
+          enum:
+            - USDC
+        available_balance:
+          type: string
+          description: >-
+            Money on the account that is not saved yet. Save it with
+            `POST /v1/transfer`.
+          example: '70.000000'
+        saved_balance:
+          type: string
+          description: >-
+            Money in savings, interest included. This is what earns interest and
+            what you can withdraw.
+          example: '110.250000'
+        pending_balance:
+          type: string
+          description: >-
+            Money still moving into or out of savings. It is negative while a
+            withdrawal is on its way, and `0.000000` when nothing is moving.
+          example: '0.000000'
+        earned_total:
+          type: string
+          description: All the interest this savings has earned
+          example: '0.250000'
+        apy:
+          type: string
+          description: >-
+            Today's yearly rate in percent, the same as `GET /v1/savings/rate`.
+            Empty when the rate cannot be read right now.
+          example: '3.50'
+        wallet_address:
+          type: string
+          description: The savings wallet's on-chain address
+          example: '0x8f3b2a91c4d05e6f7a8b9c0d1e2f3a4b5c6d7e8f'
+        blockchain_network:
+          type: string
+          enum:
+            - avalanche
+        as_of:
+          type: string
+          format: date-time
+    SavingsEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Savings'
+        error:
+          type: 'null'
+    Rate:
+      type: object
+      properties:
+        apy:
+          type: string
+          description: Today's yearly rate in percent, which is what a customer's savings earns
+          example: '3.50'
+        apy_bps:
+          type: integer
+          description: The same rate in basis points. 350 is 3.50%.
+          example: 350
+        currency:
+          type: string
+          enum:
+            - USDC
+        network:
+          type: string
+          enum:
+            - avalanche
+        minimum_deposit:
+          type: string
+          description: The smallest amount the savings pool takes in one save. Live only.
+          example: '1'
+        minimum_withdrawal:
+          type: string
+          description: The smallest amount the savings pool pays in one withdrawal. Live only.
+        indicative:
+          type: boolean
+          description: >-
+            True in sandbox, where the rate is fixed at 3.50 and nothing is
+            earned overnight
+        as_of:
+          type: string
+          format: date-time
+    RateEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Rate'
+        error:
+          type: 'null'
+    StatementRow:
+      type: object
+      description: >-
+        One UTC day. `saved`, `withdrawn` and `interest` are that day's
+        completed movements, all positive. `closing_balance` is
+        `opening_balance` + `saved` - `withdrawn` + `interest`.
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2026-10-27'
+        opening_balance:
+          type: string
+          example: '0.000000'
+        saved:
+          type: string
+          example: '110.000000'
+        withdrawn:
+          type: string
+          example: '0.000000'
+        interest:
+          type: string
+          example: '0.250000'
+        closing_balance:
+          type: string
+          example: '110.250000'
+    Statement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/Kind'
+        currency:
+          type: string
+          enum:
+            - USDC
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        opening_balance:
+          type: string
+          description: The saved balance at the start of `from`
+        closing_balance:
+          type: string
+          description: The saved balance at the end of `to`
+        rows:
+          type: array
+          description: One row for every day from `from` to `to`, oldest first
+          items:
+            $ref: '#/components/schemas/StatementRow'
+    StatementEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Statement'
+        error:
+          type: 'null'
+    SimulateInterestRequest:
+      type: object
+      description: Send `account_id` or `wallet_id`, not both.
+      required:
+        - amount
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          description: The savings account
+          example: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+        wallet_id:
+          type: string
+          format: uuid
+          description: A savings wallet with no account
+        amount:
+          type: string
+          description: The interest to add, from 0.000001 to 1000, with at most 6 decimal places
+          example: '0.25'
+    InterestLine:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+          description: The `savings_interest` transaction
+        type:
+          type: string
+          enum:
+            - savings_interest
+        account_id:
+          type: string
+          format: uuid
+        wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          example: '0.25'
+        currency:
+          type: string
+          enum:
+            - USDC
+        saved_balance:
+          type: string
+          description: The saved balance after the interest
+          example: '110.250000'
+        status:
+          type: string
+          enum:
+            - completed
+    InterestLineEnvelope:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/InterestLine'
+        error:
+          type: 'null'
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: 'null'
+        error:
+          type: string
+  responses:
+    NotFound:
+      description: The id is not a savings account or savings wallet of yours
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: savings account not found
+    NotSavings:
+      description: The id is an account or wallet, but not a savings one
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: the account is not a savings account
+    NotLiveYet:
+      description: >-
+        Savings is not open to live keys yet. It works in sandbox today.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unavailable:
+      description: Gravv cannot read savings right now. Retry.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Savings
+    description: Read a customer's savings, its rate and its daily statement
+paths:
+  /v1/savings/rate:
+    get:
+      tags:
+        - Savings
+      summary: Get the savings rate
+      operationId: getSavingsRate
+      description: >-
+        Returns today's yearly savings rate. The rate moves once a day, so you
+        can show it next to a save button. In sandbox it is fixed at 3.50 and
+        `indicative` is true.
+      responses:
+        '200':
+          description: Today's rate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateEnvelope'
+              examples:
+                Live:
+                  summary: Live
+                  value:
+                    data:
+                      apy: '3.46'
+                      apy_bps: 346
+                      currency: USDC
+                      network: avalanche
+                      minimum_deposit: '1'
+                      minimum_withdrawal: '1'
+                      indicative: false
+                      as_of: '2026-10-27T09:30:00Z'
+                    error: null
+                Sandbox:
+                  summary: Sandbox
+                  value:
+                    data:
+                      apy: '3.50'
+                      apy_bps: 350
+                      currency: USDC
+                      network: avalanche
+                      indicative: true
+                      as_of: '2026-10-27T09:30:00Z'
+                    error: null
+        '501':
+          $ref: '#/components/responses/NotLiveYet'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /v1/savings/{id}:
+    get:
+      tags:
+        - Savings
+      summary: Get a customer's savings
+      operationId: getSavings
+      description: >-
+        Returns what is saved, what is still on the account, what is moving and
+        what has been earned. Read it after a `transfer.status.completed` for a
+        save or a withdrawal, or after `savings.interest.credited`.
+      parameters:
+        - $ref: '#/components/parameters/SavingsIdPath'
+      responses:
+        '200':
+          description: The savings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavingsEnvelope'
+              example:
+                data:
+                  id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  kind: account
+                  account_id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  wallet_id: d4ed232e-ebd1-43b3-b6d7-b6739cadd13f
+                  currency: USDC
+                  available_balance: '70.000000'
+                  saved_balance: '110.250000'
+                  pending_balance: '0.000000'
+                  earned_total: '0.250000'
+                  apy: '3.50'
+                  wallet_address: '0x8f3b2a91c4d05e6f7a8b9c0d1e2f3a4b5c6d7e8f'
+                  blockchain_network: avalanche
+                  as_of: '2026-10-27T09:20:00Z'
+                error: null
+        '400':
+          $ref: '#/components/responses/NotSavings'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          $ref: '#/components/responses/NotLiveYet'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /v1/savings/{id}/statement:
+    get:
+      tags:
+        - Savings
+      summary: Get a savings statement
+      operationId: getSavingsStatement
+      description: >-
+        Returns one row per UTC day with the opening balance, what was saved,
+        withdrawn and earned, and the closing balance. With `format=csv` the
+        same rows download as a CSV file. A statement covers at most 92 days.
+      parameters:
+        - $ref: '#/components/parameters/SavingsIdPath'
+        - name: from
+          in: query
+          required: false
+          description: First day, as YYYY-MM-DD in UTC. Defaults to 30 days before `to`.
+          schema:
+            type: string
+            format: date
+          example: '2026-10-26'
+        - name: to
+          in: query
+          required: false
+          description: Last day, as YYYY-MM-DD in UTC. Defaults to today and cannot be after today.
+          schema:
+            type: string
+            format: date
+          example: '2026-10-27'
+        - name: format
+          in: query
+          required: false
+          description: >-
+            `json` (the default) or `csv`. A CSV comes back as a file download
+            with the columns date, opening_balance, saved, withdrawn, interest,
+            closing_balance and currency.
+          schema:
+            type: string
+            enum:
+              - json
+              - csv
+      responses:
+        '200':
+          description: The statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatementEnvelope'
+              example:
+                data:
+                  id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  kind: account
+                  currency: USDC
+                  from: '2026-10-26'
+                  to: '2026-10-27'
+                  opening_balance: '0.000000'
+                  closing_balance: '110.250000'
+                  rows:
+                    - date: '2026-10-26'
+                      opening_balance: '0.000000'
+                      saved: '0.000000'
+                      withdrawn: '0.000000'
+                      interest: '0.000000'
+                      closing_balance: '0.000000'
+                    - date: '2026-10-27'
+                      opening_balance: '0.000000'
+                      saved: '110.000000'
+                      withdrawn: '0.000000'
+                      interest: '0.250000'
+                      closing_balance: '110.250000'
+                error: null
+            text/csv:
+              schema:
+                type: string
+              example: |
+                date,opening_balance,saved,withdrawn,interest,closing_balance,currency
+                2026-10-26,0.000000,0.000000,0.000000,0.000000,0.000000,USDC
+                2026-10-27,0.000000,110.000000,0.000000,0.250000,110.250000,USDC
+        '400':
+          description: >-
+            A date is not YYYY-MM-DD, `to` is after today, `from` is after
+            `to`, the range is longer than 92 days, `format` is not `json` or
+            `csv`, the id is not a savings one, or the range holds too many
+            movements (`too many savings movements for one statement; ask for a
+            shorter range`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Range:
+                  summary: Range too long
+                  value:
+                    data: null
+                    error: a statement covers at most 92 days
+                Future:
+                  summary: Date in the future
+                  value:
+                    data: null
+                    error: to cannot be after today
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '501':
+          $ref: '#/components/responses/NotLiveYet'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /v1/savings/simulate/interest:
+    post:
+      tags:
+        - Savings
+      summary: Simulate interest (sandbox)
+      operationId: simulateSavingsInterest
+      description: >-
+        Sandbox only. Adds interest to a savings now, as the nightly run does in
+        live, and sends `savings.interest.credited` with `source` `simulated`.
+        The savings must hold money first. Needs a key that can initiate
+        transfers. A live key gets a 400.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateInterestRequest'
+            example:
+              account_id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+              amount: '0.25'
+      responses:
+        '200':
+          description: The interest was added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterestLineEnvelope'
+              example:
+                data:
+                  transaction_id: b75f078b-6c03-4a6d-b8e4-ecc1634b6727
+                  type: savings_interest
+                  account_id: d9eae506-77b4-4e8b-8ab3-caaf96054d79
+                  wallet_id: d4ed232e-ebd1-43b3-b6d7-b6739cadd13f
+                  amount: '0.25'
+                  currency: USDC
+                  saved_balance: '110.250000'
+                  status: completed
+                error: null
+        '400':
+          description: >-
+            A live key, both or neither of `account_id` and `wallet_id`, an
+            amount out of range, nothing saved yet, or an id that is not a
+            savings one
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                NothingSaved:
+                  summary: Nothing saved yet
+                  value:
+                    data: null
+                    error: 'nothing saved: save into this account before simulating interest'
+                Live:
+                  summary: Live key
+                  value:
+                    data: null
+                    error: savings interest can only be simulated in sandbox
+                Amount:
+                  summary: Amount out of range
+                  value:
+                    data: null
+                    error: amount must be between 0.000001 and 1000, with at most 6 decimal places
+        '403':
+          description: The key cannot initiate transfers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'

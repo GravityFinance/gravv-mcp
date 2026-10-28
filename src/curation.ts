@@ -41,6 +41,7 @@ export const TOOLSETS = [
   "external-accounts",
   "cards",
   "wallets",
+  "savings",
   "fx",
   "collections",
   "kyc",
@@ -198,6 +199,14 @@ export const NAMES: Record<string, Op> = {
     name: "listExternalAccountInstitutions",
     toolset: "external-accounts",
   },
+  "GET /v1/external-accounts/routing-numbers/{routing_number}/wire": {
+    name: "verifyWireRoutingNumber",
+    toolset: "external-accounts",
+  },
+  "GET /v1/external-accounts/routing-numbers/{routing_number}/rtp": {
+    name: "verifyRtpRoutingNumber",
+    toolset: "external-accounts",
+  },
 
   // ---- transfers -----------------------------------------------------------
   "POST /v1/transfer": { name: "createTransfer", toolset: "transfers" },
@@ -246,6 +255,12 @@ export const NAMES: Record<string, Op> = {
   "GET /v1/wallets": { name: "listWallets", toolset: "wallets" },
   "GET /v1/wallets/{wallet_id}": { name: "getWallet", toolset: "wallets" },
 
+  // ---- savings -------------------------------------------------------------
+  // Reads only. Saving and withdrawing are createTransfer, already confirm-gated.
+  "GET /v1/savings/rate": { name: "getSavingsRate", toolset: "savings" },
+  "GET /v1/savings/{id}": { name: "getSavings", toolset: "savings" },
+  "GET /v1/savings/{id}/statement": { name: "getSavingsStatement", toolset: "savings" },
+
   // ---- fx ------------------------------------------------------------------
   "POST /v1/fx/quote": { name: "getFxQuote", toolset: "fx" },
   "GET /v1/fx/rates": { name: "listFxRates", toolset: "fx" },
@@ -276,6 +291,7 @@ export const NAMES: Record<string, Op> = {
   // Test-only routes. Default on, but each is hidden unless the key is a sandbox key
   // (SANDBOX_ONLY), so a live server never advertises them.
   "POST /v2/accounts/simulate/deposit": { name: "simulateDeposit", toolset: "sandbox" },
+  "POST /v1/savings/simulate/interest": { name: "simulateSavingsInterest", toolset: "sandbox" },
 
   // ---- webhooks ------------------------------------------------------------
   "GET /v1/webhooks/history": { name: "getWebhookHistory", toolset: "webhooks" },
@@ -577,7 +593,11 @@ export const CONFIRM_OPS = new Set<string>([
  */
 export const FLATTEN_BODY_VARIANTS = new Set<string>(["createAccountV2", "createExternalAccount"]);
 
-export const SANDBOX_ONLY = new Set<string>(["POST /v2/accounts/simulate/deposit"]);
+export const SANDBOX_ONLY = new Set<string>([
+  "POST /v2/accounts/simulate/deposit",
+  // A live key gets a 400 here rather than a 403, but the tool is just as useless there.
+  "POST /v1/savings/simulate/interest",
+]);
 
 export function isSandboxOnly(method: string, path: string): boolean {
   return SANDBOX_ONLY.has(opKey(method, path));
@@ -700,7 +720,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Call first, before getAccountRequirements and createAccountV2. Always send customer_type, also with customer_id: without it options for both types come back. Pass the chosen bank_code, currency and account_type on.",
 
   createAccountV2:
-    `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2.`,
+    `PREREQUISITES: (1) the customer exists and its basic KYC is completed (getCustomer); (2) bank_code, currency and account_type come from getAccountCapabilities, and customer_type is always sent; (3) data is built from getAccountRequirements. Do not send data.root.autofill_tax_form: it is not live yet. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("createAccountV2")}) in place of base64 content. Then poll getAccountV2 until \`active\`, and act on status_reason with updateAccountApplicationV2. A SAVINGS account is customer_type (required), category \`savings\`, currency USD, no wallet_id, account_type left out or \`regular\`, network left out or \`avalanche_c_chain\`; one per customer (409 SAVINGS_ACCOUNT_ALREADY_EXISTS). It is sandbox-only for now.`,
 
   getAccountRequirements:
     "Build createAccountV2.data from this: `root` scope fields in data.root, party fields in each data.parties[] entry, documents by scope. The `predefined` object and the documents' `required_when` and `metadata` are not live yet; production does not return them.",
@@ -717,6 +737,9 @@ export const PREREQUISITES: Record<string, string> = {
   updateAccountApplicationV2:
     `PREREQUISITE: read getAccountApplicationV2 first and send only what required_fields and required_documents list, all in one call. Documents take file_path (a local JPEG, PNG or PDF of ${uploadLimit("updateAccountApplicationV2")}) in place of base64 content. Do not resend blindly: there is no idempotency key, so a resend uploads again.`,
 
+  simulateSavingsInterest:
+    "SANDBOX ONLY: this server shows and runs it only with a sandbox key. Adds interest now, as the nightly run does in live, and sends savings.interest.credited with source `simulated`. Send account_id (the savings account) or wallet_id, not both, and amount as a string from 0.000001 to 1000. PREREQUISITE: a completed save, or it answers 400 `nothing saved`. Reuse the same idempotency_key only to retry.",
+
   simulateDeposit:
     "SANDBOX ONLY: this server shows and runs it only with a sandbox key. PREREQUISITE: the account is `active` with bank details (getAccountV2). amount is a string in major units, such as \"250.00\". Each call makes a new deposit; leave idempotency_key out unless the outcome is unknown.",
 
@@ -724,7 +747,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
 
   uploadTransferDocument:
     `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
@@ -738,6 +761,15 @@ export const PREREQUISITES: Record<string, string> = {
   getRemitterLimits:
     "remitter_id is your own id for the sender, as sent in additional_information.remitter_verification on createTransfer. An unknown id answers with the default tier, not a 404.",
 
+
+  getSavingsRate:
+    "Today's yearly rate in percent (apy) and basis points (apy_bps). In sandbox it is fixed at 3.50 with indicative true. Savings is sandbox-only for now: a live key gets 501.",
+
+  getSavings:
+    "id is the savings account id (category `savings` on getAccountV2). The savings wallet id also works but its available_balance is the wallet's own, so prefer the account id. Amounts are USDC strings with 6 places: available_balance is not saved yet, saved_balance earns and is the most a withdrawal can take, pending_balance is negative while a withdrawal is on its way. Read it after transfer.status.completed for a save or withdrawal. A live key gets 501 for now.",
+
+  getSavingsStatement:
+    "from and to are YYYY-MM-DD in UTC; to cannot be after today, the range is at most 92 days, and leaving both out gives the last 30 days. One row per day: closing = opening + saved - withdrawn + interest, completed moves only. format=csv answers a CSV file. A live key gets 501 for now.",
 
   createWallet:
     "SYNCHRONOUS: the response carries the wallet address. Each call creates a NEW wallet, so do not call it again to check on a wallet; use getWallet or listWallets. network is one of polygon, ethereum, avalanche, stellar or solana. Only Stellar wallets finish their trustline setup in the background.",
@@ -909,6 +941,10 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
   uploadCardholderKycDocument: {
     lookup:
       "no tool lists card KYC documents, so resend with the same key, which returns the first upload's answer if it landed",
+  },
+  simulateSavingsInterest: {
+    lookup:
+      "getSavingsStatement for today, and read today's interest; a resend with the same key books once",
   },
   simulateDeposit: {
     lookup:

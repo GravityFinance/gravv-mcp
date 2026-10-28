@@ -30,6 +30,7 @@ describe("collectDocsLinks", () => {
         [`${DEFAULT_DOCS_ORIGIN}/platform/cards/overview`, ["prompt issue-card"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/collections/collections-overview`, ["prompt collect-payment"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/foreign-exchange/overview`, ["prompt convert-currency"]],
+        [`${DEFAULT_DOCS_ORIGIN}/platform/savings/overview`, ["prompt set-up-savings"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/platform/settlement-instructions/overview`, ["prompt convert-currency"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/transfers/crypto-transfers`, ["prompt send-crypto"]],
         [`${DEFAULT_DOCS_ORIGIN}/platform/transfers/overview`, ["prompt send-payout", "prompt send-remittance"]],
@@ -40,6 +41,7 @@ describe("collectDocsLinks", () => {
         [`${DEFAULT_DOCS_ORIGIN}/recipes/bank-payouts/overview`, ["prompt send-payout"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/recipes/bank-payouts/pay-a-us-bank-account-by-ach`, ["tool getGravvDocPage"]], // *
         [`${DEFAULT_DOCS_ORIGIN}/recipes/remittance-and-crypto/overview`, ["prompt send-remittance", "prompt send-crypto"]], // *
+        [`${DEFAULT_DOCS_ORIGIN}/recipes/sandbox/test-savings-end-to-end`, ["prompt set-up-savings"]], // *
       ],
     );
   });

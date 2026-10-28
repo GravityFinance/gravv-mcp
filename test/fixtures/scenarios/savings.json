@@ -1,0 +1,107 @@
+{
+  "about": "Requests from the savings scenario, written 2026-10-27 from the sandbox run of that day (open, fund, save 100, interest 0.25, read, statement, withdraw 50). Each one is checked against the tool for its route by test/scenarios.test.ts; the expected outcome of each is in expected.json.",
+  "requests": [
+    {
+      "id": "S-SAV-01.1",
+      "scenario": "S-SAV-01",
+      "method": "GET",
+      "path": "/v1/customers/b140f51d-2598-410a-a583-e1cb7a871443"
+    },
+    {
+      "id": "S-SAV-01.2",
+      "scenario": "S-SAV-01",
+      "method": "POST",
+      "path": "/v2/accounts",
+      "body": {
+        "customer_id": "b140f51d-2598-410a-a583-e1cb7a871443",
+        "customer_type": "individual",
+        "currency": "USD",
+        "category": "savings",
+        "label": "Ada savings"
+      }
+    },
+    {
+      "id": "S-SAV-01.3",
+      "scenario": "S-SAV-01",
+      "method": "GET",
+      "path": "/v2/accounts/d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+    },
+    {
+      "id": "S-SAV-01.4",
+      "scenario": "S-SAV-01",
+      "method": "POST",
+      "path": "/v2/accounts/simulate/deposit",
+      "body": {
+        "account_id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79",
+        "amount": "150.00",
+        "currency": "USD"
+      }
+    },
+    {
+      "id": "S-SAV-01.5",
+      "scenario": "S-SAV-01",
+      "method": "GET",
+      "path": "/v1/savings/rate"
+    },
+    {
+      "id": "S-SAV-01.6",
+      "scenario": "S-SAV-01",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "internal_account",
+          "id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+        },
+        "destination": {
+          "destination_type": "savings",
+          "id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+        },
+        "amount": "100.00",
+        "customer_id": "b140f51d-2598-410a-a583-e1cb7a871443",
+        "client_reference": "ada-save-0001"
+      }
+    },
+    {
+      "id": "S-SAV-01.7",
+      "scenario": "S-SAV-01",
+      "method": "POST",
+      "path": "/v1/savings/simulate/interest",
+      "body": {
+        "account_id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79",
+        "amount": "0.25"
+      }
+    },
+    {
+      "id": "S-SAV-01.8",
+      "scenario": "S-SAV-01",
+      "method": "GET",
+      "path": "/v1/savings/d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+    },
+    {
+      "id": "S-SAV-01.9",
+      "scenario": "S-SAV-01",
+      "method": "GET",
+      "path": "/v1/savings/d9eae506-77b4-4e8b-8ab3-caaf96054d79/statement?from=2026-10-26&to=2026-10-27&format=csv"
+    },
+    {
+      "id": "S-SAV-01.10",
+      "scenario": "S-SAV-01",
+      "method": "POST",
+      "path": "/v1/transfer",
+      "body": {
+        "source": {
+          "source_type": "savings",
+          "id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+        },
+        "destination": {
+          "destination_type": "internal_account",
+          "id": "d9eae506-77b4-4e8b-8ab3-caaf96054d79"
+        },
+        "amount": "50.00",
+        "customer_id": "b140f51d-2598-410a-a583-e1cb7a871443",
+        "client_reference": "ada-withdraw-0001"
+      }
+    }
+  ]
+}

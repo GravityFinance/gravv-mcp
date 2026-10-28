@@ -36,6 +36,15 @@ components:
         type: string
         format: uuid
       example: 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60
+    RoutingNumberPath:
+      name: routing_number
+      in: path
+      required: true
+      description: A US ABA routing number, 9 digits
+      schema:
+        type: string
+        pattern: '^[0-9]{9}$'
+      example: '021000021'
   schemas:
     PayeeType:
       type: string
@@ -613,7 +622,9 @@ components:
               type: string
               description: >-
                 There is no default. `wire` needs a routing number that takes
-                wires, and `rtp` one that takes instant payments.
+                wires, and `rtp` one that takes instant payments. Check it
+                first with `GET /v1/external-accounts/routing-numbers/{routing_number}/wire`
+                or `/rtp`.
               enum:
                 - ach
                 - wire
@@ -1075,6 +1086,30 @@ components:
             Bank fields to copy into a `swift` external account, such as
             `bank_address_line_1` and `bank_city`. SWIFT banks only.
           additionalProperties: true
+    RoutingNumberCheckEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            routing_number:
+              type: string
+              description: The routing number checked, without surrounding spaces
+            rail:
+              type: string
+              enum:
+                - wire
+                - rtp
+            valid:
+              type: boolean
+              description: True when the routing number can receive payments on `rail`
+            bank_name:
+              type: string
+              description: >-
+                The bank the routing number belongs to, when known. It can be
+                present when `valid` is false.
+        error:
+          type: 'null'
     ErrorResponse:
       type: object
       properties:
@@ -1105,6 +1140,28 @@ components:
             data: null
             error: 'payee 6a2f0c1e-93b4-4d0e-8f57-1c2b3d4e5f60: resource not found'
             code: ERROR_CODE_NOT_FOUND
+    RoutingNumberInvalid:
+      description: >-
+        The routing number is not 9 digits, or its checksum is wrong. No bank
+        was asked.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: 'routing number checksum invalid: invalid input'
+            code: ERROR_CODE_INVALID_FORMAT
+    RoutingCheckUnavailable:
+      description: The check could not run. Retry with backoff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            data: null
+            error: routing number verification is unavailable; please retry
+            code: ERROR_CODE_SERVICE_UNAVAILABLE
 security:
   - ApiKeyAuth: []
 tags:
@@ -1395,6 +1452,22 @@ paths:
                     error: >-
                       payment rail required but missing for ach/wire payee (expected
                       ach, wire, or rtp): invalid input
+                WireRoutingNumber:
+                  summary: A wire account whose routing number cannot receive wires
+                  value:
+                    data: null
+                    error: >-
+                      routing number 123456780 cannot receive wires; use the bank's
+                      wire routing number: invalid input
+                    code: ERROR_CODE_INVALID_WIRE_ROUTING_NUMBER
+                RtpRoutingNumber:
+                  summary: An rtp account whose bank cannot receive instant payments
+                  value:
+                    data: null
+                    error: >-
+                      routing number 123456780 cannot receive instant payments; use
+                      ach or wire: invalid input
+                    code: ERROR_CODE_INVALID_RTP_ROUTING_NUMBER
                 AccountNumber:
                   summary: A Nigerian account number of the wrong length
                   value:
@@ -1575,6 +1648,102 @@ paths:
               example:
                 data: null
                 error: 'at least one account identifier required: account_number, iban, phone, or clabe'
+  /v1/external-accounts/routing-numbers/{routing_number}/wire:
+    get:
+      tags:
+        - External accounts
+      summary: Check a routing number for wire
+      operationId: verifyWireRoutingNumber
+      description: >-
+        Checks whether a US routing number can receive wires, before you add an
+        `ach_wire` external account with `payment_rail` `wire`. Some banks use
+        one routing number for ACH and another for wires. When `valid` is
+        false, adding the account for `wire` returns 400 with the code
+        `ERROR_CODE_INVALID_WIRE_ROUTING_NUMBER`, so ask for the bank's wire
+        routing number or add the account for `ach`.
+
+
+        `valid: false` is a 200, not an error. A 503 means the check could not
+        run, so retry it. This route needs no Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/RoutingNumberPath'
+      responses:
+        '200':
+          description: The answer. `valid` is false when the routing number cannot receive wires.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingNumberCheckEnvelope'
+              examples:
+                Valid:
+                  summary: The routing number can receive wires
+                  value:
+                    data:
+                      routing_number: '021000021'
+                      rail: wire
+                      valid: true
+                      bank_name: JPMORGAN CHASE BANK
+                    error: null
+                NotValid:
+                  summary: The routing number cannot receive wires
+                  value:
+                    data:
+                      routing_number: '123456780'
+                      rail: wire
+                      valid: false
+                    error: null
+        '400':
+          $ref: '#/components/responses/RoutingNumberInvalid'
+        '503':
+          $ref: '#/components/responses/RoutingCheckUnavailable'
+  /v1/external-accounts/routing-numbers/{routing_number}/rtp:
+    get:
+      tags:
+        - External accounts
+      summary: Check a routing number for RTP
+      operationId: verifyRtpRoutingNumber
+      description: >-
+        Checks whether a US routing number can receive instant payments through
+        Gravv, before you add an `ach_wire` external account with
+        `payment_rail` `rtp`. A bank can take some instant payments and still
+        answer false. When `valid` is false, adding the account for `rtp`
+        returns 400 with the code `ERROR_CODE_INVALID_RTP_ROUTING_NUMBER`, so
+        add it for `ach` or `wire` instead.
+
+
+        `valid: false` is a 200, not an error. A 503 means the check could not
+        run, so retry it. This route needs no Idempotency-Key.
+      parameters:
+        - $ref: '#/components/parameters/RoutingNumberPath'
+      responses:
+        '200':
+          description: The answer. `valid` is false when the routing number cannot receive instant payments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoutingNumberCheckEnvelope'
+              examples:
+                Valid:
+                  summary: The routing number can receive instant payments
+                  value:
+                    data:
+                      routing_number: '021000021'
+                      rail: rtp
+                      valid: true
+                      bank_name: JPMORGAN CHASE BANK
+                    error: null
+                NotValid:
+                  summary: The routing number cannot receive instant payments
+                  value:
+                    data:
+                      routing_number: '123456780'
+                      rail: rtp
+                      valid: false
+                    error: null
+        '400':
+          $ref: '#/components/responses/RoutingNumberInvalid'
+        '503':
+          $ref: '#/components/responses/RoutingCheckUnavailable'
   /v1/external-accounts/{external_account_id}:
     get:
       tags:
@@ -1630,6 +1799,10 @@ paths:
         It always returns 202. Get the account until it is `active` or
         `setup_failed`. A 409 means the account cannot change in its current
         state, so add a new one instead. This route needs no Idempotency-Key.
+
+
+        A change to `routing_number` or `payment_rail` that leaves a US account
+        on `wire` or `rtp` gets the same routing check as POST.
       parameters:
         - $ref: '#/components/parameters/ExternalAccountIdPath'
       requestBody:
@@ -1654,9 +1827,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                data: null
-                error: 'account name cannot be cleared: invalid input'
+              examples:
+                AccountName:
+                  summary: The account name was cleared
+                  value:
+                    data: null
+                    error: 'account name cannot be cleared: invalid input'
+                WireRoutingNumber:
+                  summary: The new routing number cannot receive wires
+                  value:
+                    data: null
+                    error: >-
+                      routing number 123456780 cannot receive wires; use the bank's
+                      wire routing number: invalid input
+                    code: ERROR_CODE_INVALID_WIRE_ROUTING_NUMBER
         '404':
           description: No such external account
           content:
