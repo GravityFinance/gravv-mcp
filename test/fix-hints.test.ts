@@ -76,6 +76,11 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
     status: 409,
     body: { data: null, error: "this customer already holds the maximum number of USD accounts for this option" },
   },
+  "card-home-wallet": {
+    tool: "activateFeature",
+    status: 400,
+    body: { data: null, error: "wallet must be active to be used for cards, but its status is \"frozen\"" },
+  },
   "card-account": {
     tool: "createCardApplication",
     status: 400,

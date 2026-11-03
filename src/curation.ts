@@ -790,7 +790,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
   createCardApplication:
-    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and the card's home is account_id, your active `card` account (listAccounts with account_type card), or, only when the business has no card account, wallet_id, one of its active non-savings wallets on the cards' chain (listWallets). Send one, never both. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
 
   createCard:
     "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
@@ -799,7 +799,7 @@ export const PREREQUISITES: Record<string, string> = {
     "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
 
   activateFeature:
-    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active), or wallet_id (one of your active non-savings wallets on the cards' chain) when the business has no card account, never both, as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
 
   startCardholderKyc:
     "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",

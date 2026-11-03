@@ -12,6 +12,11 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
 
+- Cards with a home wallet. `createCardApplication` and `activateFeature` (`provider_data`) take
+  `wallet_id` as the other choice to `account_id`, for a business with no card account: the
+  wallet becomes the card's home, and withdrawals and a blocked card's balance go back to it.
+  The card-building prompt says when to use it, and a new fix hint explains the wallet
+  refusals.
 - Savings, sandbox only for now (a live key gets 501 until savings opens in live). A
   `savings` toolset with `getSavingsRate`, `getSavings` and `getSavingsStatement`;
   `simulateSavingsInterest` in `sandbox`, sandbox keys only; and the `set-up-savings` goal

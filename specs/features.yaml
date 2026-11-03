@@ -128,11 +128,21 @@ components:
               type: string
               format: uuid
               description: >-
-                Always send it for `virtual_cards`. It is the ID of your
-                business's card account (type `card`, status `active`). The same
-                card account backs every cardholder. Leaving it out fails with
-                `cards service: internal server error`.
+                For `virtual_cards`, send this or `wallet_id`. It is the ID of
+                your business's card account (type `card`, status `active`).
+                The same card account backs every cardholder.
               example: 5d9e677f-f071-4881-a861-7cdcebacd9d5
+            wallet_id:
+              type: string
+              format: uuid
+              description: >-
+                For `virtual_cards` when your business has no card account: one
+                of your wallets, used as the card's home instead. Withdrawals
+                and a blocked card's balance go back to it. It must be
+                `active`, not a savings wallet, have an address, and be on the
+                chain your cards are issued on. Send this or `account_id`, not
+                both.
+              example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f
             funding:
               type: object
               description: How the card is funded
