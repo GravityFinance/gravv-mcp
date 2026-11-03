@@ -570,7 +570,7 @@ export const PROMPTS: GoalPrompt[] = [
     common: {
       title: "Before any card",
       steps: [
-        "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, either open it first (the open-account prompt, path card-account), or send wallet_id instead: one of the business's active, non-savings wallets on the chain its cards are issued on (listWallets). That wallet is then the card's home: withdrawals and a blocked card's balance go back to it.",
+        "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, either open it first (the open-account prompt, path card-account), or send wallet_id instead: one of the business's active, non-savings wallets on the chain its cards are issued on (listWallets). That wallet is then the card's linked wallet: withdrawals and a blocked card's balance go back to it.",
       ],
     },
     paths: [
@@ -582,7 +582,7 @@ export const PROMPTS: GoalPrompt[] = [
           "createCustomer if the person is new, then getCustomer.",
           "checkFeatureEligibility.",
           "startCardholderKyc only if basic KYC is `not_started` or `failed`; then wait.",
-          "activateFeature with provider_data: account_id (the card account) or wallet_id (the home wallet, only with no card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
+          "activateFeature with provider_data: account_id (the card account) or wallet_id (the linked wallet, only with no card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
           "listCards with customer_id. In live: listCardApplications, getCardApplication for `application_link`, then createCard.",
         ],
       },

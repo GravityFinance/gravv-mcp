@@ -101,7 +101,7 @@ export const TOOLS: GeneratedTool[] = [
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "For `virtual_cards` when your business has no card account: one of your wallets, used as the card's home instead. Withdrawals and a blocked card's balance go back to it. It must be `active`, not a savings wallet, have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
+              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals and a blocked card's balance go back to it. It must be `active`, not a savings wallet, have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
               "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
             },
             "funding": {
@@ -1374,7 +1374,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/applications/new",
-    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and the card's home is account_id, your active `card` account (listAccounts with account_type card), or, only when the business has no card account, wallet_id, one of its active non-savings wallets on the cards' chain (listWallets). Send one, never both. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and the card is linked to account_id, your active `card` account (listAccounts with account_type card), or, only when the business has no card account, wallet_id, one of its active non-savings wallets on the cards' chain (listWallets). Send one, never both. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1393,7 +1393,7 @@ export const TOOLS: GeneratedTool[] = [
         "wallet_id": {
           "type": "string",
           "format": "uuid",
-          "description": "For a business with no card account: one of your wallets, used as the card's home instead. Withdrawals and a blocked card's balance go back to it. It must be `active`, not a savings wallet, have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
+          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals and a blocked card's balance go back to it. It must be `active`, not a savings wallet, have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
           "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
         },
         "annual_remuneration": {
@@ -2834,7 +2834,7 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "source_type": {
               "type": "string",
-              "description": "A `card` source can only be withdrawn to its own home: its card account (`internal_account`), or for a card issued with `wallet_id`, that wallet (`internal_crypto_wallet`). A `savings` source withdraws from savings: send the savings account id, and the same id as an `internal_account` destination.",
+              "description": "A `card` source can only be withdrawn to what it is linked to: its card account (`internal_account`), or for a card issued with `wallet_id`, that wallet (`internal_crypto_wallet`). A `savings` source withdraws from savings: send the savings account id, and the same id as an `internal_account` destination.",
               "enum": [
                 "internal_account",
                 "internal_crypto_wallet",

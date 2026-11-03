@@ -172,7 +172,7 @@ components:
         - ip_address
       description: >-
         The API ignores unknown fields. Send the numbers as JSON numbers. Send
-        the card's home as `account_id` or `wallet_id`, exactly one.
+        the card's linked account (`account_id`) or linked wallet (`wallet_id`), exactly one.
       properties:
         customer_id:
           type: string
@@ -192,9 +192,9 @@ components:
           type: string
           format: uuid
           description: >-
-            For a business with no card account: one of your wallets, used as
-            the card's home instead. Withdrawals and a blocked card's balance
-            go back to it. It must be `active`, not a savings wallet, have an
+            For a business with no card account: one of your wallets, linked to
+            the card instead. Withdrawals and a blocked card's balance go back
+            to it. It must be `active`, not a savings wallet, have an
             address, and be on the chain your cards are issued on. A wallet of
             another business is refused. Send this or `account_id`, not both.
           example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f
@@ -390,7 +390,7 @@ components:
         wallet_id:
           type: string
           description: >-
-            The card's home wallet, for a card issued with a wallet instead of
+            The card's linked wallet, for a card issued with a wallet instead of
             a card account.
         proxy_address:
           type:

@@ -183,7 +183,7 @@ export const ERROR_FIXES: ErrorFix[] = [
   // ---- cards -----------------------------------------------------------------
   // Before card-account: "must be active to be used for cards" is said of a wallet too.
   {
-    id: "card-home-wallet",
+    id: "card-linked-wallet",
     scenarios: ["S-CRD-01"],
     tools: ["createCardApplication", "activateFeature"],
     messages: [
@@ -192,12 +192,12 @@ export const ERROR_FIXES: ErrorFix[] = [
       /wallet does not exist/i,
       /wallet is not operated by the authenticated tenant/i,
       /wallet must be active to be used for cards/i,
-      /savings wallet cannot be a card's home/i,
+      /savings wallet cannot be a card's (home|linked wallet)/i,
       /wallet has no address yet/i,
       /wallet is on \S+, but cards are issued on/i,
     ],
     hint:
-      "A card's home is account_id (the business's active card account, listAccounts with account_type card) or " +
+      "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or " +
       "wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets " +
       "(listWallets), active, not a savings wallet, with an address, and on the chain the business's cards are " +
       "issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
@@ -219,7 +219,7 @@ export const ERROR_FIXES: ErrorFix[] = [
       "be active: find it with listAccounts (account_type card, status active). If there is none, open it first: " +
       "createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own " +
       "customer id, or the Dashboard. It is ready at account.activated. Or send wallet_id instead of account_id: " +
-      "an active, non-savings wallet of the business on the cards' chain becomes the card's home.",
+      "an active, non-savings wallet of the business on the cards' chain becomes the card's linked wallet.",
   },
   {
     id: "card-activate-fault",
@@ -230,7 +230,7 @@ export const ERROR_FIXES: ErrorFix[] = [
     hint:
       "Most often annual_remuneration was sent as a string. Check with " +
       "listFeatures (customer_id) whether the activation landed. If not, send account_id (the business's active card " +
-      "account, from listAccounts) or wallet_id (a home wallet, with no card account) and the amounts as numbers, " +
+      "account, from listAccounts) or wallet_id (a linked wallet, with no card account) and the amounts as numbers, " +
       "and call again without idempotency_key.",
   },
   {

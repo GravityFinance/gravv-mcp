@@ -137,7 +137,7 @@ components:
               format: uuid
               description: >-
                 For `virtual_cards` when your business has no card account: one
-                of your wallets, used as the card's home instead. Withdrawals
+                of your wallets, linked to the card instead. Withdrawals
                 and a blocked card's balance go back to it. It must be
                 `active`, not a savings wallet, have an address, and be on the
                 chain your cards are issued on. Send this or `account_id`, not
