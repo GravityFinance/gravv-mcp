@@ -76,6 +76,15 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
     status: 409,
     body: { data: null, error: "this customer already holds the maximum number of USD accounts for this option" },
   },
+  "card-link-fixed": {
+    tool: "createCardApplication",
+    status: 400,
+    body: {
+      data: null,
+      error:
+        "this customer already has a card application linked to wallet 437bac28-3afb-4421-a78b-d59cb0408f1e; a card's link cannot be changed, so send that wallet_id",
+    },
+  },
   "card-linked-wallet": {
     tool: "activateFeature",
     status: 400,

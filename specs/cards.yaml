@@ -195,7 +195,8 @@ components:
             For a business with no card account: one of your wallets, linked to
             the card instead. Withdrawals go back to it. It must be `active`,
             not a savings wallet or a card's own balance wallet (named
-            `card-group-…`), have an address, and be on the chain your cards are issued on. A wallet of
+            `card-group-…`, or `card-…` for older cards), have an address, and be
+            on the chain your cards are issued on. A wallet of
             another business is refused. Send this or `account_id`, not both.
           example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f
         annual_remuneration:
@@ -261,6 +262,16 @@ components:
           description: Verification page for the cardholder, live only. Empty when there is none.
         address:
           $ref: '#/components/schemas/BillingAddress'
+        account_id:
+          type: string
+          description: >-
+            The card account the application's cards are linked to. Empty for an
+            application linked to a wallet.
+        wallet_id:
+          type: string
+          description: >-
+            The wallet the application's cards are linked to, when it has no card
+            account. Left out otherwise.
     Card:
       type: object
       properties:
@@ -333,6 +344,16 @@ components:
               type: integer
               description: The card's spending limit, in whole USD per day
               example: 50
+        account_id:
+          type: string
+          description: >-
+            The card account the card is linked to: where its money goes when it
+            leaves. Empty for a card linked to a wallet.
+        wallet_id:
+          type: string
+          description: >-
+            The card's linked wallet, for a card issued with a wallet instead of
+            a card account. Left out otherwise.
     CardEnvelope:
       type: object
       properties:
@@ -837,6 +858,7 @@ paths:
                     type: virtual
                     activated: true
                     daily_transaction_limit: 50
+                  account_id: 4c0a51e2-7d3b-4f6e-9a21-8b5d3c7e9f10
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'

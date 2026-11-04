@@ -139,7 +139,7 @@ components:
                 For `virtual_cards` when your business has no card account: one
                 of your wallets, linked to the card instead. Withdrawals go
                 back to it. It must be `active`, not a savings wallet or a
-                card's own balance wallet (named `card-group-…`), have an
+                card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an
                 address, and be on the chain your cards are issued on. Send this or `account_id`, not
                 both.
               example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f

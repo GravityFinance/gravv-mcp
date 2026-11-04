@@ -405,6 +405,29 @@
       "hint": "The customer is at the limit for this account option, or already has an application in progress at this bank. Quote the message to the user and offer an existing account (listAccountsV2), another option from getAccountCapabilities, or support. Do not resend the same body."
     },
     {
+      "id": "card-link-fixed",
+      "scenarios": [
+        "S-CRD-01"
+      ],
+      "ops": [
+        "POST /v1/cards/applications/new",
+        "POST /v1/risk/features/activate"
+      ],
+      "tools": [
+        "createCardApplication",
+        "activateFeature"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "already has a card application linked to",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "This customer already has a card application, linked to the card account or wallet the message names, and a card's link cannot change once filed. Send that account_id or wallet_id (or neither on activateFeature); getCardApplication shows which link stands. Nothing was created."
+    },
+    {
       "id": "card-linked-wallet",
       "scenarios": [
         "S-CRD-01"
@@ -457,7 +480,7 @@
         }
       ],
       "outcome_known": true,
-      "hint": "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets (listWallets), active, not a savings wallet or a card's own balance wallet (card-group-...), with an address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without idempotency_key."
+      "hint": "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets (listWallets), active, not a savings wallet or a card's own balance wallet (card-group-..., or card-... for older cards), with an address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without idempotency_key."
     },
     {
       "id": "card-account",
@@ -1570,7 +1593,8 @@
           "steps": [
             "getCard and getCardBalance. If `shared` is true, other cards lose that money: say so.",
             "updateCardStatus `blocked` with the limit (ask first), so the card stops spending and the balance holds still.",
-            "withdrawFromCard for the `available` amount (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from.",
+            "getCardBalance again: after a block Gravv may return the balance to the linked card account or wallet by itself (every card on that balance blocked, at least 1 USD), with a cards.transaction.withdraw webhook described `Balance returned after card block`. If `available` is 0, the money is back and you are done.",
+            "Otherwise withdrawFromCard for what is still `available` (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from. An `insufficient balance` answer here usually means the return already took it.",
             "After any error, read the balance and wait for `cards.transaction.withdraw` before trying again: the money may already have moved."
           ]
         },

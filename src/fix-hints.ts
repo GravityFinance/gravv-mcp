@@ -183,6 +183,16 @@ export const ERROR_FIXES: ErrorFix[] = [
   // ---- cards -----------------------------------------------------------------
   // Before card-account: "must be active to be used for cards" is said of a wallet too.
   {
+    id: "card-link-fixed",
+    scenarios: ["S-CRD-01"],
+    tools: ["createCardApplication", "activateFeature"],
+    messages: [/already has a card application linked to/i],
+    hint:
+      "This customer already has a card application, linked to the card account or wallet the message names, and a " +
+      "card's link cannot change once filed. Send that account_id or wallet_id (or neither on activateFeature); " +
+      "getCardApplication shows which link stands. Nothing was created.",
+  },
+  {
     id: "card-linked-wallet",
     scenarios: ["S-CRD-01"],
     tools: ["createCardApplication", "activateFeature"],
@@ -200,7 +210,7 @@ export const ERROR_FIXES: ErrorFix[] = [
     hint:
       "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or " +
       "wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets " +
-      "(listWallets), active, not a savings wallet or a card's own balance wallet (card-group-...), with an " +
+      "(listWallets), active, not a savings wallet or a card's own balance wallet (card-group-..., or card-... for older cards), with an " +
       "address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
       "idempotency_key.",
   },

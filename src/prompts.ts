@@ -633,7 +633,8 @@ export const PROMPTS: GoalPrompt[] = [
         steps: [
           "getCard and getCardBalance. If `shared` is true, other cards lose that money: say so.",
           "updateCardStatus `blocked` with the limit (ask first), so the card stops spending and the balance holds still.",
-          "withdrawFromCard for the `available` amount (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from.",
+          "getCardBalance again: after a block Gravv may return the balance to the linked card account or wallet by itself (every card on that balance blocked, at least 1 USD), with a cards.transaction.withdraw webhook described `Balance returned after card block`. If `available` is 0, the money is back and you are done.",
+          "Otherwise withdrawFromCard for what is still `available` (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from. An `insufficient balance` answer here usually means the return already took it.",
           "After any error, read the balance and wait for `cards.transaction.withdraw` before trying again: the money may already have moved.",
         ],
       },

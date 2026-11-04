@@ -101,7 +101,7 @@ export const TOOLS: GeneratedTool[] = [
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`), have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
+              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
               "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
             },
             "funding": {
@@ -1393,7 +1393,7 @@ export const TOOLS: GeneratedTool[] = [
         "wallet_id": {
           "type": "string",
           "format": "uuid",
-          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`), have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
+          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
           "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
         },
         "annual_remuneration": {
@@ -7821,7 +7821,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from a card — Moves money from an `active`, frozen or `blocked` card back to its linked card account or linked wallet. One call works for every card: some pay out straight away (`status` `completed`, with `tx_hash`), the others by transfer (`status` `pending`, with `transfer_id`). Gravv sends the `cards.transaction.withdraw` webhook when the withdrawal ends. A call that errors or times out may still have moved the money: read the card balance and your webhooks before you retry with a new Idempotency-Key.\n\nMOVES MONEY: requires confirm: true. Works for an `active`, frozen (`freeze`) or `blocked` card; only an `inactive` card is refused. The amount (USD, at most 2 decimals) must not exceed `available` from getCardBalance. Funds go to the card's linked card account or linked wallet, nowhere else. The answer is `completed` (with tx_hash) or `pending` (with transfer_id); the cards.transaction.withdraw webhook reports the end. An error can still mean the money moved: read getCardBalance before any retry, and retry only if the money did not move.",
+    "description": "Withdraw from a card — Moves money from an `active`, frozen or `blocked` card back to its linked card account or linked wallet. One call works for every card: some pay out straight away (`status` `completed`, with `tx_hash`), the others by transfer (`status` `pending`, with `transfer_id`). Gravv sends the `cards.transaction.withdraw` webhook when the withdrawal ends. A call that errors or times out may still have moved the money: read the card balance and your webhooks before you retry with a new Idempotency-Key.\n\nMOVES MONEY: requires confirm: true. Works for an `active`, frozen (`freeze`) or `blocked` card; only an `inactive` card is refused. The amount (USD, at most 2 decimals) must not exceed `available` from getCardBalance. Funds go to the card's linked card account or linked wallet, nowhere else. The answer is `completed` (with tx_hash) or `pending` (with transfer_id); the cards.transaction.withdraw webhook reports the end. An error can still mean the money moved: read getCardBalance before any retry, and retry only if the money did not move. On a blocked card Gravv may already have returned the balance by itself: read getCardBalance first and withdraw only what is still `available`.",
     "inputSchema": {
       "type": "object",
       "properties": {
