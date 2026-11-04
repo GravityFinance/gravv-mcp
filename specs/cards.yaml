@@ -193,9 +193,9 @@ components:
           format: uuid
           description: >-
             For a business with no card account: one of your wallets, linked to
-            the card instead. Withdrawals and a blocked card's balance go back
-            to it. It must be `active`, not a savings wallet, have an
-            address, and be on the chain your cards are issued on. A wallet of
+            the card instead. Withdrawals go back to it. It must be `active`,
+            not a savings wallet or a card's own balance wallet (named
+            `card-group-…`), have an address, and be on the chain your cards are issued on. A wallet of
             another business is refused. Send this or `account_id`, not both.
           example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f
         annual_remuneration:
@@ -871,7 +871,7 @@ paths:
                         type: number
                         description: >-
                           What a withdrawal from this card may take: the group's
-                          balance for an `active` or `blocked` card. Left out
+                          balance for an `active`, `freeze` or `blocked` card. Left out
                           for a card that cannot be withdrawn from.
                       currency:
                         type: string
@@ -1086,11 +1086,14 @@ paths:
       summary: Withdraw from a card
       operationId: withdrawFromCard
       description: >-
-        Moves money from an `active` card back to its card account. Some cards,
-        including every new sandbox card, return the error `this card withdraws
-        by transfer`. For those, send a `POST /v1/transfer` from the card to its
-        card account. Retry a failed call with the same Idempotency-Key. Gravv
-        also sends the result as the `cards.transaction.withdraw` webhook.
+        Moves money from an `active`, frozen or `blocked` card back to its
+        linked card account or linked wallet. One call works for every card:
+        some pay out straight away (`status` `completed`, with `tx_hash`), the
+        others by transfer (`status` `pending`, with `transfer_id`). Gravv sends
+        the `cards.transaction.withdraw` webhook when the withdrawal ends. A
+        call that errors or times out may still have moved the money: read the
+        card balance and your webhooks before you retry with a new
+        Idempotency-Key.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1119,7 +1122,7 @@ paths:
               amount: 20
       responses:
         '200':
-          description: The withdrawal is done
+          description: The withdrawal is done (`completed`) or on its way (`pending`)
           content:
             application/json:
               schema:
@@ -1130,18 +1133,46 @@ paths:
                     properties:
                       tx_hash:
                         type: string
+                        description: The chain transaction, when the card paid out straight away. Empty otherwise
+                      transfer_id:
+                        type: string
+                        description: The transfer that pays the money out, when the card pays out by transfer
+                      status:
+                        type: string
+                        enum:
+                          - completed
+                          - pending
+                      route:
+                        type: string
+                        enum:
+                          - card
+                          - transfer
                   error:
                     type: 'null'
-              example:
-                data:
-                  tx_hash: '0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192'
-                error: null
+              examples:
+                PaidOutStraightAway:
+                  summary: Paid out straight away
+                  value:
+                    data:
+                      tx_hash: '0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192'
+                      status: completed
+                      route: card
+                    error: null
+                PaidOutByTransfer:
+                  summary: Paid out by transfer
+                  value:
+                    data:
+                      tx_hash: ''
+                      transfer_id: 8a65408c-868c-4e7e-92e0-41d342b172c5
+                      status: pending
+                      route: transfer
+                    error: null
         '400':
-          description: The card is not active, the balance is too low, or the card withdraws by transfer
+          description: The card is inactive, the amount is not positive, or the balance is too low
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 data: null
-                error: 'this card withdraws by transfer: send a transfer from the card to its account'
+                error: insufficient balance

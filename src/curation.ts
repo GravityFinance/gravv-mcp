@@ -434,14 +434,6 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
       "Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can " +
       "hold USDC.",
   },
-  withdrawFromCard: {
-    whileSpecSays: "Retry a failed call with the same Idempotency-Key.",
-    description:
-      "Moves money from an `active` card back to its card account. Some cards, including every new sandbox " +
-      "card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card " +
-      "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
-  },
-
   // ---- collections ---------------------------------------------------------
   // The route takes card methods, but this tool offers bank_transfer only
   // (ENUM_RESTRICTIONS), so the card sentences describe a call the tool cannot make.
@@ -811,7 +803,7 @@ export const PREREQUISITES: Record<string, string> = {
     "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
 
   withdrawFromCard:
-    "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+    "MOVES MONEY: requires confirm: true. Works for an `active`, frozen (`freeze`) or `blocked` card; only an `inactive` card is refused. The amount (USD, at most 2 decimals) must not exceed `available` from getCardBalance. Funds go to the card's linked card account or linked wallet, nowhere else. The answer is `completed` (with tx_hash) or `pending` (with transfer_id); the cards.transaction.withdraw webhook reports the end. An error can still mean the money moved: read getCardBalance before any retry, and retry only if the money did not move.",
 
   updateCardStatus:
     "ALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",

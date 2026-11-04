@@ -623,7 +623,7 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-CRD-07"],
         steps: [
           "getCard. Ask: freeze (reversible) or block (permanent)?",
-          "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, withdraw it first (path close). Offer a replacement with createCard.",
+          "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, block it and then withdraw (path close). Offer a replacement with createCard.",
         ],
       },
       {
@@ -632,9 +632,9 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-CRD-10"],
         steps: [
           "getCard and getCardBalance. If `shared` is true, other cards lose that money: say so.",
-          "withdrawFromCard (confirm first). If it answers that the card withdraws by transfer, createTransfer from the card to the card account (confirm first).",
-          "Then updateCardStatus `blocked` with the limit (ask first). Withdraw before you block.",
-          "After an internal server error, read the balance and wait for `cards.transaction.withdraw` before trying again.",
+          "updateCardStatus `blocked` with the limit (ask first), so the card stops spending and the balance holds still.",
+          "withdrawFromCard for the `available` amount (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from.",
+          "After any error, read the balance and wait for `cards.transaction.withdraw` before trying again: the money may already have moved.",
         ],
       },
       {
