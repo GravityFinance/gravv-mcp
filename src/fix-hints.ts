@@ -193,14 +193,15 @@ export const ERROR_FIXES: ErrorFix[] = [
       /wallet is not operated by the authenticated tenant/i,
       /wallet must be active to be used for cards/i,
       /savings wallet cannot be a card's (home|linked wallet)/i,
+      /card's own balance wallet cannot be a card's linked wallet/i,
       /wallet has no address yet/i,
       /wallet is on \S+, but cards are issued on/i,
     ],
     hint:
       "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or " +
       "wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets " +
-      "(listWallets), active, not a savings wallet, with an address, and on the chain the business's cards are " +
-      "issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
+      "(listWallets), active, not a savings wallet or a card's own balance wallet (card-group-...), with an " +
+      "address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
       "idempotency_key.",
   },
   {
