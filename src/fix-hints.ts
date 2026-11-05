@@ -181,6 +181,41 @@ export const ERROR_FIXES: ErrorFix[] = [
       "getAccountCapabilities, or support. Do not resend the same body.",
   },
   // ---- cards -----------------------------------------------------------------
+  // Before card-account: "must be active to be used for cards" is said of a wallet too.
+  {
+    id: "card-link-fixed",
+    scenarios: ["S-CRD-01"],
+    tools: ["createCardApplication", "activateFeature"],
+    messages: [/already has a card application linked to/i],
+    hint:
+      "This customer already has a card application, linked to the card account or wallet the message names, and a " +
+      "card's link cannot change once filed. Send that account_id or wallet_id (or neither on activateFeature); " +
+      "getCardApplication shows which link stands. Nothing was created.",
+  },
+  {
+    id: "card-linked-wallet",
+    scenarios: ["S-CRD-01"],
+    tools: ["createCardApplication", "activateFeature"],
+    messages: [
+      /account_id or wallet_id is required/i,
+      /send account_id or wallet_id, not both/i,
+      /wallet does not exist/i,
+      /wallet is not operated by the authenticated tenant/i,
+      /wallet must be active to be used for cards/i,
+      /savings wallet cannot be a card's (home|linked wallet)/i,
+      /card's own balance wallet cannot be a card's linked wallet/i,
+      /wallet has no address yet/i,
+      /wallet is on \S+, but cards are issued on/i,
+      /is the wallet of account \S+, so it cannot be a card's linked wallet/i,
+    ],
+    hint:
+      "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or " +
+      "wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets " +
+      "(listWallets), active, not a savings wallet, not the wallet behind one of the business's accounts, and not a card's own " +
+      "balance wallet (card-group-..., or card-... for older cards), with an " +
+      "address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
+      "idempotency_key.",
+  },
   {
     id: "card-account",
     scenarios: ["S-CRD-01", "S-ACC1-07"],
@@ -196,7 +231,8 @@ export const ERROR_FIXES: ErrorFix[] = [
       "account_id (provider_data.account_id on activateFeature) must be the business's own card account, and it must " +
       "be active: find it with listAccounts (account_type card, status active). If there is none, open it first: " +
       "createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own " +
-      "customer id, or the Dashboard. It is ready at account.activated.",
+      "customer id, or the Dashboard. It is ready at account.activated. Or send wallet_id instead of account_id: " +
+      "an active, non-savings wallet of the business on the cards' chain, with no account behind it, becomes the card's linked wallet.",
   },
   {
     id: "card-activate-fault",
@@ -205,9 +241,21 @@ export const ERROR_FIXES: ErrorFix[] = [
     messages: [/cards service: internal server error/i],
     outcomeKnown: false,
     hint:
-      "Most often provider_data.account_id was left out, or annual_remuneration was sent as a string. Check with " +
+      "Most often annual_remuneration was sent as a string. Check with " +
       "listFeatures (customer_id) whether the activation landed. If not, send account_id (the business's active card " +
-      "account, from listAccounts) and the amounts as numbers, and call again without idempotency_key.",
+      "account, from listAccounts) or wallet_id (a linked wallet, with no card account) and the amounts as numbers, " +
+      "and call again without idempotency_key.",
+  },
+  {
+    id: "card-withdraw-unconfirmed",
+    scenarios: ["S-CRD-10"],
+    tools: ["withdrawFromCard"],
+    messages: [/card withdrawal could not be confirmed in time/i],
+    outcomeKnown: false,
+    hint:
+      "Gravv started the withdrawal but could not confirm it in time, so the money may still move. Wait about a " +
+      "minute, then read getCardBalance and listTransactions (card_id) or look for the cards.transaction.withdraw " +
+      "webhook. Withdraw again, with a new idempotency_key, only if the money did not move.",
   },
   {
     id: "card-account-create",

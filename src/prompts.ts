@@ -570,7 +570,7 @@ export const PROMPTS: GoalPrompt[] = [
     common: {
       title: "Before any card",
       steps: [
-        "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, open it first (the open-account prompt, path card-account).",
+        "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, either open it first (the open-account prompt, path card-account), or send wallet_id instead: one of the business's active, non-savings wallets on the chain its cards are issued on (listWallets). That wallet is then the card's linked wallet: withdrawals and a blocked card's balance go back to it.",
       ],
     },
     paths: [
@@ -582,7 +582,7 @@ export const PROMPTS: GoalPrompt[] = [
           "createCustomer if the person is new, then getCustomer.",
           "checkFeatureEligibility.",
           "startCardholderKyc only if basic KYC is `not_started` or `failed`; then wait.",
-          "activateFeature with provider_data: account_id (the card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
+          "activateFeature with provider_data: account_id (the card account) or wallet_id (the linked wallet, only with no card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
           "listCards with customer_id. In live: listCardApplications, getCardApplication for `application_link`, then createCard.",
         ],
       },
@@ -623,7 +623,7 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-CRD-07"],
         steps: [
           "getCard. Ask: freeze (reversible) or block (permanent)?",
-          "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, withdraw it first (path close). Offer a replacement with createCard.",
+          "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, block it and then withdraw (path close). Offer a replacement with createCard.",
         ],
       },
       {
@@ -632,9 +632,10 @@ export const PROMPTS: GoalPrompt[] = [
         scenarios: ["S-CRD-10"],
         steps: [
           "getCard and getCardBalance. If `shared` is true, other cards lose that money: say so.",
-          "withdrawFromCard (confirm first). If it answers that the card withdraws by transfer, createTransfer from the card to the card account (confirm first).",
-          "Then updateCardStatus `blocked` with the limit (ask first). Withdraw before you block.",
-          "After an internal server error, read the balance and wait for `cards.transaction.withdraw` before trying again.",
+          "updateCardStatus `blocked` with the limit (ask first), so the card stops spending and the balance holds still.",
+          "getCardBalance again: after a block Gravv may return the balance to the linked card account or wallet by itself (every card on that balance blocked, at least 1 USD), with a cards.transaction.withdraw webhook described `Balance returned after card block`. If `available` is 0, the money is back and you are done.",
+          "Otherwise withdrawFromCard for what is still `available` (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from. An `insufficient balance` answer here usually means the return already took it.",
+          "After any error, read the balance and wait for `cards.transaction.withdraw` before trying again: the money may already have moved.",
         ],
       },
       {

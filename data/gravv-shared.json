@@ -405,6 +405,88 @@
       "hint": "The customer is at the limit for this account option, or already has an application in progress at this bank. Quote the message to the user and offer an existing account (listAccountsV2), another option from getAccountCapabilities, or support. Do not resend the same body."
     },
     {
+      "id": "card-link-fixed",
+      "scenarios": [
+        "S-CRD-01"
+      ],
+      "ops": [
+        "POST /v1/cards/applications/new",
+        "POST /v1/risk/features/activate"
+      ],
+      "tools": [
+        "createCardApplication",
+        "activateFeature"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "already has a card application linked to",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "This customer already has a card application, linked to the card account or wallet the message names, and a card's link cannot change once filed. Send that account_id or wallet_id (or neither on activateFeature); getCardApplication shows which link stands. Nothing was created."
+    },
+    {
+      "id": "card-linked-wallet",
+      "scenarios": [
+        "S-CRD-01"
+      ],
+      "ops": [
+        "POST /v1/cards/applications/new",
+        "POST /v1/risk/features/activate"
+      ],
+      "tools": [
+        "createCardApplication",
+        "activateFeature"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "account_id or wallet_id is required",
+          "flags": "i"
+        },
+        {
+          "source": "send account_id or wallet_id, not both",
+          "flags": "i"
+        },
+        {
+          "source": "wallet does not exist",
+          "flags": "i"
+        },
+        {
+          "source": "wallet is not operated by the authenticated tenant",
+          "flags": "i"
+        },
+        {
+          "source": "wallet must be active to be used for cards",
+          "flags": "i"
+        },
+        {
+          "source": "savings wallet cannot be a card's (home|linked wallet)",
+          "flags": "i"
+        },
+        {
+          "source": "card's own balance wallet cannot be a card's linked wallet",
+          "flags": "i"
+        },
+        {
+          "source": "wallet has no address yet",
+          "flags": "i"
+        },
+        {
+          "source": "wallet is on \\S+, but cards are issued on",
+          "flags": "i"
+        },
+        {
+          "source": "is the wallet of account \\S+, so it cannot be a card's linked wallet",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets (listWallets), active, not a savings wallet, not the wallet behind one of the business's accounts, and not a card's own balance wallet (card-group-..., or card-... for older cards), with an address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without idempotency_key."
+    },
+    {
       "id": "card-account",
       "scenarios": [
         "S-CRD-01",
@@ -442,7 +524,7 @@
         }
       ],
       "outcome_known": true,
-      "hint": "account_id (provider_data.account_id on activateFeature) must be the business's own card account, and it must be active: find it with listAccounts (account_type card, status active). If there is none, open it first: createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own customer id, or the Dashboard. It is ready at account.activated."
+      "hint": "account_id (provider_data.account_id on activateFeature) must be the business's own card account, and it must be active: find it with listAccounts (account_type card, status active). If there is none, open it first: createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own customer id, or the Dashboard. It is ready at account.activated. Or send wallet_id instead of account_id: an active, non-savings wallet of the business on the cards' chain, with no account behind it, becomes the card's linked wallet."
     },
     {
       "id": "card-activate-fault",
@@ -464,7 +546,28 @@
         }
       ],
       "outcome_known": false,
-      "hint": "Most often provider_data.account_id was left out, or annual_remuneration was sent as a string. Check with listFeatures (customer_id) whether the activation landed. If not, send account_id (the business's active card account, from listAccounts) and the amounts as numbers, and call again without idempotency_key."
+      "hint": "Most often annual_remuneration was sent as a string. Check with listFeatures (customer_id) whether the activation landed. If not, send account_id (the business's active card account, from listAccounts) or wallet_id (a linked wallet, with no card account) and the amounts as numbers, and call again without idempotency_key."
+    },
+    {
+      "id": "card-withdraw-unconfirmed",
+      "scenarios": [
+        "S-CRD-10"
+      ],
+      "ops": [
+        "POST /v1/cards/withdraw"
+      ],
+      "tools": [
+        "withdrawFromCard"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "card withdrawal could not be confirmed in time",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": false,
+      "hint": "Gravv started the withdrawal but could not confirm it in time, so the money may still move. Wait about a minute, then read getCardBalance and listTransactions (card_id) or look for the cards.transaction.withdraw webhook. Withdraw again, with a new idempotency_key, only if the money did not move."
     },
     {
       "id": "card-account-create",
@@ -1425,7 +1528,7 @@
       "common": {
         "title": "Before any card",
         "steps": [
-          "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, open it first (the open-account prompt, path card-account)."
+          "listAccounts with account_type `card` and status `active`: the business's card account. Send its id as account_id on every card application and activation. If there is none, either open it first (the open-account prompt, path card-account), or send wallet_id instead: one of the business's active, non-savings wallets on the chain its cards are issued on (listWallets). That wallet is then the card's linked wallet: withdrawals and a blocked card's balance go back to it."
         ]
       },
       "paths": [
@@ -1442,7 +1545,7 @@
             "createCustomer if the person is new, then getCustomer.",
             "checkFeatureEligibility.",
             "startCardholderKyc only if basic KYC is `not_started` or `failed`; then wait.",
-            "activateFeature with provider_data: account_id (the card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
+            "activateFeature with provider_data: account_id (the card account) or wallet_id (the linked wallet, only with no card account), annual_remuneration and estimated_monthly_limit as numbers, and the funding mode. Confirm first, showing the customer's name, the daily limit and the card type. If activation already exists, go to listCards.",
             "listCards with customer_id. In live: listCardApplications, getCardApplication for `application_link`, then createCard."
           ]
         },
@@ -1501,7 +1604,7 @@
           ],
           "steps": [
             "getCard. Ask: freeze (reversible) or block (permanent)?",
-            "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, withdraw it first (path close). Offer a replacement with createCard."
+            "updateCardStatus with the status and the current limit. A block cannot be undone: say so and ask first. If the card holds money, block it and then withdraw (path close). Offer a replacement with createCard."
           ]
         },
         {
@@ -1514,9 +1617,10 @@
           ],
           "steps": [
             "getCard and getCardBalance. If `shared` is true, other cards lose that money: say so.",
-            "withdrawFromCard (confirm first). If it answers that the card withdraws by transfer, createTransfer from the card to the card account (confirm first).",
-            "Then updateCardStatus `blocked` with the limit (ask first). Withdraw before you block.",
-            "After an internal server error, read the balance and wait for `cards.transaction.withdraw` before trying again."
+            "updateCardStatus `blocked` with the limit (ask first), so the card stops spending and the balance holds still.",
+            "getCardBalance again: after a block Gravv may return the balance to the linked card account or wallet by itself (every card on that balance blocked, at least 1 USD), with a cards.transaction.withdraw webhook described `Balance returned after card block`. If `available` is 0, the money is back and you are done.",
+            "Otherwise withdrawFromCard for what is still `available` (confirm first). The money goes to the card's linked card account or linked wallet; a blocked card can still be withdrawn from. An `insufficient balance` answer here usually means the return already took it.",
+            "After any error, read the balance and wait for `cards.transaction.withdraw` before trying again: the money may already have moved."
           ]
         },
         {

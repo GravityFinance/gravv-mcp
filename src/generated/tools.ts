@@ -48,7 +48,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/risk/features/activate",
-    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`. Give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
+    "description": "Activate a feature — Turns on a feature for a customer. For `virtual_cards` it creates a card application and, when the application is approved, issues a virtual card. Cards need completed KYC with a liveness check, a card-type account, and `provider_data` with `annual_remuneration` and `estimated_monthly_limit`. If the customer has no liveness check, the status is `pending_liveness`. Give the cardholder `websdk_url`, then call again. `crypto_wallet` and `international_transfers` become active at once. An activation that already exists is returned unchanged. Every error is HTTP 400.\n\nPREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active), or wallet_id (one of your active non-savings wallets on the cards' chain) when the business has no card account, never both, as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -95,8 +95,14 @@ export const TOOLS: GeneratedTool[] = [
             "account_id": {
               "type": "string",
               "format": "uuid",
-              "description": "Always send it for `virtual_cards`. It is the ID of your business's card account (type `card`, status `active`). The same card account backs every cardholder. Leaving it out fails with `cards service: internal server error`.",
+              "description": "For `virtual_cards`, send this or `wallet_id`. It is the ID of your business's card account (type `card`, status `active`). The same card account backs every cardholder.",
               "example": "5d9e677f-f071-4881-a861-7cdcebacd9d5"
+            },
+            "wallet_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
+              "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
             },
             "funding": {
               "type": "object",
@@ -1368,7 +1374,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/applications/new",
-    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "description": "Create a card application — Opens a card application for a customer whose `basic` KYC is completed, using your active `card` account. In live, apply with `POST /v1/risk/features/activate` and `feature_id: virtual_cards` instead; this route works in sandbox. A second call for the same customer returns the existing application, in the shape of `GET /v1/cards/applications/{application_id}`, and does not check the new body. The response has no `application_status`; read it from `GET /v1/cards/applications`.\n\nPREREQUISITES: the customer's basic KYC is completed (getCustomer), and the card is linked to account_id, your active `card` account (listAccounts with account_type card), or, only when the business has no card account, wallet_id, one of its active non-savings wallets on the cards' chain (listWallets). Send one, never both. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1381,8 +1387,14 @@ export const TOOLS: GeneratedTool[] = [
         "account_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Your active account of type `card`",
+          "description": "Your active account of type `card`. Send this or `wallet_id`, not both.",
           "example": "9b40be8d-9d74-4d2a-8897-dea3ef80ad23"
+        },
+        "wallet_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
+          "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
         },
         "annual_remuneration": {
           "type": "number",
@@ -1453,7 +1465,6 @@ export const TOOLS: GeneratedTool[] = [
       },
       "required": [
         "customer_id",
-        "account_id",
         "annual_remuneration",
         "estimated_monthly_limit",
         "ip_address"
@@ -1466,6 +1477,7 @@ export const TOOLS: GeneratedTool[] = [
     "bodyProps": [
       "customer_id",
       "account_id",
+      "wallet_id",
       "annual_remuneration",
       "estimated_monthly_limit",
       "ip_address",
@@ -2822,7 +2834,7 @@ export const TOOLS: GeneratedTool[] = [
           "properties": {
             "source_type": {
               "type": "string",
-              "description": "A `card` source can only be withdrawn to its own card account. A `savings` source withdraws from savings: send the savings account id, and the same id as an `internal_account` destination.",
+              "description": "A `card` source can only be withdrawn to what it is linked to: its card account (`internal_account`), or for a card issued with `wallet_id`, that wallet (`internal_crypto_wallet`). A `savings` source withdraws from savings: send the savings account id, and the same id as an `internal_account` destination.",
               "enum": [
                 "internal_account",
                 "internal_crypto_wallet",
@@ -7809,7 +7821,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "cards",
     "method": "post",
     "path": "/v1/cards/withdraw",
-    "description": "Withdraw from a card — Moves money from an `active` card back to its card account. Some cards, including every new sandbox card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card account. The result is also sent as the `cards.transaction.withdraw` webhook.\n\nMOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+    "description": "Withdraw from a card — Moves money from an `active`, frozen or `blocked` card back to its linked card account or linked wallet. One call works for every card: some pay out straight away (`status` `completed`, with `tx_hash`), the others by transfer (`status` `pending`, with `transfer_id`). Gravv sends the `cards.transaction.withdraw` webhook when the withdrawal ends. A call that errors or times out may still have moved the money: read the card balance and your webhooks before you retry with a new Idempotency-Key.\n\nMOVES MONEY: requires confirm: true. Works for an `active`, frozen (`freeze`) or `blocked` card; only an `inactive` card is refused. The amount (USD, at most 2 decimals) must not exceed `available` from getCardBalance. Funds go to the card's linked card account or linked wallet, nowhere else. The answer is `completed` (with tx_hash) or `pending` (with transfer_id); the cards.transaction.withdraw webhook reports the end. An error can still mean the money moved: read getCardBalance before any retry, and retry only if the money did not move. On a blocked card Gravv may already have returned the balance by itself: read getCardBalance first and withdraw only what is still `available`.",
     "inputSchema": {
       "type": "object",
       "properties": {

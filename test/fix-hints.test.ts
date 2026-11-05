@@ -76,6 +76,29 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
     status: 409,
     body: { data: null, error: "this customer already holds the maximum number of USD accounts for this option" },
   },
+  "card-link-fixed": {
+    tool: "createCardApplication",
+    status: 400,
+    body: {
+      data: null,
+      error:
+        "this customer already has a card application linked to wallet 437bac28-3afb-4421-a78b-d59cb0408f1e; a card's link cannot be changed, so send that wallet_id",
+    },
+  },
+  "card-withdraw-unconfirmed": {
+    tool: "withdrawFromCard",
+    status: 400,
+    body: {
+      data: null,
+      error:
+        "the card withdrawal could not be confirmed in time and may still complete; check the card's transactions before trying again with a new idempotency key",
+    },
+  },
+  "card-linked-wallet": {
+    tool: "activateFeature",
+    status: 400,
+    body: { data: null, error: "wallet must be active to be used for cards, but its status is \"frozen\"" },
+  },
   "card-account": {
     tool: "createCardApplication",
     status: 400,

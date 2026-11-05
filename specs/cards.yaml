@@ -167,11 +167,12 @@ components:
       type: object
       required:
         - customer_id
-        - account_id
         - annual_remuneration
         - estimated_monthly_limit
         - ip_address
-      description: The API ignores unknown fields. Send the numbers as JSON numbers.
+      description: >-
+        The API ignores unknown fields. Send the numbers as JSON numbers. Send
+        the card's linked account (`account_id`) or linked wallet (`wallet_id`), exactly one.
       properties:
         customer_id:
           type: string
@@ -183,8 +184,21 @@ components:
         account_id:
           type: string
           format: uuid
-          description: Your active account of type `card`
+          description: >-
+            Your active account of type `card`. Send this or `wallet_id`, not
+            both.
           example: 9b40be8d-9d74-4d2a-8897-dea3ef80ad23
+        wallet_id:
+          type: string
+          format: uuid
+          description: >-
+            For a business with no card account: one of your wallets, linked to
+            the card instead. Withdrawals go back to it. It must be `active`,
+            not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named
+            `card-group-…`, or `card-…` for older cards), have an address, and be
+            on the chain your cards are issued on. A wallet of
+            another business is refused. Send this or `account_id`, not both.
+          example: 2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f
         annual_remuneration:
           type: number
           exclusiveMinimum: 0
@@ -248,6 +262,16 @@ components:
           description: Verification page for the cardholder, live only. Empty when there is none.
         address:
           $ref: '#/components/schemas/BillingAddress'
+        account_id:
+          type: string
+          description: >-
+            The card account the application's cards are linked to. Empty for an
+            application linked to a wallet.
+        wallet_id:
+          type: string
+          description: >-
+            The wallet the application's cards are linked to, when it has no card
+            account. Left out otherwise.
     Card:
       type: object
       properties:
@@ -320,6 +344,16 @@ components:
               type: integer
               description: The card's spending limit, in whole USD per day
               example: 50
+        account_id:
+          type: string
+          description: >-
+            The card account the card is linked to: where its money goes when it
+            leaves. Empty for a card linked to a wallet.
+        wallet_id:
+          type: string
+          description: >-
+            The card's linked wallet, for a card issued with a wallet instead of
+            a card account. Left out otherwise.
     CardEnvelope:
       type: object
       properties:
@@ -373,7 +407,12 @@ components:
           description: Address that holds the card's funds
         account_id:
           type: string
-          description: The card account
+          description: The card account. Empty for a card issued with `wallet_id`.
+        wallet_id:
+          type: string
+          description: >-
+            The card's linked wallet, for a card issued with a wallet instead of
+            a card account.
         proxy_address:
           type:
             - string
@@ -819,6 +858,7 @@ paths:
                     type: virtual
                     activated: true
                     daily_transaction_limit: 50
+                  account_id: 4c0a51e2-7d3b-4f6e-9a21-8b5d3c7e9f10
                 error: null
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -849,6 +889,12 @@ paths:
                       group_balance:
                         type: number
                         description: Balance shared by the cards in the group
+                      available:
+                        type: number
+                        description: >-
+                          What a withdrawal from this card may take: the group's
+                          balance for an `active`, `freeze` or `blocked` card. Left out
+                          for a card that cannot be withdrawn from.
                       currency:
                         type: string
                         example: USD
@@ -864,6 +910,7 @@ paths:
                 data:
                   balance: 22.5
                   group_balance: 22.5
+                  available: 22.5
                   currency: USD
                   shared: false
                   card_group_id: 3f1d0c5e-2a8b-4b7e-9f3a-6c1e2d4b5a70
@@ -1061,11 +1108,14 @@ paths:
       summary: Withdraw from a card
       operationId: withdrawFromCard
       description: >-
-        Moves money from an `active` card back to its card account. Some cards,
-        including every new sandbox card, return the error `this card withdraws
-        by transfer`. For those, send a `POST /v1/transfer` from the card to its
-        card account. Retry a failed call with the same Idempotency-Key. Gravv
-        also sends the result as the `cards.transaction.withdraw` webhook.
+        Moves money from an `active`, frozen or `blocked` card back to its
+        linked card account or linked wallet. One call works for every card:
+        some pay out straight away (`status` `completed`, with `tx_hash`), the
+        others by transfer (`status` `pending`, with `transfer_id`). Gravv sends
+        the `cards.transaction.withdraw` webhook when the withdrawal ends. A
+        call that errors or times out may still have moved the money: read the
+        card balance and your webhooks before you retry with a new
+        Idempotency-Key.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1094,7 +1144,7 @@ paths:
               amount: 20
       responses:
         '200':
-          description: The withdrawal is done
+          description: The withdrawal is done (`completed`) or on its way (`pending`)
           content:
             application/json:
               schema:
@@ -1105,18 +1155,46 @@ paths:
                     properties:
                       tx_hash:
                         type: string
+                        description: The chain transaction, when the card paid out straight away. Empty otherwise
+                      transfer_id:
+                        type: string
+                        description: The transfer that pays the money out, when the card pays out by transfer
+                      status:
+                        type: string
+                        enum:
+                          - completed
+                          - pending
+                      route:
+                        type: string
+                        enum:
+                          - card
+                          - transfer
                   error:
                     type: 'null'
-              example:
-                data:
-                  tx_hash: '0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192'
-                error: null
+              examples:
+                PaidOutStraightAway:
+                  summary: Paid out straight away
+                  value:
+                    data:
+                      tx_hash: '0x2e5d0af9189b4b4c23bc64b96295e730609ec91e50e452a5da0a4af4bfe5c192'
+                      status: completed
+                      route: card
+                    error: null
+                PaidOutByTransfer:
+                  summary: Paid out by transfer
+                  value:
+                    data:
+                      tx_hash: ''
+                      transfer_id: 8a65408c-868c-4e7e-92e0-41d342b172c5
+                      status: pending
+                      route: transfer
+                    error: null
         '400':
-          description: The card is not active, the balance is too low, or the card withdraws by transfer
+          description: The card is inactive, the amount is not positive, or the balance is too low
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 data: null
-                error: 'this card withdraws by transfer: send a transfer from the card to its account'
+                error: insufficient balance

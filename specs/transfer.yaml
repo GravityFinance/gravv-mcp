@@ -133,7 +133,9 @@ components:
         source_type:
           type: string
           description: >-
-            A `card` source can only be withdrawn to its own card account. A
+            A `card` source can only be withdrawn to what it is linked to: its card
+            account (`internal_account`), or for a card issued with
+            `wallet_id`, that wallet (`internal_crypto_wallet`). A
             `savings` source withdraws from savings: send the savings account
             id, and the same id as an `internal_account` destination.
           enum:

@@ -434,14 +434,6 @@ export const DESCRIPTION_OVERRIDES: Record<string, DescriptionOverride> = {
       "Stellar wallet finishes its trustline setup in the background, so it can take a short time before it can " +
       "hold USDC.",
   },
-  withdrawFromCard: {
-    whileSpecSays: "Retry a failed call with the same Idempotency-Key.",
-    description:
-      "Moves money from an `active` card back to its card account. Some cards, including every new sandbox " +
-      "card, answer `this card withdraws by transfer`; for those, use createTransfer from the card to its card " +
-      "account. The result is also sent as the `cards.transaction.withdraw` webhook.",
-  },
-
   // ---- collections ---------------------------------------------------------
   // The route takes card methods, but this tool offers bank_transfer only
   // (ENUM_RESTRICTIONS), so the card sentences describe a call the tool cannot make.
@@ -790,7 +782,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Only orders placed in the Dashboard wait for approval. Orders created with an API key run at once and never appear here, so this list is usually empty for an API integration. A scoped API key needs the fx:order_approve permission, or the call returns 400 `caller is not permitted to approve or reject orders`. Approving and rejecting happen in the Dashboard; the API cannot do them.",
 
   createCardApplication:
-    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and account_id is your active `card` account (listAccounts with account_type card). In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
+    "PREREQUISITES: the customer's basic KYC is completed (getCustomer), and the card is linked to account_id, your active `card` account (listAccounts with account_type card), or, only when the business has no card account, wallet_id, one of its active non-savings wallets on the cards' chain (listWallets). Send one, never both. In live, use activateFeature with feature_id virtual_cards instead. Poll listCardApplications for application_status, or wait for the cards.application.update webhook.",
 
   createCard:
     "PREREQUISITE: listCardApplications shows application_status `approved` for the customer. card_limit is a whole-dollar daily limit above 0. A physical card needs shipping_address. Each further card for the customer is a new call: leave idempotency_key out. The PIN route is not available over MCP.",
@@ -799,7 +791,7 @@ export const PREREQUISITES: Record<string, string> = {
     "The provider_data items listed as pending are the fields to pass to activateFeature. Leave idempotency_key out on each check: an answer is kept for 24 hours under its key.",
 
   activateFeature:
-    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active) as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
+    "PREREQUISITES: checkFeatureEligibility first. For virtual_cards the cardholder needs completed card KYC with a liveness check (startCardholderKyc, or the websdk_url this call returns), and provider_data needs account_id (your active card account: listAccounts with account_type card and status active), or wallet_id (one of your active non-savings wallets on the cards' chain) when the business has no card account, never both, as well as annual_remuneration and estimated_monthly_limit as JSON numbers. Requires confirm: true.",
 
   startCardholderKyc:
     "Card KYC for a cardholder; for a customer's own KYC use startCustomerKyc. Check getCustomer first: never call it for a customer whose basic kyc status is `completed`, because it resets it to `pending`. Returns a web_url valid for one hour.",
@@ -811,7 +803,7 @@ export const PREREQUISITES: Record<string, string> = {
     "STEP 2 of server-to-server card KYC: every document must already be uploaded with uploadCardholderKycDocument. Check data.status and data.code: HTTP 200 also carries MISSING_DOCUMENTS and KYC_ALREADY_COMPLETED.",
 
   withdrawFromCard:
-    "MOVES MONEY: requires confirm: true. Works for cards on the live card programme and for older sandbox cards. New sandbox cards and some live cards refuse with 'this card withdraws by transfer'. The card must be `active`, and the amount (USD, at most 2 decimals) must not exceed the balance from getCardBalance. Funds go to the card's own account wallet.",
+    "MOVES MONEY: requires confirm: true. Works for an `active`, frozen (`freeze`) or `blocked` card; only an `inactive` card is refused. The amount (USD, at most 2 decimals) must not exceed `available` from getCardBalance. Funds go to the card's linked card account or linked wallet, nowhere else. The answer is `completed` (with tx_hash) or `pending` (with transfer_id); the cards.transaction.withdraw webhook reports the end. An error can still mean the money moved: read getCardBalance before any retry, and retry only if the money did not move. On a blocked card Gravv may already have returned the balance by itself: read getCardBalance first and withdraw only what is still `available`.",
 
   updateCardStatus:
     "ALWAYS send limit (whole USD per day) together with status: leaving limit out sets the card's daily limit to 0, and a live card stops working. status is required on every call: active, freeze or blocked; blocked is permanent. To change only the limit, resend the current status.",
