@@ -101,7 +101,7 @@ export const TOOLS: GeneratedTool[] = [
             "wallet_id": {
               "type": "string",
               "format": "uuid",
-              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
+              "description": "For `virtual_cards` when your business has no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. Send this or `account_id`, not both.",
               "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
             },
             "funding": {
@@ -1393,7 +1393,7 @@ export const TOOLS: GeneratedTool[] = [
         "wallet_id": {
           "type": "string",
           "format": "uuid",
-          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
+          "description": "For a business with no card account: one of your wallets, linked to the card instead. Withdrawals go back to it. It must be `active`, not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named `card-group-…`, or `card-…` for older cards), have an address, and be on the chain your cards are issued on. A wallet of another business is refused. Send this or `account_id`, not both.",
           "example": "2c1d8f0e-6a7b-4c3d-9e2f-1a0b3c4d5e6f"
         },
         "annual_remuneration": {

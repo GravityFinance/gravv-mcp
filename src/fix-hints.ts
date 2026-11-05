@@ -206,11 +206,13 @@ export const ERROR_FIXES: ErrorFix[] = [
       /card's own balance wallet cannot be a card's linked wallet/i,
       /wallet has no address yet/i,
       /wallet is on \S+, but cards are issued on/i,
+      /is the wallet of account \S+, so it cannot be a card's linked wallet/i,
     ],
     hint:
       "A card is linked to account_id (the business's active card account, listAccounts with account_type card) or " +
       "wallet_id (only with no card account), exactly one. A wallet_id must be one of the business's own wallets " +
-      "(listWallets), active, not a savings wallet or a card's own balance wallet (card-group-..., or card-... for older cards), with an " +
+      "(listWallets), active, not a savings wallet, not the wallet behind one of the business's accounts, and not a card's own " +
+      "balance wallet (card-group-..., or card-... for older cards), with an " +
       "address, and on the chain the business's cards are issued on. Pick another wallet, or create one on that chain with createWallet, and call again without " +
       "idempotency_key.",
   },
@@ -230,7 +232,7 @@ export const ERROR_FIXES: ErrorFix[] = [
       "be active: find it with listAccounts (account_type card, status active). If there is none, open it first: " +
       "createAccount with type card, currency USD, bank lead_bank or cross_river_bank and the business's own " +
       "customer id, or the Dashboard. It is ready at account.activated. Or send wallet_id instead of account_id: " +
-      "an active, non-savings wallet of the business on the cards' chain becomes the card's linked wallet.",
+      "an active, non-savings wallet of the business on the cards' chain, with no account behind it, becomes the card's linked wallet.",
   },
   {
     id: "card-activate-fault",

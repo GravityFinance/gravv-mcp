@@ -194,7 +194,7 @@ components:
           description: >-
             For a business with no card account: one of your wallets, linked to
             the card instead. Withdrawals go back to it. It must be `active`,
-            not a savings wallet or a card's own balance wallet (named
+            not a savings wallet, the wallet of one of your accounts, or a card's own balance wallet (named
             `card-group-…`, or `card-…` for older cards), have an address, and be
             on the chain your cards are issued on. A wallet of
             another business is refused. Send this or `account_id`, not both.
