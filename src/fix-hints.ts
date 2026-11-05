@@ -247,6 +247,17 @@ export const ERROR_FIXES: ErrorFix[] = [
       "and call again without idempotency_key.",
   },
   {
+    id: "card-withdraw-unconfirmed",
+    scenarios: ["S-CRD-10"],
+    tools: ["withdrawFromCard"],
+    messages: [/card withdrawal could not be confirmed in time/i],
+    outcomeKnown: false,
+    hint:
+      "Gravv started the withdrawal but could not confirm it in time, so the money may still move. Wait about a " +
+      "minute, then read getCardBalance and listTransactions (card_id) or look for the cards.transaction.withdraw " +
+      "webhook. Withdraw again, with a new idempotency_key, only if the money did not move.",
+  },
+  {
     id: "card-account-create",
     scenarios: ["S-ACC1-07"],
     tools: ["createAccount"],

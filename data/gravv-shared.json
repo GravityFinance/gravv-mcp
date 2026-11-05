@@ -549,6 +549,27 @@
       "hint": "Most often annual_remuneration was sent as a string. Check with listFeatures (customer_id) whether the activation landed. If not, send account_id (the business's active card account, from listAccounts) or wallet_id (a linked wallet, with no card account) and the amounts as numbers, and call again without idempotency_key."
     },
     {
+      "id": "card-withdraw-unconfirmed",
+      "scenarios": [
+        "S-CRD-10"
+      ],
+      "ops": [
+        "POST /v1/cards/withdraw"
+      ],
+      "tools": [
+        "withdrawFromCard"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "card withdrawal could not be confirmed in time",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": false,
+      "hint": "Gravv started the withdrawal but could not confirm it in time, so the money may still move. Wait about a minute, then read getCardBalance and listTransactions (card_id) or look for the cards.transaction.withdraw webhook. Withdraw again, with a new idempotency_key, only if the money did not move."
+    },
+    {
       "id": "card-account-create",
       "scenarios": [
         "S-ACC1-07"
