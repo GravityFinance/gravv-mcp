@@ -354,8 +354,8 @@ export const PROMPTS: GoalPrompt[] = [
       steps: [
         "listExternalAccountInstitutions with country_iso_code and institution_type (`bank` or `mobile_money`): the payee must carry an `institution_id` from this list, or the transfer is refused.",
         "listExternalAccounts with customer_id and search, then createExternalAccount. Read the phone or account number back to the user, and show the holder or wallet name the answer returns. A phone number cannot be changed later: a wrong one needs a new payee.",
-        "getTransferRates with the currency gives the indicative local amount. There is no rate lock: the rate is taken when the transfer is sent, and `local_amount` in its answer is what the recipient is due.",
-        "createTransfer with the sender in `additional_information`, `rail` left out, and the amount as a string. Show amount, recipient, institution and the indicative local amount, and send confirm: true only after the user says yes.",
+        "getTransferQuote with from_currency USD, to_currency the payee's currency, amount as a string, to_country_iso_code, and destination `{destination_type: external_account, id: <payee id>}`. Show the rate, `net_to_amount` (what the recipient is credited) and `fee` (charged on top). A refusal here means the route is closed or the amount is too small: tell the user, and send nothing.",
+        "createTransfer with `quote_id`, the same amount and currencies, the sender in `additional_information`, and `rail` left out. Show amount, recipient, institution, net_to_amount and fee, and send confirm: true only after the user says yes. The quote lasts about a minute (`expires_at`): if it expired while the user decided, quote again and show the new figures.",
         "getTransaction until final.",
       ],
     },
@@ -414,8 +414,8 @@ export const PROMPTS: GoalPrompt[] = [
       },
     ],
     rules: [
-      "Never send `rail: wire` for these payouts: that is a US wire. Do not pass a quote: it does not lock a payout rate.",
-      "On `paused`, read `requirements` and ask only for those (the fix-stuck-transfer prompt walks through resumeTransfer). For `customer_email`, updateCustomer first.",
+      "Never send `rail: wire` for these payouts: that is a US wire. The quote_id must come from getTransferQuote; an FX quote from getFxQuote does not price a payout.",
+      "On `paused`, read `requirements` and ask only for those (the fix-stuck-transfer prompt walks through resumeTransfer). For `customer_email`, updateCustomer first. A resumed transfer is priced again, so the amount the recipient gets can change: say so.",
       "A webhook says failed while the transaction says pending: the transfer is held for manual review. Stop, explain, and escalate; never send it again.",
       "A duplicate payee answer carries `data.payee_id`: reuse it. \"not yet set up for transfers\": create the payee again with an `institution_id`.",
     ],

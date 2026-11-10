@@ -109,6 +109,13 @@ describe("prompt text is true", () => {
     }
   });
 
+  test("send-remittance quotes before it sends", () => {
+    const text = full(PROMPTS_BY_NAME.get("send-remittance")!);
+    assert.match(text, /getTransferQuote[^\n]*destination/);
+    assert.match(text, /createTransfer with `quote_id`/);
+    assert.doesNotMatch(text, /Do not pass a quote|There is no rate lock/);
+  });
+
   test("the key rule is PR 1b's: after a 4xx, no idempotency_key; after an unknown outcome, look first", () => {
     const rules = SHARED_RULES.join("\n");
     assert.match(rules, /timeout, a network error or a 5xx[^\n]*look the result up first/);
