@@ -148,7 +148,7 @@ then paste a JSON-RPC frame on stdin:
 Gravv documentation, read from the docs site as it is published. They need **no API key**,
 so you can explore Gravv before you have credentials.
 
-**API tools** — 89 tools, all loaded by default (87 on a live key, which hides the two
+**API tools** — 90 tools, all loaded by default (88 on a live key, which hides the two
 sandbox simulators), covering customers, KYC, accounts, transfers, limits, cards, wallets,
 savings, FX and settlement instructions, collections, webhooks, and sandbox deposit and
 savings interest simulators.
@@ -294,7 +294,7 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
 | `accounts` | ✓ | capabilities, v2 accounts and their applications, and the business's one card account |
-| `transfers` | ✓ | transfers, supporting documents, resume, limits, rates, supported countries and currencies |
+| `transfers` | ✓ | transfers, supporting documents, resume, limits, rate-locked quotes, rates, supported countries and currencies |
 | `transactions` | ✓ | history, volume, export |
 | `external-accounts` | ✓ | recipients, verification, institutions |
 | `kyc` | ✓ | KYC start, server-to-server, document upload and download, status |
@@ -347,7 +347,7 @@ take five networks: `polygon`, `ethereum`, `solana`, `stellar` and Avalanche
 
 **transfers**
 `createTransfer*` · `uploadTransferDocument` · `resumeTransfer*` · `getCustomerLimits` ·
-`getRemitterLimits` · `getTransferRates` · `listTransferSupportedCurrencies` ·
+`getRemitterLimits` · `getTransferQuote` · `getTransferRates` · `listTransferSupportedCurrencies` ·
 `listTransferSupportedCountries` · `listTransferSupportedCountriesForAddress`
 
 **transactions**

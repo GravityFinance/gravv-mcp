@@ -45,6 +45,7 @@
     "getSettlementInstruction": "GET /v1/settlement-instructions/{id}",
     "getTransaction": "GET /v1/transactions/{transaction_id}",
     "getTransactionsVolume": "GET /v1/transactions/volume",
+    "getTransferQuote": "POST /v1/transfer/quote",
     "getTransferRates": "GET /v1/transfer/rates",
     "getWallet": "GET /v1/wallets/{wallet_id}",
     "getWebhookCallHistory": "GET /v1/webhooks/calls/{id}",

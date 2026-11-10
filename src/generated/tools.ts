@@ -2821,7 +2821,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "transfers",
     "method": "post",
     "path": "/v1/transfer",
-    "description": "Create a transfer — Sends money from a customer's account, crypto wallet, card or savings to an account, crypto wallet, crypto address, card, savings or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
+    "description": "Create a transfer — Sends money from a customer's account, crypto wallet, card or savings to an account, crypto wallet, crypto address, card, savings or external account. The call returns once the transfer is recorded; it then runs in the background. Follow it with `GET /v1/transactions/{transaction_id}` or the `transfer.status.*` webhooks. A 200 can still be `transfer_status: paused`. Read `requirements`, upload documents with `POST /v1/transfer/documents` if asked, then call `POST /v1/transfer/{id}/resume`. Put `rail` inside `destination`. Send at most 2 decimal places. Most errors are a 400 with no code.\n\nPREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). For a payout in another currency, getTransferQuote first and pass its quote_id: the transfer then settles at that rate (refused if the quote expired, was used, or prices another amount, currency or country). Without quote_id the rate is taken when the transfer is sent. Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3077,6 +3077,15 @@ export const TOOLS: GeneratedTool[] = [
             "format": "uuid"
           }
         },
+        "quote_id": {
+          "type": "string",
+          "description": "Optional. A `quote_id` from `POST /v1/transfer/quote`. An `external_account` payout then settles at the quoted rate. It is refused when the quote has expired or was already used, or when it prices other currencies, another amount or another country. Without it, the transfer is priced when you send it.",
+          "example": "GRVTRF_8C2E41A97B3D5F06"
+        },
+        "expected_source_amount": {
+          "type": "string",
+          "description": "Optional. The quote's `source_amount_incl_fees`, on routes that return one. The transfer is refused when its price moves past it."
+        },
         "additional_information": {
           "type": "object",
           "description": "Sender details. Some payout routes need them; without them the transfer pauses with `sender_details_required`.",
@@ -3218,6 +3227,8 @@ export const TOOLS: GeneratedTool[] = [
       "client_metadata",
       "payment_rail_reference",
       "supporting_document_ids",
+      "quote_id",
+      "expected_source_amount",
       "additional_information"
     ],
     "alsoInBody": [],
@@ -4151,7 +4162,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "fx",
     "method": "post",
     "path": "/v1/fx/quote",
-    "description": "Get a quote — Returns a firm price to sell an amount of one currency for another. The quote lasts 5 minutes and can be used once, only by `POST /v1/fx/orders`. It does not set the rate of a transfer. A pair that is not enabled for you returns `quote currency pair is not supported`.\n\nQuotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
+    "description": "Get a quote — Returns a firm price to sell an amount of one currency for another. The quote lasts 5 minutes and can be used once, only by `POST /v1/fx/orders`. It does not set the rate of a transfer. A pair that is not enabled for you returns `quote currency pair is not supported`.\n\nQuotes expire after about 5 minutes (see the expiry in the response). This quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. To lock a payout rate, use getTransferQuote. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4515,11 +4526,138 @@ export const TOOLS: GeneratedTool[] = [
     "spec": "transactions.yaml"
   },
   {
+    "name": "getTransferQuote",
+    "toolset": "transfers",
+    "method": "post",
+    "path": "/v1/transfer/quote",
+    "description": "Get a transfer quote — Prices a payout before you send it. Send the returned `quote_id` in `POST /v1/transfer` before `expires_at`, with the same currencies and amount, and the transfer settles at the quoted rate. With a `destination` payee, the quote also prices the fees and returns `net_to_amount`, what the recipient is credited. A route that is not open for the payee is refused here, before any money moves. Nothing is debited by a quote.\n\nPrices a payout before createTransfer and locks its rate. Send from_currency (USD for a USD account or a USDC/USDT wallet), to_currency, amount as a string (the exact amount createTransfer will send) and, for a payee in a currency paid in several countries (XOF, XAF, EUR), to_country_iso_code. Pass the payee as destination {destination_type: external_account, id} to also get net_to_amount (what the recipient is credited) and fee (charged on top). A route that is not open for that payee is refused here, before any money moves: this is the live check that a route works. Show the user the rate, net_to_amount and fee, then send createTransfer with quote_id before expires_at (about a minute) and the same currencies and amount. When it expires, quote again. A quote moves no money and needs no confirm.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "from_currency": {
+          "type": "string",
+          "description": "The currency the transfer is sent in. `USD` for a USD account and for a USDC or USDT wallet.",
+          "example": "USD"
+        },
+        "to_currency": {
+          "type": "string",
+          "description": "The currency the recipient receives. It must differ from `from_currency`.",
+          "example": "NGN"
+        },
+        "amount": {
+          "type": "string",
+          "description": "The amount you will send in `POST /v1/transfer`, in `from_currency`. Positive. The transfer must send exactly this amount.",
+          "example": "250.00"
+        },
+        "from_country_iso_code": {
+          "type": "string",
+          "description": "Optional ISO 3166-1 alpha-2 code of the sender's country.",
+          "example": "US"
+        },
+        "to_country_iso_code": {
+          "type": "string",
+          "description": "Optional ISO 3166-1 alpha-2 code of the payee's country. Send it for a currency paid in several countries, such as XOF, XAF or EUR: the quote is priced for that country, and a transfer to a payee in another country is refused.",
+          "example": "NG"
+        },
+        "sender_type": {
+          "type": "string",
+          "description": "Optional. `individual` or `business`.",
+          "example": "individual"
+        },
+        "recipient_type": {
+          "type": "string",
+          "description": "Optional. `individual` or `business`.",
+          "example": "individual"
+        },
+        "source_network": {
+          "type": "string",
+          "description": "Optional. The network of the wallet the transfer is sent from.",
+          "example": "polygon"
+        },
+        "source_asset": {
+          "type": "string",
+          "description": "Optional. The stablecoin the transfer is sent from, `USDC` or `USDT`.",
+          "example": "USDC"
+        },
+        "destination": {
+          "title": "External account",
+          "type": "object",
+          "required": [
+            "destination_type",
+            "id"
+          ],
+          "properties": {
+            "destination_type": {
+              "type": "string",
+              "enum": [
+                "external_account"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "An `active` external account"
+            },
+            "rail": {
+              "type": "string",
+              "description": "Payout rail. `ach`, `wire` and `rtp` are US domestic rails; `wire` is not an international wire. Leave it out, or send `globalbank`, for local bank and mobile money payouts.",
+              "enum": [
+                "ach",
+                "wire",
+                "rtp",
+                "sepa",
+                "swift",
+                "fps",
+                "globalbank"
+              ],
+              "example": "ach"
+            }
+          }
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[\\x20-\\x7E]+$",
+          "description": "Optional. Leave it out and a new key is made for this call. Set it only to repeat a call whose outcome is unknown (a timeout, a network error or a 5xx answer): pass the idempotency_key from that result and exactly the same arguments. If the first call took effect, the API returns its answer instead of running it again. A 5xx answer is not kept, so look the result up first. After a 4xx answer, leave it out: that answer is kept for 24 hours under its key."
+        }
+      },
+      "required": [
+        "from_currency",
+        "to_currency",
+        "amount"
+      ],
+      "additionalProperties": true
+    },
+    "pathParams": [],
+    "queryParams": [],
+    "bodyMode": "inline",
+    "bodyProps": [
+      "from_currency",
+      "to_currency",
+      "amount",
+      "from_country_iso_code",
+      "to_country_iso_code",
+      "sender_type",
+      "recipient_type",
+      "source_network",
+      "source_asset",
+      "destination"
+    ],
+    "alsoInBody": [],
+    "closedBody": false,
+    "movesMoney": false,
+    "needsConfirm": false,
+    "needsIdempotency": true,
+    "sandboxOnly": false,
+    "spec": "transfer.yaml"
+  },
+  {
     "name": "getTransferRates",
     "toolset": "transfers",
     "method": "get",
     "path": "/v1/transfer/rates",
-    "description": "Get transfer rates — Without `source_wallet_id`, returns indicative exchange rates, which you can filter by `currency`. With `source_wallet_id`, `destination_wallet_id`, `receive_asset` and `amount`, it prices a USDT and USDC conversion between two wallets of one customer. Neither is a locked price; the transfer is priced again when you create it.",
+    "description": "Get transfer rates — Without `source_wallet_id`, returns indicative exchange rates, which you can filter by `currency`. With `source_wallet_id`, `destination_wallet_id`, `receive_asset` and `amount`, it prices a USDT and USDC conversion between two wallets of one customer. Neither is a locked price; the transfer is priced again when you create it. To lock a payout's rate, use `POST /v1/transfer/quote`.",
     "inputSchema": {
       "type": "object",
       "properties": {

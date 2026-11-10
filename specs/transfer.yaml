@@ -356,6 +356,20 @@ components:
           items:
             type: string
             format: uuid
+        quote_id:
+          type: string
+          description: >-
+            Optional. A `quote_id` from `POST /v1/transfer/quote`. An
+            `external_account` payout then settles at the quoted rate. It is
+            refused when the quote has expired or was already used, or when it
+            prices other currencies, another amount or another country. Without
+            it, the transfer is priced when you send it.
+          example: GRVTRF_8C2E41A97B3D5F06
+        expected_source_amount:
+          type: string
+          description: >-
+            Optional. The quote's `source_amount_incl_fees`, on routes that
+            return one. The transfer is refused when its price moves past it.
         additional_information:
           $ref: '#/components/schemas/AdditionalInformation'
     Requirement:
@@ -586,6 +600,109 @@ components:
           items:
             type: string
             format: uuid
+    TransferQuoteRequest:
+      type: object
+      required:
+        - from_currency
+        - to_currency
+        - amount
+      properties:
+        from_currency:
+          type: string
+          description: >-
+            The currency the transfer is sent in. `USD` for a USD account and
+            for a USDC or USDT wallet.
+          example: USD
+        to_currency:
+          type: string
+          description: The currency the recipient receives. It must differ from `from_currency`.
+          example: NGN
+        amount:
+          type: string
+          description: >-
+            The amount you will send in `POST /v1/transfer`, in `from_currency`.
+            Positive. The transfer must send exactly this amount.
+          example: '250.00'
+        from_country_iso_code:
+          type: string
+          description: Optional ISO 3166-1 alpha-2 code of the sender's country.
+          example: US
+        to_country_iso_code:
+          type: string
+          description: >-
+            Optional ISO 3166-1 alpha-2 code of the payee's country. Send it for a
+            currency paid in several countries, such as XOF, XAF or EUR: the quote
+            is priced for that country, and a transfer to a payee in another
+            country is refused.
+          example: NG
+        sender_type:
+          type: string
+          description: Optional. `individual` or `business`.
+          example: individual
+        recipient_type:
+          type: string
+          description: Optional. `individual` or `business`.
+          example: individual
+        source_network:
+          type: string
+          description: Optional. The network of the wallet the transfer is sent from.
+          example: polygon
+        source_asset:
+          type: string
+          description: Optional. The stablecoin the transfer is sent from, `USDC` or `USDT`.
+          example: USDC
+        destination:
+          $ref: '#/components/schemas/ExternalAccountDestination'
+    TransferQuote:
+      type: object
+      properties:
+        quote_id:
+          type: string
+          description: Send it as `quote_id` in `POST /v1/transfer` before `expires_at`.
+        from_currency:
+          type: string
+        to_currency:
+          type: string
+        from_amount:
+          type: string
+        to_amount:
+          type: string
+          description: '`from_amount` at the quoted `rate`.'
+        rate:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          description: The quote cannot be used after this time. Quotes last about a minute.
+        pair_code:
+          type: string
+          description: The corridor priced, such as `USD_US_NGN_NG`.
+        source_amount_incl_fees:
+          type: string
+          description: >-
+            Set only on routes that price their own payouts. Send it back as
+            `expected_source_amount` in `POST /v1/transfer`.
+        fees_included:
+          type: boolean
+          description: >-
+            `true` when you sent a `destination` and the quote priced the fees.
+        net_to_amount:
+          type: string
+          description: >-
+            With a `destination` only. What the recipient is credited: `to_amount`
+            less the payout fee taken from the amount.
+        fee:
+          type: string
+          description: >-
+            With a `destination` only. Your plan's fee, charged on top of the
+            amount.
+        fee_currency:
+          type: string
+        fee_unavailable:
+          type: boolean
+          description: >-
+            `true` when the fee could not be priced now. It is still charged when
+            you send the transfer.
     RateItem:
       type: object
       properties:
@@ -1111,6 +1228,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LimitErrorResponse'
+  /v1/transfer/quote:
+    post:
+      tags:
+        - Transfer
+      summary: Get a transfer quote
+      operationId: getTransferQuote
+      description: >-
+        Prices a payout before you send it. Send the returned `quote_id` in
+        `POST /v1/transfer` before `expires_at`, with the same currencies and
+        amount, and the transfer settles at the quoted rate. With a
+        `destination` payee, the quote also prices the fees and returns
+        `net_to_amount`, what the recipient is credited. A route that is not
+        open for the payee is refused here, before any money moves. Nothing is
+        debited by a quote.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferQuoteRequest'
+            example:
+              from_currency: USD
+              to_currency: NGN
+              amount: '250.00'
+              to_country_iso_code: NG
+              destination:
+                destination_type: external_account
+                id: 6f1d2c3b-4a5e-4f60-8b7a-9c0d1e2f3a4b
+      responses:
+        '200':
+          description: The quote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TransferQuote'
+                  error:
+                    type: 'null'
+              example:
+                data:
+                  quote_id: GRVTRF_8C2E41A97B3D5F06
+                  from_currency: USD
+                  to_currency: NGN
+                  from_amount: '250'
+                  to_amount: '382500'
+                  rate: '1530'
+                  expires_at: '2026-11-10T14:01:00Z'
+                  pair_code: USD_US_NGN_NG
+                  fees_included: true
+                  net_to_amount: '382000'
+                  fee: '1.5'
+                  fee_currency: USD
+                error: null
+        '400':
+          description: The quote was refused. Read `error`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                Pair:
+                  summary: No rate for this pair
+                  value:
+                    data: null
+                    error: quote currency pair is not supported
+                Route:
+                  summary: The route to this payee is not open
+                  value:
+                    data: null
+                    error: transfers to this destination are not available right now — please try again later
+                Currency:
+                  summary: The payee is paid in another currency
+                  value:
+                    data: null
+                    error: the destination payee is paid in GHS, not NGN
+                Fee:
+                  summary: The amount is too small for the payout fee
+                  value:
+                    data: null
+                    error: 'the amount is too small for this destination: the payout fee would be more than 20% of it'
   /v1/transfer/rates:
     get:
       tags:
@@ -1122,7 +1323,8 @@ paths:
         can filter by `currency`. With `source_wallet_id`,
         `destination_wallet_id`, `receive_asset` and `amount`, it prices a USDT
         and USDC conversion between two wallets of one customer. Neither is a
-        locked price; the transfer is priced again when you create it.
+        locked price; the transfer is priced again when you create it. To lock a
+        payout's rate, use `POST /v1/transfer/quote`.
       parameters:
         - in: query
           name: currency
