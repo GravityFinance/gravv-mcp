@@ -234,6 +234,179 @@
       "hint": "This route is not open for this business in this environment, and nothing was debited. Tell the user, and ask support to confirm it is switched on. Do not retry."
     },
     {
+      "id": "transfer-quote-expired",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer"
+      ],
+      "tools": [
+        "createTransfer"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "quote is invalid or expired",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "Nothing was sent. The quote lasts about a minute. Get a new one with getTransferQuote, show the user the new rate, net_to_amount and fee, and send createTransfer with the new quote_id once they agree."
+    },
+    {
+      "id": "transfer-quote-mismatch",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer"
+      ],
+      "tools": [
+        "createTransfer"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "quote does not match this transfer",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "Nothing was sent. The quote priced another amount, currency pair or destination country. Send createTransfer with exactly the quote's amount and currencies, or get a new getTransferQuote for what the user wants to send."
+    },
+    {
+      "id": "transfer-quote-used",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer"
+      ],
+      "tools": [
+        "createTransfer"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "quote has already been used by another transfer",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "This quote already paid for a transfer, so this call was refused. If it is a retry of that transfer, find it with listTransactions before anything else: it may already be on its way. For a new payment, get a new getTransferQuote."
+    },
+    {
+      "id": "quote-route-closed",
+      "scenarios": [
+        "S-REM-01",
+        "S-REM-06"
+      ],
+      "ops": [
+        "POST /v1/transfer/quote",
+        "POST /v1/transfer"
+      ],
+      "tools": [
+        "getTransferQuote",
+        "createTransfer"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "transfers to this destination are not available right now",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "No route is open for this payee's country and currency right now, and nothing was debited. Tell the user it is not available, and do not retry in a loop; ask support if it should be open."
+    },
+    {
+      "id": "quote-pair-unsupported",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer/quote"
+      ],
+      "tools": [
+        "getTransferQuote"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "quote currency pair is not supported",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "Gravv does not price this currency pair. Check from_currency (USD for a USD account or a USDC/USDT wallet) and to_currency (the payee's currency). If both are right, this payout is not offered."
+    },
+    {
+      "id": "quote-payee-currency",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer/quote"
+      ],
+      "tools": [
+        "getTransferQuote"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "the destination payee is paid in",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "The payee is paid in the currency the message names. Quote again with that currency as to_currency, or pick a payee in the currency the user wants."
+    },
+    {
+      "id": "quote-amount-too-small",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer/quote",
+        "POST /v1/transfer"
+      ],
+      "tools": [
+        "getTransferQuote",
+        "createTransfer"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "the amount is too small for this destination",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "The payout fee would take too much of this amount. Ask the user for a larger amount and quote again."
+    },
+    {
+      "id": "quote-fee-destination",
+      "scenarios": [
+        "S-REM-01"
+      ],
+      "ops": [
+        "POST /v1/transfer/quote"
+      ],
+      "tools": [
+        "getTransferQuote"
+      ],
+      "codes": [],
+      "messages": [
+        {
+          "source": "fees can be quoted only for an external_account destination",
+          "flags": "i"
+        }
+      ],
+      "outcome_known": true,
+      "hint": "Send destination as {destination_type: external_account, id: <payee id>} to get the fee, or leave destination out to get only the rate."
+    },
+    {
       "id": "transfer-limit",
       "scenarios": [
         "S-PAY-11",
