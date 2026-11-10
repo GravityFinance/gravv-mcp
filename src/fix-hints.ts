@@ -325,7 +325,7 @@ export const ERROR_FIXES: ErrorFix[] = [
   },
   // ---- uploads -----------------------------------------------------------------
   // A size refusal comes in several shapes: the gateway's 413 `request_body_too_large`, a
-  // 413 "the maximum is 10MB" for a refusal further on (in sandbox, from about 576 KiB), the
+  // 413 "the maximum is 5MB" for a refusal further on (in sandbox, from about 576 KiB), the
   // card KYC route's 400 with the gRPC size message, and each service's own 400. Not one
   // states the size the route takes.
   tooLarge("kyc-file-too-large", ["S-CUS-02"], "uploadCustomerKycDocument", /document exceeds maximum allowed size/i),

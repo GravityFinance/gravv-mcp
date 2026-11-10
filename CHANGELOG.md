@@ -90,11 +90,12 @@ documented endpoint now has a tool or a stated reason it has none.
 - The `activateFeature` note for `provider_data.account_id` says to always send the
   business's card account; the spec said it could be left out.
 - Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
-  the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
+  the service takes: `uploadCustomerKycDocument` 5 MB, `uploadCardholderKycDocument` 5 MB,
   `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
   500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
   about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
-  name the tool's limit.
+  name the tool's limit. `uploadCustomerKycDocument` dropped from 10 MB to 5 MB in
+  November 2026, when the KYC service and the gateway lowered their limit.
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
   warning.

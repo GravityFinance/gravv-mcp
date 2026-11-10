@@ -74,6 +74,18 @@ components:
         One or more of `pending`, `completed`, `failed`, `waiting_approval` and
         `paused`, comma-separated
       example: completed
+    Refunded:
+      in: query
+      name: refunded
+      schema:
+        type: string
+        enum:
+          - 'true'
+          - 'false'
+      description: >-
+        `true` returns only failed transfers whose money came back to the
+        source, `false` everything else. A refunded transfer keeps the status
+        `failed` and has `metadata.refunded_at`. Any other value returns 400.
     TransactionType:
       in: query
       name: transaction_type
@@ -291,6 +303,24 @@ components:
             - 'null'
           description: ISO 4217 currency code for `local_amount`
           example: NGN
+        refunded_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: >-
+            On a failed transfer, when its money came back to the source. Left
+            out when it was not refunded. The status stays `failed`.
+        refund_transaction_id:
+          type:
+            - string
+            - 'null'
+          description: The id of the `transfer_refund` transaction that brought the money back
+        refund_tx_hash:
+          type:
+            - string
+            - 'null'
+          description: The on-chain hash of the refund, when it has one
         uetr:
           type:
             - string
@@ -556,6 +586,7 @@ paths:
         - $ref: '#/components/parameters/Direction'
         - $ref: '#/components/parameters/Status'
         - $ref: '#/components/parameters/TransactionType'
+        - $ref: '#/components/parameters/Refunded'
       responses:
         '200':
           description: A page of transactions
@@ -686,6 +717,7 @@ paths:
         - $ref: '#/components/parameters/Direction'
         - $ref: '#/components/parameters/Status'
         - $ref: '#/components/parameters/TransactionType'
+        - $ref: '#/components/parameters/Refunded'
         - in: query
           name: start_date
           schema:

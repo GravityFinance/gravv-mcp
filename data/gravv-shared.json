@@ -769,7 +769,7 @@
         }
       ],
       "outcome_known": true,
-      "hint": "The file is too large, whatever size the message states: uploadCustomerKycDocument takes files of at most 10 MB; in sandbox, under 500 KB. Compress the file or scan it at a lower resolution, then call again without idempotency_key."
+      "hint": "The file is too large, whatever size the message states: uploadCustomerKycDocument takes files of at most 5 MB; in sandbox, under 500 KB. Compress the file or scan it at a lower resolution, then call again without idempotency_key."
     },
     {
       "id": "card-kyc-file-too-large",
@@ -996,7 +996,7 @@
           "steps": [
             "getCustomer: if basic KYC is already `completed`, stop.",
             "Ask for the document type, its number, the issue and expiry dates, the issuing country, and whether it is two-sided.",
-            "uploadCustomerKycDocument for each item (front, back of a two-sided ID, selfie). Pass file_path for a local file rather than pasting base64. Each file: at most 10 MB; in sandbox, under 500 KB.",
+            "uploadCustomerKycDocument for each item (front, back of a two-sided ID, selfie). Pass file_path for a local file rather than pasting base64. Each file: at most 5 MB; in sandbox, under 500 KB.",
             "startCustomerKycS2S, then wait for the webhook or poll getCustomer.",
             "A \"missing required documents\" error lists what to upload: upload exactly those, then call again.",
             "Server-to-server KYC records no liveness: a card for this person will ask for a liveness step later."

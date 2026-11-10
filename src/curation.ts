@@ -614,8 +614,8 @@ export type FileKind = "pdf" | "png" | "jpeg";
  * file, checks its type and size, and fills `content` (and the name and type fields when
  * they are absent). `maxBytes` is the decoded size the route takes in live, as the
  * services check it:
- * - uploadCustomerKycDocument: 10 MiB, the customers KYC check and the gateway's
- *   document body limit (sized for a 10 MiB file).
+ * - uploadCustomerKycDocument: 5 MiB, the customers KYC check (`maxDocumentSize`) and the
+ *   gateway's document limit, both lowered from 10 MiB in November 2026.
  * - uploadCardholderKycDocument: 5 MiB. The card KYC service accepts gRPC requests of
  *   at most 10 MiB, and the file reaches it base64 in the JSON body, base64 again in the
  *   gRPC request (16/9 of the file), so about 5.6 MiB of file fits; its own 10 MB check
@@ -638,7 +638,7 @@ const MB = 1024 * 1024;
 const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
 
 export const UPLOADS: Record<string, UploadSpec[]> = {
-  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
   uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
   uploadTransferDocument: [
     {
@@ -668,7 +668,7 @@ export function sizeText(bytes: number): string {
  * What to keep a sandbox call's files under. Sandbox calls reach the services through an
  * ingress that refuses a request over 1 MiB. The file travels base64 in the JSON body and
  * the body base64 again in the gRPC request, 16/9 of the file, so files from about 576 KiB
- * are refused there, with a 413 that says 10MB (sandbox, 2026-10-13: 571 KB taken, 600 KB
+ * are refused there, with a 413 that says 10MB at the time (sandbox, 2026-10-13: 571 KB taken, 600 KB
  * refused, on the customer KYC and transfer document routes). 500 KB leaves room for the
  * other fields. The limit is per request, so a call with several files shares it.
  */

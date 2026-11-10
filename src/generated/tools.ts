@@ -3497,6 +3497,14 @@ export const TOOLS: GeneratedTool[] = [
           "type": "string",
           "description": "One or more transaction types, comma-separated. See the `transaction_type` values on the transaction. An unknown value returns nothing."
         },
+        "refunded": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "`true` returns only failed transfers whose money came back to the source, `false` everything else. A refunded transfer keeps the status `failed` and has `metadata.refunded_at`. Any other value returns 400."
+        },
         "start_date": {
           "type": "string",
           "format": "date",
@@ -3531,6 +3539,7 @@ export const TOOLS: GeneratedTool[] = [
       "direction",
       "status",
       "transaction_type",
+      "refunded",
       "start_date",
       "end_date",
       "export_format"
@@ -4006,7 +4015,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "get",
     "path": "/v1/customers/{customer_id}/kyc/status",
-    "description": "Get a customer's KYC review status — Reads the live review state for a customer's verification. It does not change the customer's KYC status, which only the webhooks update. For the final result, read `kyc` on the customer (`GET /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*` webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means verification failed. Customers verified by automatic document verification have no review and get a 404 here.",
+    "description": "Get a customer's KYC review status — Reads the live review state for a customer's verification. It does not change the customer's KYC status, which only the webhooks update. For the final result, read `kyc` on the customer (`GET /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*` webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means verification failed. A customer with no submitted verification gets 404 `KYC_NOT_INITIATED`, which names the calls to make. A customer verified by automatic document verification has no review and gets 404 `KYC_ALREADY_COMPLETED`. Read that customer with `GET /v1/customers/{customer_id}`.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5681,6 +5690,14 @@ export const TOOLS: GeneratedTool[] = [
         "transaction_type": {
           "type": "string",
           "description": "One or more transaction types, comma-separated. See the `transaction_type` values on the transaction. An unknown value returns nothing."
+        },
+        "refunded": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "`true` returns only failed transfers whose money came back to the source, `false` everything else. A refunded transfer keeps the status `failed` and has `metadata.refunded_at`. Any other value returns 400."
         }
       },
       "required": [],
@@ -5698,7 +5715,8 @@ export const TOOLS: GeneratedTool[] = [
       "channel",
       "direction",
       "status",
-      "transaction_type"
+      "transaction_type",
+      "refunded"
     ],
     "bodyMode": "none",
     "bodyProps": [],
@@ -6344,7 +6362,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start",
-    "description": "Start KYC verification — Starts hosted verification and returns a link for the person or business to complete. The link expires after one hour. Call again with a new Idempotency-Key for a fresh link. The same key returns the old link. A customer who is already verified gets `review_status: completed` and no link. For a business, every associated person must complete verification first. Tenants with automatic document verification get a 400 and must use the upload route instead. Gravv sends the result in the `customer.kyc.status.*` webhooks. Each first start charges one KYC fee.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
+    "description": "Start KYC verification — Starts hosted verification and returns a link for the person or business to complete. The link expires after one hour. Call again with a new Idempotency-Key for a fresh link. The same key returns the old link. A customer who is already verified gets `review_status: completed` and no link. For a business, every associated person must complete verification first. Otherwise the start returns 400 `ASSOCIATED_PERSONS_INCOMPLETE`, which names each person whose KYC is not completed, with the step they need and the call that finishes it. Tenants with automatic document verification get a 400 and must use the upload route instead. Gravv sends the result in the `customer.kyc.status.*` webhooks. Each first start charges one KYC fee.\n\nFor business customers, complete KYC for every associated person BEFORE starting the business's own verification. Verification is asynchronous. Read the outcome from getCustomer (the `basic` kyc status becomes `completed` or `failed`) or from the customer.kyc.status.* webhooks. Each start is billed: never call it again in a loop.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6385,7 +6403,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/start-s2s",
-    "description": "Start server-to-server KYC verification — Sends the documents you uploaded for review, with no hosted page. This is step 2 of server-to-server verification. Upload every required document first. For a business, every associated person must complete verification first, and the business needs each `COMPANY_DOC` subtype. Gravv sends the result in the `customer.kyc.status.*` webhooks. This flow records no liveness check. A customer verified this way must still complete a liveness step before a card can be issued.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
+    "description": "Start server-to-server KYC verification — Sends the documents you uploaded for review, with no hosted page. This is step 2 of server-to-server verification. Upload every required document first. For a business, every associated person must complete verification first, and the business needs each `COMPANY_DOC` subtype. Gravv sends the result in the `customer.kyc.status.*` webhooks. When a step is missing, the error names it and the call that fixes it. `DOCUMENTS_MISSING` names the customer (an associated person together with its business) and lists each missing document with its `idDocType` and `idDocSubType`. For a business, `ASSOCIATED_PERSONS_INCOMPLETE` names every associated person whose KYC is not completed, with their step: no documents uploaded, not started, waiting for review, or rejected with the reviewer's remark. The same message lists any company documents the business still lacks. A repeat call while the review is running returns 409 `KYC_IN_PROGRESS`. At any other time, a repeat call submits again. If the review refuses the submission, the call returns 400 `SUBMISSION_INCOMPLETE` or `DOCUMENT_REJECTED` with the reason, and the KYC stays unsubmitted so you can fix it and start again. Gravv replays a 4xx response for the same Idempotency-Key, so use a new key after you fix the step. This flow records no liveness check. A customer verified this way must still complete a liveness step before a card can be issued.\n\nSTEP 2 of the server-to-server KYC flow. All required documents must already be uploaded via uploadCustomerKycDocument. Each start is billed: never call it again in a loop.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7452,7 +7470,7 @@ export const TOOLS: GeneratedTool[] = [
     "toolset": "kyc",
     "method": "post",
     "path": "/v1/customers/kyc/upload-document",
-    "description": "Upload a KYC document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Uploading the same type and subtype again replaces the earlier file. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 10 MB; in sandbox, under 500 KB) in place of base64 content.",
+    "description": "Upload a KYC document — Stores one document file for a customer. This is step 1 of server-to-server verification. Upload each document, and each side of a two-sided card, in a separate call. Nothing is sent for review until you call `POST /v1/customers/kyc/start-s2s`. Individual and UBO customers need one identity document (`PASSPORT`, `ID_CARD` or `DRIVERS`) with `FRONT_SIDE`, plus a `SELFIE`. Identity documents also need `country`, `number` and `validUntil`. A selfie must be a JPEG or PNG. Business customers use `idDocType: COMPANY_DOC` for every file and set `idDocSubType` to `INCORPORATION_CERT`, `SHAREHOLDER_REGISTRY`, `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`). Gravv checks `idDocType` and `idDocSubType` before the other metadata. An unknown type, `REGISTRATION_CERTIFICATE`, or a subtype that doesn't fit the type returns 400 `INVALID_DOCUMENT_TYPE` with the accepted values. A type that belongs on another customer returns 400 `DOCUMENT_TYPE_NOT_ALLOWED`, which says where it goes. A person's documents go on their associated person, and company documents go on the business. The response `message` lists the documents still required before `POST /v1/customers/kyc/start-s2s`, or says that all are uploaded and which call to make next. Uploading the same type and subtype again replaces the earlier file. Once the customer's KYC is `completed`, uploads return 409 `KYC_ALREADY_COMPLETED`. A KYC that is not started, `pending` or `failed` still accepts uploads. On tenants with automatic document verification, the upload that completes the required set also completes KYC.\n\nSTEP 1 of the server-to-server KYC flow. Upload all required documents first, then call startCustomerKycS2S. Calling startCustomerKycS2S before the documents are uploaded fails. Pass file_path (a local JPEG, PNG or PDF of at most 5 MB; in sandbox, under 500 KB) in place of base64 content.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -7553,7 +7571,7 @@ export const TOOLS: GeneratedTool[] = [
         "content": {
           "type": "string",
           "format": "byte",
-          "description": "The file as plain standard base64, with no `data:` prefix. The decoded file must be a JPEG, PNG or PDF. The service checks the file bytes, not the name. The maximum decoded size is 10 MB. In sandbox, keep files under about 500 KB.",
+          "description": "The file as plain standard base64, with no `data:` prefix. The decoded file must be a JPEG, PNG or PDF. The service checks the file bytes, not the name. The maximum decoded size is 5 MB. In sandbox, keep files under about 500 KB.",
           "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         },
         "filename": {
@@ -7565,7 +7583,7 @@ export const TOOLS: GeneratedTool[] = [
         "file_path": {
           "type": "string",
           "minLength": 1,
-          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 10 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
+          "description": "Path of a local file to send instead of content. The server reads it, checks that it is JPEG, PNG, PDF (by its bytes, not its name) and at most 5 MB, and sends it as content, filling filename when you leave them out. Send file_path or content, not both; with content, send filename yourself."
         },
         "idempotency_key": {
           "type": "string",

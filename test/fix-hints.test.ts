@@ -107,7 +107,7 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
   "kyc-file-too-large": {
     tool: "uploadCustomerKycDocument",
     status: 413,
-    body: { data: null, error: "the uploaded file is too large — the maximum is 10MB" },
+    body: { data: null, error: "the uploaded file is too large — the maximum is 5MB" },
   },
   "card-kyc-file-too-large": {
     tool: "uploadCardholderKycDocument",

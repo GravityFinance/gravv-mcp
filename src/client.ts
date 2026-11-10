@@ -646,7 +646,7 @@ const REPLAYED = `${REPLAYED_STORED} Fix the request if needed, then call again 
 
 /**
  * A 413 the upload fixes (fix-hints.ts) did not match: the gateway's `request_body_too_large`
- * with a `limit`, or "the uploaded file is too large — the maximum is 10MB", sent for any
+ * with a `limit`, or "the uploaded file is too large — the maximum is 5MB", sent for any
  * size refusal further on. Neither states the size the route takes, so the hint does.
  */
 function hint413(tool: GeneratedTool): string {

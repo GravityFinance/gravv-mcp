@@ -545,7 +545,7 @@ its own limit:
 
 | Tool | Largest file |
 |---|---|
-| `uploadCustomerKycDocument` | 10 MB |
+| `uploadCustomerKycDocument` | 5 MB |
 | `uploadCardholderKycDocument` | 5 MB |
 | `uploadTransferDocument` | 700 KB |
 | `createAccountV2`, `updateAccountApplicationV2` documents | 2 MB each |
