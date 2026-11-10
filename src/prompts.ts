@@ -330,7 +330,7 @@ export const PROMPTS: GoalPrompt[] = [
     name: "send-remittance",
     title: "Send money to a bank account or mobile wallet abroad",
     description:
-      "Pay a bank account or mobile money wallet in Africa, or collect a payee's details for Mexico, Brazil, Colombia, India or Hong Kong, with the routes that are open today.",
+      "Pay a bank account or mobile money wallet in Africa, Latin America or Asia from a USD balance, with a locked rate and the fee shown before the user confirms.",
     scenarios: ["S-REM-01", "S-REM-02", "S-REM-03", "S-REM-04", "S-REM-05", "S-REM-06", "S-REM-10"],
     argument: {
       name: "country",
@@ -338,25 +338,25 @@ export const PROMPTS: GoalPrompt[] = [
       description:
         "Optional: the recipient's country code, NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN or HK; xof for another CFA franc country. Leave it out for every country.",
     },
-    intro: "Pay a recipient abroad from a customer's USD account, in the order below.",
+    intro: "Pay a recipient abroad from a customer's USD account or USDC/USDT wallet, in the order below.",
     askFirst: [
       "The sender (customer), the source account, and the amount in USD.",
       "The recipient's country (ask it outright when the user says CFA or XOF: eight countries share XOF), bank account or mobile wallet, the bank or operator, and the recipient's name.",
       "The sender's date of birth, home address and country, if the customer record lacks them, before sending, so the transfer does not pause for sender details.",
     ],
     labels: [
-      "Available: mobile wallets named `MTN MoMo <country>` in Rwanda, Zambia, Uganda, Congo, Côte d'Ivoire and Benin.",
-      `Not yet available (${SUPPORT}): Nigeria bank accounts, Ghana, Kenya, Tanzania, the other XOF operators and other mobile money operators; banks in Mexico, Brazil, Colombia, India and Hong Kong; Morocco, WAEMU and CEMAC bank accounts.`,
-      "A country in listTransferSupportedCountries is not proof the route is open. An unopened route answers \"transfers to XX/CCC are not available at this time\" and nothing is debited.",
+      "Available (open in live on 10 November 2026), paid in the local currency: Nigeria, Ghana, Kenya, Tanzania, Uganda, Rwanda, Zambia, Malawi, Mozambique, Botswana, South Africa, Lesotho, Madagascar, Burundi, DR Congo, Ethiopia, Sudan, South Sudan, Cameroon, Congo, Gabon, Chad, Equatorial Guinea, Central African Republic, Côte d'Ivoire, Benin, Senegal, Burkina Faso, Mali, Niger, Togo, Guinea-Bissau, Guinea, Gambia, Sierra Leone, Mauritania, Morocco, Tunisia, Angola; Mexico, Brazil, Colombia, Peru, Argentina, Canada; India, China, Philippines, Indonesia, Thailand, Singapore, Sri Lanka, Japan, the UAE, Israel, Turkey; and Germany, France and the UK.",
+      `Not yet available (${SUPPORT}): Hong Kong local payouts, and any country not listed above.`,
+      "Routes are switched on and off without notice, so this list is a guide, not a promise. getTransferQuote with the payee as destination is the live check: a closed route is refused there with \"transfers to this destination are not available right now\", before any money moves. A country in listTransferSupportedCountries is not proof either.",
     ],
     common: {
       title: "Every remittance",
       steps: [
-        "listExternalAccountInstitutions with country_iso_code and institution_type (`bank` or `mobile_money`): the payee must carry an `institution_id` from this list, or the transfer is refused.",
+        "listExternalAccountInstitutions with country_iso_code and institution_type (`bank` or `mobile_money`): the payee must carry an `institution_id` from this list, or the transfer is refused. Pick the bank or the wallet's operator from it.",
         "listExternalAccounts with customer_id and search, then createExternalAccount. Read the phone or account number back to the user, and show the holder or wallet name the answer returns. A phone number cannot be changed later: a wrong one needs a new payee.",
-        "getTransferRates with the currency gives the indicative local amount. There is no rate lock: the rate is taken when the transfer is sent, and `local_amount` in its answer is what the recipient is due.",
-        "createTransfer with the sender in `additional_information`, `rail` left out, and the amount as a string. Show amount, recipient, institution and the indicative local amount, and send confirm: true only after the user says yes.",
-        "getTransaction until final.",
+        "getTransferQuote with from_currency USD, to_currency the payee's currency, amount as a string, to_country_iso_code, and destination `{destination_type: external_account, id: <payee id>}`. Show the rate, `net_to_amount` (what the recipient is credited) and `fee` (charged on top). A refusal here means the route is closed or the amount is too small: tell the user, and send nothing.",
+        "createTransfer with `quote_id`, the same amount and currencies, the sender in `additional_information`, and `rail` left out. Show amount, recipient, institution, net_to_amount and fee, and send confirm: true only after the user says yes. The quote lasts about a minute (`expires_at`): if it expired while the user decided, quote again and show the new figures.",
+        "getTransaction until final, or follow the `transfer` webhooks. The webhook URL and its signing secret are set in the Gravv Dashboard, not over the API.",
       ],
     },
     paths: [
@@ -365,57 +365,66 @@ export const PROMPTS: GoalPrompt[] = [
         title: "A mobile wallet in Rwanda, Zambia, Uganda, Congo, Côte d'Ivoire or Benin",
         scenarios: ["S-REM-04", "S-REM-05"],
         steps: [
-          "Choose the institution named `MTN MoMo <country>`.",
+          "Choose the wallet's operator from the institutions list (an MTN wallet is `MTN Mobile Money`).",
           "Ask for the phone number with its country code and check its shape before creating the payee.",
         ],
       },
       {
         keys: ["ng"],
-        title: "A bank account in Nigeria: not yet available",
+        title: "A bank account in Nigeria",
         scenarios: ["S-REM-01"],
         steps: [
-          "Ask support first. Then ask for the bank and the 10-digit account number.",
+          "Ask for the bank and the 10-digit account number.",
           "verifyExternalAccount shows the holder name: ask the user to confirm it is the right person before creating the payee.",
         ],
       },
       {
         keys: ["gh"],
-        title: "A mobile wallet or bank account in Ghana: not yet available",
+        title: "A mobile wallet or bank account in Ghana",
         scenarios: ["S-REM-02"],
         steps: [
-          "Ask support first. Then: wallet or bank, the operator or bank name, and the phone number in `+233…` form or the 10-16 digit account number.",
+          "Ask: wallet or bank, the operator or bank name, and the phone number in `+233…` form or the 10-16 digit account number.",
         ],
       },
       {
         keys: ["ke"],
-        title: "A mobile wallet in Kenya: not yet available",
+        title: "A mobile wallet in Kenya",
         scenarios: ["S-REM-03"],
         steps: [
-          "Ask support first. Then ask which wallet (`M-Pesa` or `Airtel Money`) and the number: 254, then 7 or 1, then 8 digits. Read it back.",
+          "Ask which wallet (`M-Pesa` or `Airtel Money`) and the number: 254, then 7 or 1, then 8 digits. Read it back.",
         ],
       },
       {
         keys: ["xof", "sn", "bf", "ml", "tg"],
-        title: "A mobile wallet in another CFA franc country: not yet available",
+        title: "A mobile wallet in another CFA franc country",
         scenarios: ["S-REM-05"],
         steps: [
-          "Only `MTN MoMo` wallets in Côte d'Ivoire and Benin are open. For Senegal, Burkina Faso, Mali or Togo, tell the user the route is not yet available before calling createTransfer.",
+          "XOF is paid in eight countries: send to_country_iso_code on the quote so it prices the payee's own country (a quote for another country is refused as a mismatch).",
+          "Choose the operator from the institutions list for that country, and ask for the phone number with its country code.",
         ],
       },
       {
-        keys: ["mx", "br", "co", "in", "hk"],
-        title: "A bank in Mexico, Brazil, Colombia, India or Hong Kong: not yet available",
+        keys: ["mx", "br", "co", "in"],
+        title: "A bank in Mexico, Brazil, Colombia or India",
+        scenarios: ["S-REM-06"],
+        steps: [
+          "Create the payee with createExternalAccount and complete it with updateExternalAccount if the answer asks for more.",
+          "Never invent a CURP, CPF or IFSC. A Mexican CLABE paid in MXN needs payee_type `bank_account`.",
+        ],
+      },
+      {
+        keys: ["hk"],
+        title: "A bank in Hong Kong: not yet available",
         scenarios: ["S-REM-06"],
         steps: [
           "Tell the user plainly that local payouts there are not yet available and support can switch them on. A USD payout by SWIFT is the send-payout prompt.",
-          "Collect the payee now with createExternalAccount, completed with updateExternalAccount; call createTransfer only after support confirms.",
-          "Never invent a CURP, CPF or IFSC. A Mexican CLABE paid in MXN needs payee_type `bank_account`.",
+          "Collect the payee now if the user wants; call createTransfer only after a getTransferQuote for it succeeds.",
         ],
       },
     ],
     rules: [
-      "Never send `rail: wire` for these payouts: that is a US wire. Do not pass a quote: it does not lock a payout rate.",
-      "On `paused`, read `requirements` and ask only for those (the fix-stuck-transfer prompt walks through resumeTransfer). For `customer_email`, updateCustomer first.",
+      "Never send `rail: wire` for these payouts: that is a US wire. The quote_id must come from getTransferQuote; an FX quote from getFxQuote does not price a payout.",
+      "On `paused`, read `requirements` and ask only for those (the fix-stuck-transfer prompt walks through resumeTransfer). For `customer_email`, updateCustomer first. A resumed transfer is priced again, so the amount the recipient gets can change: say so.",
       "A webhook says failed while the transaction says pending: the transfer is held for manual review. Stop, explain, and escalate; never send it again.",
       "A duplicate payee answer carries `data.payee_id`: reuse it. \"not yet set up for transfers\": create the payee again with an `institution_id`.",
     ],

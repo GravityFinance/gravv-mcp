@@ -113,6 +113,78 @@ export const ERROR_FIXES: ErrorFix[] = [
       "support to confirm it is switched on. Do not retry.",
   },
   {
+    id: "transfer-quote-expired",
+    scenarios: ["S-REM-01"],
+    tools: ["createTransfer"],
+    messages: [/quote is invalid or expired/i],
+    hint:
+      "Nothing was sent. The quote lasts about a minute. Get a new one with getTransferQuote, show the user the new " +
+      "rate, net_to_amount and fee, and send createTransfer with the new quote_id once they agree.",
+  },
+  {
+    id: "transfer-quote-mismatch",
+    scenarios: ["S-REM-01"],
+    tools: ["createTransfer"],
+    messages: [/quote does not match this transfer/i],
+    hint:
+      "Nothing was sent. The quote priced another amount, currency pair or destination country. Send createTransfer " +
+      "with exactly the quote's amount and currencies, or get a new getTransferQuote for what the user wants to send.",
+  },
+  {
+    id: "transfer-quote-used",
+    scenarios: ["S-REM-01"],
+    tools: ["createTransfer"],
+    messages: [/quote has already been used by another transfer/i],
+    hint:
+      "This quote already paid for a transfer, so this call was refused. If it is a retry of that transfer, find it " +
+      "with listTransactions before anything else: it may already be on its way. For a new payment, get a new " +
+      "getTransferQuote.",
+  },
+  {
+    id: "quote-route-closed",
+    scenarios: ["S-REM-01", "S-REM-06"],
+    tools: ["getTransferQuote", "createTransfer"],
+    messages: [/transfers to this destination are not available right now/i],
+    hint:
+      "No route is open for this payee's country and currency right now, and nothing was debited. Tell the user it " +
+      "is not available, and do not retry in a loop; ask support if it should be open.",
+  },
+  {
+    id: "quote-pair-unsupported",
+    scenarios: ["S-REM-01"],
+    tools: ["getTransferQuote"],
+    messages: [/quote currency pair is not supported/i],
+    hint:
+      "Gravv does not price this currency pair. Check from_currency (USD for a USD account or a USDC/USDT wallet) and " +
+      "to_currency (the payee's currency). If both are right, this payout is not offered.",
+  },
+  {
+    id: "quote-payee-currency",
+    scenarios: ["S-REM-01"],
+    tools: ["getTransferQuote"],
+    messages: [/the destination payee is paid in/i],
+    hint:
+      "The payee is paid in the currency the message names. Quote again with that currency as to_currency, or pick " +
+      "a payee in the currency the user wants.",
+  },
+  {
+    id: "quote-amount-too-small",
+    scenarios: ["S-REM-01"],
+    tools: ["getTransferQuote", "createTransfer"],
+    messages: [/the amount is too small for this destination/i],
+    hint:
+      "The payout fee would take too much of this amount. Ask the user for a larger amount and quote again.",
+  },
+  {
+    id: "quote-fee-destination",
+    scenarios: ["S-REM-01"],
+    tools: ["getTransferQuote"],
+    messages: [/fees can be quoted only for an external_account destination/i],
+    hint:
+      "Send destination as {destination_type: external_account, id: <payee id>} to get the fee, or leave destination " +
+      "out to get only the rate.",
+  },
+  {
     id: "transfer-limit",
     scenarios: ["S-PAY-11", "S-TXN-06", "S-CUS-06"],
     tools: ["createTransfer", "resumeTransfer"],
@@ -325,7 +397,7 @@ export const ERROR_FIXES: ErrorFix[] = [
   },
   // ---- uploads -----------------------------------------------------------------
   // A size refusal comes in several shapes: the gateway's 413 `request_body_too_large`, a
-  // 413 "the maximum is 10MB" for a refusal further on (in sandbox, from about 576 KiB), the
+  // 413 "the maximum is 5MB" for a refusal further on (in sandbox, from about 576 KiB), the
   // card KYC route's 400 with the gRPC size message, and each service's own 400. Not one
   // states the size the route takes.
   tooLarge("kyc-file-too-large", ["S-CUS-02"], "uploadCustomerKycDocument", /document exceeds maximum allowed size/i),

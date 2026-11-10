@@ -217,6 +217,7 @@ export const NAMES: Record<string, Op> = {
     name: "listTransferSupportedCountriesForAddress",
     toolset: "transfers",
   },
+  "POST /v1/transfer/quote": { name: "getTransferQuote", toolset: "transfers" },
   "POST /v1/transfer/documents": { name: "uploadTransferDocument", toolset: "transfers" },
   "POST /v1/transfer/{id}/resume": { name: "resumeTransfer", toolset: "transfers" },
   // Limits answer "why did this transfer pause" and "how much can I send", so they sit
@@ -614,8 +615,8 @@ export type FileKind = "pdf" | "png" | "jpeg";
  * file, checks its type and size, and fills `content` (and the name and type fields when
  * they are absent). `maxBytes` is the decoded size the route takes in live, as the
  * services check it:
- * - uploadCustomerKycDocument: 10 MiB, the customers KYC check and the gateway's
- *   document body limit (sized for a 10 MiB file).
+ * - uploadCustomerKycDocument: 5 MiB, the customers KYC check (`maxDocumentSize`) and the
+ *   gateway's document limit, both lowered from 10 MiB in November 2026.
  * - uploadCardholderKycDocument: 5 MiB. The card KYC service accepts gRPC requests of
  *   at most 10 MiB, and the file reaches it base64 in the JSON body, base64 again in the
  *   gRPC request (16/9 of the file), so about 5.6 MiB of file fits; its own 10 MB check
@@ -638,7 +639,7 @@ const MB = 1024 * 1024;
 const ANY_DOC: FileKind[] = ["jpeg", "png", "pdf"];
 
 export const UPLOADS: Record<string, UploadSpec[]> = {
-  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 10 * MB }],
+  uploadCustomerKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
   uploadCardholderKycDocument: [{ at: "", content: "content", nameField: "filename", kinds: ANY_DOC, maxBytes: 5 * MB }],
   uploadTransferDocument: [
     {
@@ -668,7 +669,7 @@ export function sizeText(bytes: number): string {
  * What to keep a sandbox call's files under. Sandbox calls reach the services through an
  * ingress that refuses a request over 1 MiB. The file travels base64 in the JSON body and
  * the body base64 again in the gRPC request, 16/9 of the file, so files from about 576 KiB
- * are refused there, with a 413 that says 10MB (sandbox, 2026-10-13: 571 KB taken, 600 KB
+ * are refused there, with a 413 that says 10MB at the time (sandbox, 2026-10-13: 571 KB taken, 600 KB
  * refused, on the customer KYC and transfer document routes). 500 KB leaves room for the
  * other fields. The limit is per request, so a call with several files shares it.
  */
@@ -739,7 +740,10 @@ export const PREREQUISITES: Record<string, string> = {
     "Returns 202 with status `pending` for swift, sepa, ach_wire and fps: poll getExternalAccount until status is `active` (usable) or `setup_failed` (terminal). Returns 200 with status `active` for bank_account and mobile_money. Do not call createTransfer until the status is `active`. A duplicate returns 400 ERROR_CODE_DUPLICATE_PAYEE with data.payee_id: reuse that id. Look first with listExternalAccounts (customer_id, search): the duplicate check can miss one. For a local bank or mobile money payee, take institution_id from listExternalAccountInstitutions. ach_wire needs payment_rail (ach, wire or rtp).",
 
   createTransfer:
-    "PREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
+    "PREREQUISITES: (1) the source account must be funded — check getAccountV2 for available balance; (2) if the destination is an external account, it must be `active`, not `pending` — verify with getExternalAccount; (3) for cross-border transfers, `additional_information` requires the remitter's KYC block (full name, country, document number and dates, date of birth, address, nationality). For a payout in another currency, getTransferQuote first and pass its quote_id: the transfer then settles at that rate (refused if the quote expired, was used, or prices another amount, currency or country). Without quote_id the rate is taken when the transfer is sent. Before a large payout, getCustomerLimits (or getRemitterLimits for a named sender) shows what is left. A 200 with `transfer_status: paused` is not a failure: read `requirements`, upload any requested document with uploadTransferDocument, then call resumeTransfer. Send a client_reference, so that a resend is recognised, and amount as a string. For SWIFT, upload the invoice with uploadTransferDocument first and pass supporting_document_ids. SAVINGS: to save, source {source_type: internal_account, id: <savings account id>} and destination {destination_type: savings, id: <the same id>}; to withdraw, swap them (source_type savings, destination_type internal_account). USDC only, at most 2 decimals, no documents, no fee; a withdrawal cannot exceed getSavings saved_balance, and in live a save must be at least 1. transfer.savings.awaiting_liquidity on a withdrawal is not a failure: transfer.status.completed follows. In sandbox the cents choose the outcome: a save ending .13 fails, a withdrawal ending .13 waits about 2 minutes then completes, one ending .14 fails. MOVES MONEY: requires confirm: true.",
+
+  getTransferQuote:
+    "Prices a payout before createTransfer and locks its rate. Send from_currency (USD for a USD account or a USDC/USDT wallet), to_currency, amount as a string (the exact amount createTransfer will send) and, for a payee in a currency paid in several countries (XOF, XAF, EUR), to_country_iso_code. Pass the payee as destination {destination_type: external_account, id} to also get net_to_amount (what the recipient is credited) and fee (charged on top). A route that is not open for that payee is refused here, before any money moves: this is the live check that a route works. Show the user the rate, net_to_amount and fee, then send createTransfer with quote_id before expires_at (about a minute) and the same currencies and amount. When it expires, quote again. A quote moves no money and needs no confirm.",
 
   uploadTransferDocument:
     `Upload before createTransfer or resumeTransfer when \`requirements\` asks for a supporting document, and pass the returned id in supporting_document_ids. Pass file_path (a local PDF, PNG or JPEG of ${uploadLimit("uploadTransferDocument")}): the server reads it and fills content, file_name and content_type.`,
@@ -773,7 +777,7 @@ export const PREREQUISITES: Record<string, string> = {
     "Only for a `setup_failed` (or long `pending`) external account, or to add national_id, national_id_type, pix_key or address. A null value clears a field and a missing one keeps it. It returns 202: poll getExternalAccount until `active` or `setup_failed`. A 409 means add a new external account instead.",
 
   getFxQuote:
-    "Quotes expire after about 5 minutes (see the expiry in the response). A quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
+    "Quotes expire after about 5 minutes (see the expiry in the response). This quote does NOT lock a rate for createTransfer; its quote_id is used only by createFxOrder. To lock a payout rate, use getTransferQuote. A quote holds pair liquidity, so do not quote again and again. Re-quote after expiry.",
 
   createFxOrder:
     "PREREQUISITE: a fresh getFxQuote (about 5 minutes). Over an API key the order is created `pending` and the source is debited at once. There is no approval step and no second user; `waiting_approval` is only for orders placed in the Dashboard. MOVES MONEY: requires confirm: true.",
@@ -943,6 +947,7 @@ export const OUTCOME_LOOKUPS: Record<string, OutcomeLookup> = {
       "listTransactions with account_id set to the account (newest first), and look for the test deposit; each new key makes a new deposit",
   },
   getFxQuote: { readOnly: true },
+  getTransferQuote: { readOnly: true },
   checkFeatureEligibility: { readOnly: true },
 };
 

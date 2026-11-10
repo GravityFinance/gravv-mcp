@@ -95,18 +95,29 @@ describe("prompt text is true", () => {
   }
 
   test("no route the docs call not yet available is labelled available", () => {
-    const notOpen = /Nigeria bank|Ghana|Kenya|Tanzania|Mexico|Brazil|Colombia|India|Hong Kong|another network|cross-network|Senegal|WAEMU|CEMAC/;
+    const notOpen = /Hong Kong|another network|cross-network|WAEMU|CEMAC/;
     for (const p of PROMPTS) {
-      for (const l of (p.labels ?? []).filter((x) => x.startsWith("Available:"))) {
+      for (const l of (p.labels ?? []).filter((x) => x.startsWith("Available"))) {
         assert.doesNotMatch(l, notOpen, `${p.name}: ${l}`);
       }
     }
     const rem = PROMPTS_BY_NAME.get("send-remittance")!;
-    assert.match(rem.labels!.find((l) => l.startsWith("Not yet available"))!, /Nigeria bank accounts, Ghana, Kenya/);
-    for (const key of ["ng", "gh", "ke", "xof", "mx"]) {
+    assert.match(rem.labels!.find((l) => l.startsWith("Not yet available"))!, /Hong Kong/);
+    assert.match(rem.labels!.find((l) => l.startsWith("Available"))!, /Nigeria, Ghana, Kenya/);
+    assert.match(rem.paths.find((x) => x.keys.includes("hk"))!.title, /not yet available/);
+    for (const key of ["ng", "gh", "ke", "xof", "mx", "rw"]) {
       const path = rem.paths.find((x) => x.keys.includes(key))!;
-      assert.match(path.title, /not yet available/, `send-remittance ${key}`);
+      assert.doesNotMatch(path.title, /not yet available/, `send-remittance ${key}`);
     }
+  });
+
+  test("send-remittance quotes before it sends, and the quote is the live route check", () => {
+    const text = full(PROMPTS_BY_NAME.get("send-remittance")!);
+    assert.match(text, /getTransferQuote[^\n]*destination/);
+    assert.match(text, /createTransfer with `quote_id`/);
+    assert.match(text, /live check/);
+    assert.match(text, /signing secret are set in the Gravv Dashboard/);
+    assert.doesNotMatch(text, /Do not pass a quote|There is no rate lock|MTN MoMo/);
   });
 
   test("the key rule is PR 1b's: after a 4xx, no idempotency_key; after an unknown outcome, look first", () => {
@@ -145,7 +156,7 @@ describe("renderPrompt", () => {
     assert.ok(!text.includes("## A US bank account by ACH"));
     assert.ok(text.includes("## Every payout to a payee"), "the shared steps stay");
     const ke = renderPrompt(PROMPTS_BY_NAME.get("send-remittance")!, { country: "KE" }, ctx);
-    assert.ok(ke.includes("## A mobile wallet in Kenya: not yet available (country: ke)"));
+    assert.ok(ke.includes("## A mobile wallet in Kenya (country: ke)"));
     assert.ok(!ke.includes("Rwanda, Zambia, Uganda, Congo, Côte d'Ivoire or Benin (country"));
   });
 

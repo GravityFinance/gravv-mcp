@@ -148,7 +148,7 @@ then paste a JSON-RPC frame on stdin:
 Gravv documentation, read from the docs site as it is published. They need **no API key**,
 so you can explore Gravv before you have credentials.
 
-**API tools** — 89 tools, all loaded by default (87 on a live key, which hides the two
+**API tools** — 90 tools, all loaded by default (88 on a live key, which hides the two
 sandbox simulators), covering customers, KYC, accounts, transfers, limits, cards, wallets,
 savings, FX and settlement instructions, collections, webhooks, and sandbox deposit and
 savings interest simulators.
@@ -184,7 +184,7 @@ same `idempotency_key` and when to leave it out.
 | `open-account` | a bank account or the business's card account; an application the bank is waiting on; deposit details | `path`: v2, card-account, manage |
 | `onboard-customer` | create and verify a person or a business; resubmit; read KYC documents | `path`: person-hosted, person-s2s, business, resubmit, documents |
 | `send-payout` | ACH, wire, RTP, SWIFT, SEPA, Faster Payments, or between own accounts | `rail`: ach, wire, rtp, swift, sepa, fps, book |
-| `send-remittance` | a bank account or mobile wallet abroad | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
+| `send-remittance` | a bank account or mobile wallet abroad, in about 60 countries | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
 | `send-crypto` | USDC or USDT to a wallet; USDT to USDC between own wallets | `path`: same-network, cross-network, convert |
 | `convert-currency` | quote and place an FX order; settlement instructions; follow or cancel | `path`: quote-and-order, settlement-instruction, manage |
 | `issue-card` | verify a cardholder and issue a card; fund, limit, freeze, close | `path`: hosted-kyc, own-kyc, fund, limit, freeze-or-block, close, another-card |
@@ -294,7 +294,7 @@ npx @gravv-infra/mcp --toolsets=all                        # everything
 |---|---|---|
 | `customers` | ✓ | create, list, get, update customers |
 | `accounts` | ✓ | capabilities, v2 accounts and their applications, and the business's one card account |
-| `transfers` | ✓ | transfers, supporting documents, resume, limits, rates, supported countries and currencies |
+| `transfers` | ✓ | transfers, supporting documents, resume, limits, rate-locked quotes, rates, supported countries and currencies |
 | `transactions` | ✓ | history, volume, export |
 | `external-accounts` | ✓ | recipients, verification, institutions |
 | `kyc` | ✓ | KYC start, server-to-server, document upload and download, status |
@@ -347,7 +347,7 @@ take five networks: `polygon`, `ethereum`, `solana`, `stellar` and Avalanche
 
 **transfers**
 `createTransfer*` · `uploadTransferDocument` · `resumeTransfer*` · `getCustomerLimits` ·
-`getRemitterLimits` · `getTransferRates` · `listTransferSupportedCurrencies` ·
+`getRemitterLimits` · `getTransferQuote` · `getTransferRates` · `listTransferSupportedCurrencies` ·
 `listTransferSupportedCountries` · `listTransferSupportedCountriesForAddress`
 
 **transactions**
@@ -545,7 +545,7 @@ its own limit:
 
 | Tool | Largest file |
 |---|---|
-| `uploadCustomerKycDocument` | 10 MB |
+| `uploadCustomerKycDocument` | 5 MB |
 | `uploadCardholderKycDocument` | 5 MB |
 | `uploadTransferDocument` | 700 KB |
 | `createAccountV2`, `updateAccountApplicationV2` documents | 2 MB each |

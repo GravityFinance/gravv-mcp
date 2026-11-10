@@ -950,9 +950,9 @@ describe("hints by status", () => {
           limit: 13997400,
         },
       },
-      { data: null, error: "the uploaded file is too large — the maximum is 10MB" },
+      { data: null, error: "the uploaded file is too large — the maximum is 5MB" },
     ]) {
-      assert.match(hintFor(413, upload, "", body) ?? "", /takes files of at most 10 MB; in sandbox, under 500 KB\./);
+      assert.match(hintFor(413, upload, "", body) ?? "", /takes files of at most 5 MB; in sandbox, under 500 KB\./);
     }
     // A route that takes no file still gets the sandbox figure.
     const transfer = TOOLS_BY_NAME.get("createTransfer")!;

@@ -114,7 +114,7 @@ components:
           description: >-
             The file as plain standard base64, with no `data:` prefix. The
             decoded file must be a JPEG, PNG or PDF. The service checks the file
-            bytes, not the name. The maximum decoded size is 10 MB. In sandbox,
+            bytes, not the name. The maximum decoded size is 5 MB. In sandbox,
             keep files under about 500 KB.
           example: >-
             iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
@@ -265,9 +265,16 @@ components:
             message:
               type: string
               description: >-
-                Confirmation text. Despite its wording, the next call in the
-                server-to-server flow is `POST /v1/customers/kyc/start-s2s`.
-              example: Document saved. Use /start-kyc to submit for verification.
+                Confirmation text with the next step. It lists the documents
+                still required before `POST /v1/customers/kyc/start-s2s`, or says
+                that every required document is uploaded and names the call to
+                make. For a business, that call waits until every associated
+                person's KYC is completed. On tenants with automatic document
+                verification it reads `Document saved.`, or says that KYC was
+                auto-approved.
+              example: >-
+                Document saved. Still required before POST
+                /v1/customers/kyc/start-s2s: Selfie (idDocType SELFIE).
             kyc_status:
               type: string
               description: >-
@@ -617,8 +624,11 @@ paths:
 
         A customer who is already verified gets `review_status: completed` and
         no link. For a business, every associated person must complete
-        verification first. Tenants with automatic document verification get a
-        400 and must use the upload route instead.
+        verification first. Otherwise the start returns 400
+        `ASSOCIATED_PERSONS_INCOMPLETE`, which names each person whose KYC is
+        not completed, with the step they need and the call that finishes it.
+        Tenants with automatic document verification get a 400 and must use the
+        upload route instead.
 
 
         Gravv sends the result in the `customer.kyc.status.*` webhooks. Each
@@ -674,12 +684,19 @@ paths:
                       INVALID_REQUEST: The customer ID provided is not valid.
                       Please verify the customer ID format.
                 AssociatedPersonNotVerified:
-                  summary: A business has an unverified associated person
+                  summary: A business has an associated person whose KYC is not completed
                   value:
                     data: null
                     error: >-
-                      INVALID_REQUEST: associated person "Ada Obi" must complete
-                      basic KYC before business verification can proceed
+                      ASSOCIATED_PERSONS_INCOMPLETE: business
+                      d2581d3c-7c55-4607-9717-546694194636 can't be verified
+                      until every associated person's KYC is completed.
+                      Associated person "Ada Obi" (customer_id
+                      3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64) has not started
+                      verification: call POST /v1/customers/kyc/start with
+                      customer_id 3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64. Then call
+                      POST /v1/customers/kyc/start with customer_id
+                      d2581d3c-7c55-4607-9717-546694194636 for the business.
                 AutoVerificationTenant:
                   summary: The tenant uses automatic document verification
                   value:
@@ -744,9 +761,26 @@ paths:
         `PROOF_OF_ADDRESS` and `TAX_DOCUMENT` (or `OTHER`).
 
 
-        Uploading the same type and subtype again replaces the earlier file. On
-        tenants with automatic document verification, the upload that completes
-        the required set also completes KYC.
+        Gravv checks `idDocType` and `idDocSubType` before the other metadata.
+        An unknown type, `REGISTRATION_CERTIFICATE`, or a subtype that doesn't
+        fit the type returns 400 `INVALID_DOCUMENT_TYPE` with the accepted
+        values. A type that belongs on another customer returns 400
+        `DOCUMENT_TYPE_NOT_ALLOWED`, which says where it goes. A person's
+        documents go on their associated person, and company documents go on
+        the business.
+
+
+        The response `message` lists the documents still required before
+        `POST /v1/customers/kyc/start-s2s`, or says that all are uploaded and
+        which call to make next.
+
+
+        Uploading the same type and subtype again replaces the earlier file.
+        Once the customer's KYC is `completed`, uploads return 409
+        `KYC_ALREADY_COMPLETED`. A KYC that is not started, `pending` or
+        `failed` still accepts uploads. On tenants with automatic document
+        verification, the upload that completes the required set also
+        completes KYC.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -829,7 +863,41 @@ paths:
                       document_sub_type: FRONT_SIDE
                       document_id: c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f
                       country: USA
-                      message: Document saved. Use /start-kyc to submit for verification.
+                      message: >-
+                        Document saved. Still required before POST
+                        /v1/customers/kyc/start-s2s: Selfie (idDocType SELFIE).
+                    error: null
+                SuccessSetComplete:
+                  summary: Selfie stored, and every required document is uploaded
+                  value:
+                    data:
+                      status: success
+                      customer_id: b84d9a52-2978-43e5-9b86-eac9839e1146
+                      document_type: SELFIE
+                      document_sub_type: ''
+                      document_id: e4f5a6b7-c8d9-4e0f-a1b2-c3d4e5f6a7b8
+                      country: NGA
+                      message: >-
+                        Document saved. All required documents are uploaded;
+                        call POST /v1/customers/kyc/start-s2s with customer_id
+                        b84d9a52-2978-43e5-9b86-eac9839e1146 to submit them for
+                        verification.
+                    error: null
+                SuccessBusinessWaitsForPersons:
+                  summary: Last company document stored while an associated person is not verified
+                  value:
+                    data:
+                      status: success
+                      customer_id: c84d9a52-2978-43e5-9b86-eac9839e1147
+                      document_type: COMPANY_DOC
+                      document_sub_type: TAX_DOCUMENT
+                      document_id: f5a6b7c8-d9e0-4f1a-b2c3-d4e5f6a7b8c9
+                      country: NGA
+                      message: >-
+                        Document saved. All required documents are uploaded;
+                        call POST /v1/customers/kyc/start-s2s with customer_id
+                        c84d9a52-2978-43e5-9b86-eac9839e1147 once every
+                        associated person's KYC is completed.
                     error: null
                 AutoApproved:
                   summary: Upload completed verification on an automatic-verification tenant
@@ -847,7 +915,9 @@ paths:
                       kyc_status: completed
                     error: null
         '400':
-          description: Invalid request
+          description: >-
+            Invalid request, or a document type that is unknown or belongs on
+            another customer
           content:
             application/json:
               schema:
@@ -888,13 +958,64 @@ paths:
                       INVALID_REQUEST: metadata.idDocSubType is required for
                       business document uploads (e.g. INCORPORATION_CERT,
                       SHAREHOLDER_REGISTRY, PROOF_OF_ADDRESS, TAX_DOCUMENT)
-                TypeNotAllowed:
-                  summary: Document type is not allowed for the customer type
+                UnknownDocType:
+                  summary: idDocType is not a known type
                   value:
                     data: null
                     error: >-
-                      INVALID_REQUEST: document type "PASSPORT" is not allowed
-                      for business customers; allowed type: COMPANY_DOC
+                      INVALID_DOCUMENT_TYPE: unknown idDocType "SELFIE_VIDEO";
+                      use PASSPORT, ID_CARD or DRIVERS (idDocSubType FRONT_SIDE
+                      or BACK_SIDE), SELFIE, PROOF_OF_ADDRESS or TAX_DECLARATION
+                      for individuals and associated persons, or COMPANY_DOC
+                      (idDocSubType INCORPORATION_CERT, SHAREHOLDER_REGISTRY,
+                      PROOF_OF_ADDRESS or TAX_DOCUMENT) for businesses
+                RegistrationCertificate:
+                  summary: REGISTRATION_CERTIFICATE is not accepted
+                  value:
+                    data: null
+                    error: >-
+                      INVALID_DOCUMENT_TYPE: idDocType REGISTRATION_CERTIFICATE
+                      is not accepted; upload a business's registration
+                      certificate as idDocType COMPANY_DOC with idDocSubType
+                      INCORPORATION_CERT
+                SubTypeDoesNotFit:
+                  summary: idDocSubType doesn't fit idDocType
+                  value:
+                    data: null
+                    error: >-
+                      INVALID_DOCUMENT_TYPE: idDocSubType "INCORPORATION_CERT"
+                      doesn't fit idDocType PASSPORT; use FRONT_SIDE or BACK_SIDE
+                IdentityDocumentOnBusiness:
+                  summary: A person's document sent for a business
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENT_TYPE_NOT_ALLOWED: idDocType PASSPORT can't be
+                      uploaded on business c84d9a52-2978-43e5-9b86-eac9839e1147,
+                      which only takes COMPANY_DOC. Upload an owner's or
+                      director's identity documents on their associated person,
+                      using its customer_id (data.associated_persons[].id from
+                      POST /v1/customers).
+                PersonTypeForCompanyDocument:
+                  summary: A person's document type sent for a company document
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENT_TYPE_NOT_ALLOWED: idDocType PROOF_OF_ADDRESS can't
+                      be uploaded on business
+                      c84d9a52-2978-43e5-9b86-eac9839e1147; upload the company's
+                      document as idDocType COMPANY_DOC with idDocSubType
+                      PROOF_OF_ADDRESS.
+                CompanyDocumentOnIndividual:
+                  summary: A company document sent for an individual
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENT_TYPE_NOT_ALLOWED: idDocType COMPANY_DOC can't be
+                      uploaded on customer b84d9a52-2978-43e5-9b86-eac9839e1146:
+                      only business customers take company documents. An
+                      individual takes PASSPORT, ID_CARD, DRIVERS, SELFIE,
+                      PROOF_OF_ADDRESS or TAX_DECLARATION.
                 InvalidBase64:
                   summary: content is not valid base64
                   value:
@@ -925,7 +1046,36 @@ paths:
                   CUSTOMER_NOT_FOUND: Customer not found. Please verify the
                   customer exists in our system.
         '409':
-          $ref: '#/components/responses/IdempotencyInFlight'
+          description: >-
+            The customer's KYC is already completed, so its documents can't be
+            replaced, or a request with the same Idempotency-Key is still
+            running.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/IdempotencyErrorResponse'
+              examples:
+                KycAlreadyCompleted:
+                  summary: The customer's KYC is already completed
+                  value:
+                    data: null
+                    error: >-
+                      KYC_ALREADY_COMPLETED: KYC for customer
+                      b84d9a52-2978-43e5-9b86-eac9839e1146 is already completed,
+                      so its documents can't be replaced. Read the verified
+                      customer with GET
+                      /v1/customers/b84d9a52-2978-43e5-9b86-eac9839e1146.
+                IdempotencyInFlight:
+                  summary: A request with the same Idempotency-Key is still running
+                  value:
+                    data: null
+                    error:
+                      code: idempotency_in_flight
+                      message: >-
+                        A request with the same Idempotency-Key is currently
+                        being processed
         '413':
           description: The file or the request body is too large.
           content:
@@ -934,7 +1084,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 data: null
-                error: the uploaded file is too large — the maximum is 10MB
+                error: the uploaded file is too large — the maximum is 5MB
         '422':
           $ref: '#/components/responses/IdempotencyKeyReused'
         '500':
@@ -962,6 +1112,25 @@ paths:
         For a business, every associated person must complete verification
         first, and the business needs each `COMPANY_DOC` subtype. Gravv sends
         the result in the `customer.kyc.status.*` webhooks.
+
+
+        When a step is missing, the error names it and the call that fixes it.
+        `DOCUMENTS_MISSING` names the customer (an associated person together
+        with its business) and lists each missing document with its
+        `idDocType` and `idDocSubType`. For a business,
+        `ASSOCIATED_PERSONS_INCOMPLETE` names every associated person whose KYC
+        is not completed, with their step: no documents uploaded, not started,
+        waiting for review, or rejected with the reviewer's remark. The same
+        message lists any company documents the business still lacks.
+
+
+        A repeat call while the review is running returns 409
+        `KYC_IN_PROGRESS`. At any other time, a repeat call submits again. If
+        the review refuses the submission, the call returns 400
+        `SUBMISSION_INCOMPLETE` or `DOCUMENT_REJECTED` with the reason, and the
+        KYC stays unsubmitted so you can fix it and start again. Gravv replays
+        a 4xx response for the same Idempotency-Key, so use a new key after
+        you fix the step.
 
 
         This flow records no liveness check. A customer verified this way must
@@ -1006,66 +1175,196 @@ paths:
                       message: KYC auto-approved for this tenant.
                     error: null
         '400':
-          description: Invalid request or missing documents
+          description: >-
+            Invalid request, a missing step, or a submission the review refused
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                NoDocuments:
-                  summary: No documents uploaded
+                InvalidCustomerId:
+                  summary: customer_id is not a valid UUID
                   value:
                     data: null
                     error: >-
-                      INVALID_REQUEST: no documents found; please upload all
-                      required documents before initiating S2S verification
-                MissingDocuments:
-                  summary: Some required documents are missing
-                  value:
-                    data: null
-                    error: 'INVALID_REQUEST: missing required documents: Selfie'
-                MissingBusinessDocuments:
-                  summary: Some required business documents are missing
+                      INVALID_REQUEST: The customer ID provided is not valid.
+                      Please verify the customer ID format.
+                DocumentsMissing:
+                  summary: Required documents are missing
                   value:
                     data: null
                     error: >-
-                      INVALID_REQUEST: missing required business documents: Tax
-                      Document (TAX_DOCUMENT)
+                      DOCUMENTS_MISSING: customer
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c is missing required
+                      documents: Identity document (idDocType PASSPORT, ID_CARD
+                      or DRIVERS with idDocSubType FRONT_SIDE), Selfie
+                      (idDocType SELFIE). Upload them with POST
+                      /v1/customers/kyc/upload-document using customer_id
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c, then call POST
+                      /v1/customers/kyc/start-s2s.
+                AssociatedPersonFrontSideMissing:
+                  summary: Only the back of an associated person's ID card is on file
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENTS_MISSING: associated person
+                      3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64 of business
+                      b84d9a52-2978-43e5-9b86-eac9839e1146 is missing required
+                      documents: Identity document front side (only the ID_CARD
+                      BACK_SIDE is on file; upload idDocType ID_CARD with
+                      idDocSubType FRONT_SIDE). Upload them with POST
+                      /v1/customers/kyc/upload-document using customer_id
+                      3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64, then call POST
+                      /v1/customers/kyc/start-s2s.
+                BusinessDocumentsMissing:
+                  summary: Required company documents are missing
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENTS_MISSING: business
+                      b84d9a52-2978-43e5-9b86-eac9839e1146 is missing required
+                      documents: Tax Document (idDocType COMPANY_DOC,
+                      idDocSubType TAX_DOCUMENT). Upload them with POST
+                      /v1/customers/kyc/upload-document using customer_id
+                      b84d9a52-2978-43e5-9b86-eac9839e1146, then call POST
+                      /v1/customers/kyc/start-s2s.
+                AssociatedPersonsIncomplete:
+                  summary: >-
+                    A business has associated persons whose KYC is not completed,
+                    and a company document is missing
+                  value:
+                    data: null
+                    error: >-
+                      ASSOCIATED_PERSONS_INCOMPLETE: business
+                      b84d9a52-2978-43e5-9b86-eac9839e1146 can't be verified
+                      until every associated person's KYC is completed.
+                      Associated person "Ada Obi" (customer_id
+                      3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64) has not uploaded
+                      Identity document (idDocType PASSPORT, ID_CARD or DRIVERS
+                      with idDocSubType FRONT_SIDE), Selfie (idDocType SELFIE):
+                      upload them with POST /v1/customers/kyc/upload-document,
+                      then call POST /v1/customers/kyc/start-s2s with
+                      customer_id 3c1f7a2e-9b4d-4e6a-8f2c-7d5e1b9a0c64.
+                      Associated person "Tunde Bakare" (customer_id
+                      5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b) is waiting for review:
+                      poll GET
+                      /v1/customers/5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b/kyc/status
+                      and start the business once it is completed. The business
+                      is also missing required documents: Tax Document
+                      (idDocType COMPANY_DOC, idDocSubType TAX_DOCUMENT). Upload
+                      them with POST /v1/customers/kyc/upload-document using
+                      customer_id b84d9a52-2978-43e5-9b86-eac9839e1146. Then call
+                      POST /v1/customers/kyc/start-s2s with customer_id
+                      b84d9a52-2978-43e5-9b86-eac9839e1146 for the business.
+                SubmissionIncomplete:
+                  summary: The review refused the submission
+                  value:
+                    data: null
+                    error: >-
+                      SUBMISSION_INCOMPLETE: the verification provider did not
+                      accept the submission for customer
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c: Not all required
+                      documents are submitted. [IDENTITY]. Upload what it asks
+                      for with POST /v1/customers/kyc/upload-document using
+                      customer_id aabe0a33-6716-42e2-bbca-7abf1a8bd91c, then call
+                      POST /v1/customers/kyc/start-s2s again.
+                DocumentRejected:
+                  summary: The review refused an uploaded file
+                  value:
+                    data: null
+                    error: >-
+                      DOCUMENT_REJECTED: the verification provider rejected the
+                      PASSPORT/FRONT_SIDE document (document_id
+                      c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f) of customer
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c: Image is too small.
+                      Upload a corrected file with POST
+                      /v1/customers/kyc/upload-document using customer_id
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c and the same
+                      idDocType, then call POST /v1/customers/kyc/start-s2s
+                      again.
         '404':
           description: Customer or KYC record not found
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                data: null
-                error: Customer not found. Please verify the customer exists in our system.
+              examples:
+                CustomerNotFound:
+                  summary: The customer does not exist in your tenant
+                  value:
+                    data: null
+                    error: >-
+                      CUSTOMER_NOT_FOUND: Customer not found. Please verify the
+                      customer exists in our system.
+                KycNotFound:
+                  summary: No KYC record exists for the customer
+                  value:
+                    data: null
+                    error: 'KYC_NOT_FOUND: KYC record not found for the specified level.'
         '409':
           description: >-
-            KYC is already completed for this customer, or a request with the
-            same Idempotency-Key is still running.
+            KYC is already completed for this customer, the review of an
+            earlier submission is still running (review status `queued`,
+            `pending` or `prechecked`), or a request with the same
+            Idempotency-Key is still running.
           content:
             application/json:
               schema:
                 oneOf:
                   - $ref: '#/components/schemas/ErrorResponse'
                   - $ref: '#/components/schemas/IdempotencyErrorResponse'
-              example:
-                data: null
-                error: >-
-                  KYC_ALREADY_COMPLETED: KYC verification has already been
-                  completed for this customer.
+              examples:
+                KycAlreadyCompleted:
+                  summary: The customer's KYC is already completed
+                  value:
+                    data: null
+                    error: >-
+                      KYC_ALREADY_COMPLETED: KYC verification has already been
+                      completed for this customer.
+                KycInProgress:
+                  summary: The review of an earlier submission is still running
+                  value:
+                    data: null
+                    error: >-
+                      KYC_IN_PROGRESS: verification for customer
+                      aabe0a33-6716-42e2-bbca-7abf1a8bd91c was already submitted
+                      and the verification provider is reviewing it (review
+                      status pending). Poll GET
+                      /v1/customers/aabe0a33-6716-42e2-bbca-7abf1a8bd91c/kyc/status
+                      for the result instead of calling POST
+                      /v1/customers/kyc/start-s2s again.
+                IdempotencyInFlight:
+                  summary: A request with the same Idempotency-Key is still running
+                  value:
+                    data: null
+                    error:
+                      code: idempotency_in_flight
+                      message: >-
+                        A request with the same Idempotency-Key is currently
+                        being processed
         '422':
           $ref: '#/components/responses/IdempotencyKeyReused'
         '500':
-          description: The documents could not be sent for review
+          description: >-
+            The documents or the review request could not be sent. The KYC
+            stays unsubmitted. Retry with the same Idempotency-Key.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                data: null
-                error: failed to upload documents to verification provider
+              examples:
+                UploadFailed:
+                  summary: Sending the documents failed
+                  value:
+                    data: null
+                    error: failed to upload documents to verification provider
+                ProcessingError:
+                  summary: Requesting the review failed, or another processing error
+                  value:
+                    data: null
+                    error: >-
+                      KYC_PROCESSING_ERROR: KYC processing failed. Please try
+                      again later or contact support.
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
   /v1/customers/{customer_id}/kyc/documents:
@@ -1259,8 +1558,11 @@ paths:
         For the final result, read `kyc` on the customer (`GET
         /v1/customers/{customer_id}`) or listen for the `customer.kyc.status.*`
         webhooks. `reviewStatus: completed` with `reviewAnswer: rejected` means
-        verification failed. Customers verified by automatic document
-        verification have no review and get a 404 here.
+        verification failed. A customer with no submitted verification gets 404
+        `KYC_NOT_INITIATED`, which names the calls to make. A customer verified
+        by automatic document verification has no review and gets 404
+        `KYC_ALREADY_COMPLETED`. Read that customer with `GET
+        /v1/customers/{customer_id}`.
       parameters:
         - $ref: '#/components/parameters/CustomerIdPath'
       responses:
@@ -1313,7 +1615,9 @@ paths:
                   INVALID_REQUEST: The customer ID provided is not valid. Please
                   verify the customer ID format.
         '404':
-          description: Customer not found, or verification not started
+          description: >-
+            Customer not found, no verification submitted, or KYC completed
+            without a review
           content:
             application/json:
               schema:
@@ -1326,11 +1630,26 @@ paths:
                     error: >-
                       CUSTOMER_NOT_FOUND: Customer not found. Please verify the
                       customer exists in our system.
-                NoApplicant:
-                  summary: Verification has not started, or completed automatically
+                KycNotInitiated:
+                  summary: No verification has been submitted yet
                   value:
                     data: null
-                    error: no applicant found for customer; KYC has not been initiated
+                    error: >-
+                      KYC_NOT_INITIATED: no verification has been submitted for
+                      customer 42ad0adb-e134-4345-b4be-98e5021b0da8 yet. Upload
+                      its documents with POST /v1/customers/kyc/upload-document,
+                      then call POST /v1/customers/kyc/start-s2s (or POST
+                      /v1/customers/kyc/start for the hosted flow).
+                AutoApproved:
+                  summary: KYC was completed by automatic document verification
+                  value:
+                    data: null
+                    error: >-
+                      KYC_ALREADY_COMPLETED: KYC for customer
+                      42ad0adb-e134-4345-b4be-98e5021b0da8 was completed without
+                      a verification provider review (auto-approval), so there is
+                      no review status to report. Read the verified customer with
+                      GET /v1/customers/42ad0adb-e134-4345-b4be-98e5021b0da8.
         '500':
           description: The review state could not be read
           content:

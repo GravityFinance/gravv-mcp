@@ -95,6 +95,7 @@
     "GET /v1/savings/rate",
     "GET /v1/savings/{id}",
     "GET /v1/savings/{id}/statement",
-    "POST /v1/savings/simulate/interest"
+    "POST /v1/savings/simulate/interest",
+    "POST /v1/transfer/quote"
   ]
 }

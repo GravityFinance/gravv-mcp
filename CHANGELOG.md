@@ -7,11 +7,21 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 ## 0.4.0 (unreleased)
 
 This release brings the tools in line with the current API reference. API tools go from 72
-to 89, all in the default load (87 on a live key, which hides the two sandbox tools). Every
+to 90, all in the default load (88 on a live key, which hides the two sandbox tools). Every
 documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
 
+- `getTransferQuote` in `transfers` (`POST /v1/transfer/quote`): prices a payout, returns the
+  fee and `net_to_amount` (what the recipient is credited) when the payee is the destination,
+  and a `quote_id` that `createTransfer` takes to settle at that rate. It moves no money, so it
+  has no confirm step. A closed route is refused here, before any money moves. The
+  `createTransfer` preview names the quote, and new fix hints cover an expired, mismatched or
+  used quote and each quote refusal.
+- `send-remittance` quotes before it sends, lists the countries open in live on 10 November
+  2026 (Nigeria, Ghana and Kenya among them; MTN-only advice removed; Hong Kong still not
+  available), treats a quote with the payee as the live route check, and says the webhook URL
+  and signing secret are set in the Dashboard.
 - Cards with a linked wallet. `createCardApplication` and `activateFeature` (`provider_data`) take
   `wallet_id` as the other choice to `account_id`, for a business with no card account: the
   wallet becomes the card's linked wallet, and withdrawals and a blocked card's balance go back to it.
@@ -90,11 +100,12 @@ documented endpoint now has a tool or a stated reason it has none.
 - The `activateFeature` note for `provider_data.account_id` says to always send the
   business's card account; the spec said it could be left out.
 - Upload sizes: every tool note, fix hint and prompt states one limit per tool, the size
-  the service takes: `uploadCustomerKycDocument` 10 MB, `uploadCardholderKycDocument` 5 MB,
+  the service takes: `uploadCustomerKycDocument` 5 MB, `uploadCardholderKycDocument` 5 MB,
   `uploadTransferDocument` 700 KB, v2 account documents 2 MB each, and in sandbox under
   500 KB for one call's files. Before, the notes, hints and prompts disagreed (500 KB,
   about 600 KB, 700 KB, 5 MB, 10 MB). A `413`, and a size refusal sent as a `400`, now
-  name the tool's limit.
+  name the tool's limit. `uploadCustomerKycDocument` dropped from 10 MB to 5 MB in
+  November 2026, when the KYC service and the gateway lowered their limit.
 - The `features` toolset merged into `cards`, since activating `virtual_cards` is how a
   card is issued in live. `--toolsets=features` still works: it loads `cards`, with a
   warning.

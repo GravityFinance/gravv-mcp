@@ -41,6 +41,46 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
     status: 400,
     body: { data: null, error: "transfers to NG/NGN are not available at this time" },
   },
+  "transfer-quote-expired": {
+    tool: "createTransfer",
+    status: 400,
+    body: { data: null, error: "quote is invalid or expired; request a new quote" },
+  },
+  "transfer-quote-mismatch": {
+    tool: "createTransfer",
+    status: 400,
+    body: { data: null, error: "quote does not match this transfer's currencies and amount" },
+  },
+  "transfer-quote-used": {
+    tool: "createTransfer",
+    status: 409,
+    body: { data: null, error: "quote has already been used by another transfer" },
+  },
+  "quote-route-closed": {
+    tool: "getTransferQuote",
+    status: 400,
+    body: { data: null, error: "transfers to this destination are not available right now — please try again later" },
+  },
+  "quote-pair-unsupported": {
+    tool: "getTransferQuote",
+    status: 400,
+    body: { data: null, error: "quote currency pair is not supported" },
+  },
+  "quote-payee-currency": {
+    tool: "getTransferQuote",
+    status: 400,
+    body: { data: null, error: "the destination payee is paid in XOF, not NGN" },
+  },
+  "quote-amount-too-small": {
+    tool: "getTransferQuote",
+    status: 400,
+    body: { data: null, error: "the amount is too small for this destination: the payout fee would be more than 20% of it" },
+  },
+  "quote-fee-destination": {
+    tool: "getTransferQuote",
+    status: 400,
+    body: { data: null, error: "fees can be quoted only for an external_account destination with an id" },
+  },
   "transfer-limit": {
     tool: "createTransfer",
     status: 422,
@@ -107,7 +147,7 @@ const FIXTURES: Record<string, { tool: string; status: number; body: unknown }> 
   "kyc-file-too-large": {
     tool: "uploadCustomerKycDocument",
     status: 413,
-    body: { data: null, error: "the uploaded file is too large — the maximum is 10MB" },
+    body: { data: null, error: "the uploaded file is too large — the maximum is 5MB" },
   },
   "card-kyc-file-too-large": {
     tool: "uploadCardholderKycDocument",
@@ -221,8 +261,10 @@ describe("fix hints", () => {
 
   test("a fix applies only to the tools that return it", () => {
     const transfer = TOOLS_BY_NAME.get("createTransfer")!;
-    assert.equal(errorFixFor("createTransfer", 400, "quote is invalid or expired", null), undefined);
+    // The same words from createTransfer are about a payout quote, not an FX quote.
+    assert.equal(errorFixFor("createTransfer", 400, "quote is invalid or expired", null)?.id, "transfer-quote-expired");
     assert.doesNotMatch(hintFor(400, transfer, "quote is invalid or expired") ?? "", /getFxQuote/);
+    assert.equal(errorFixFor("listTransactions", 400, "quote is invalid or expired", null), undefined);
   });
 
   test("a code is matched whole, wherever the body puts it", () => {

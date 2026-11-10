@@ -98,6 +98,12 @@ describe("previews read the fields the schemas really have", () => {
     );
   });
 
+  test("a transfer with quote_id says it settles at the quoted rate", () => {
+    const quoted = willDo("createTransfer", { amount: "100", quote_id: "GRVTRF_8C2E41A97B3D5F06", source: { id: "acc_1" } });
+    assert.match(quoted, /At the rate of quote GRVTRF_8C2E41A97B3D5F06/);
+    assert.doesNotMatch(willDo("createTransfer", { amount: "100", source: { id: "acc_1" } }), /rate of quote/);
+  });
+
   test("an FX order never prints [object Object] or an approval step", () => {
     const d = willDo("createFxOrder", { amount: "1000", pair: { base: "USD", quote: "EUR" }, side: "sell" });
     assert.doesNotMatch(d, /\[object Object\]/);

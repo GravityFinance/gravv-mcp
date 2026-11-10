@@ -242,7 +242,12 @@ function summarise(tool: GeneratedTool, body: unknown, args: Record<string, unkn
       const sent = text(b.source?.currency)
         ? money(b.source.currency)
         : `${money(undefined)} in the source account's currency`;
-      return `Transfer ${sent} from ${from} to ${kind} ${to}. Once submitted this cannot be reversed from the API.`;
+      // With a quote_id the transfer settles at the quoted rate, or is refused; without one the rate
+      // is taken when it is sent.
+      const rate = text(b.quote_id)
+        ? ` At the rate of quote ${b.quote_id}; it is refused if the quote expired or prices another amount.`
+        : "";
+      return `Transfer ${sent} from ${from} to ${kind} ${to}.${rate} Once submitted this cannot be reversed from the API.`;
     }
     case "withdrawFromCard":
       return `Withdraw ${money(b.currency)} from card ${text(b.card_id) ?? "(unspecified)"}.`;
