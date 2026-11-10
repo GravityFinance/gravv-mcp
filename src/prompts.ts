@@ -356,7 +356,7 @@ export const PROMPTS: GoalPrompt[] = [
         "listExternalAccounts with customer_id and search, then createExternalAccount. Read the phone or account number back to the user, and show the holder or wallet name the answer returns. A phone number cannot be changed later: a wrong one needs a new payee.",
         "getTransferQuote with from_currency USD, to_currency the payee's currency, amount as a string, to_country_iso_code, and destination `{destination_type: external_account, id: <payee id>}`. Show the rate, `net_to_amount` (what the recipient is credited) and `fee` (charged on top). A refusal here means the route is closed or the amount is too small: tell the user, and send nothing.",
         "createTransfer with `quote_id`, the same amount and currencies, the sender in `additional_information`, and `rail` left out. Show amount, recipient, institution, net_to_amount and fee, and send confirm: true only after the user says yes. The quote lasts about a minute (`expires_at`): if it expired while the user decided, quote again and show the new figures.",
-        "getTransaction until final.",
+        "getTransaction until final, or follow the `transfer` webhooks. The webhook URL and its signing secret are set in the Gravv Dashboard, not over the API.",
       ],
     },
     paths: [

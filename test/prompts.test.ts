@@ -116,6 +116,7 @@ describe("prompt text is true", () => {
     assert.match(text, /getTransferQuote[^\n]*destination/);
     assert.match(text, /createTransfer with `quote_id`/);
     assert.match(text, /live check/);
+    assert.match(text, /signing secret are set in the Gravv Dashboard/);
     assert.doesNotMatch(text, /Do not pass a quote|There is no rate lock|MTN MoMo/);
   });
 
