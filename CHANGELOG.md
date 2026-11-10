@@ -7,11 +7,21 @@ All notable changes to `@gravv-infra/mcp` are recorded here. The format follows
 ## 0.4.0 (unreleased)
 
 This release brings the tools in line with the current API reference. API tools go from 72
-to 89, all in the default load (87 on a live key, which hides the two sandbox tools). Every
+to 90, all in the default load (88 on a live key, which hides the two sandbox tools). Every
 documented endpoint now has a tool or a stated reason it has none.
 
 ### Added
 
+- `getTransferQuote` in `transfers` (`POST /v1/transfer/quote`): prices a payout, returns the
+  fee and `net_to_amount` (what the recipient is credited) when the payee is the destination,
+  and a `quote_id` that `createTransfer` takes to settle at that rate. It moves no money, so it
+  has no confirm step. A closed route is refused here, before any money moves. The
+  `createTransfer` preview names the quote, and new fix hints cover an expired, mismatched or
+  used quote and each quote refusal.
+- `send-remittance` quotes before it sends, lists the countries open in live on 10 November
+  2026 (Nigeria, Ghana and Kenya among them; MTN-only advice removed; Hong Kong still not
+  available), treats a quote with the payee as the live route check, and says the webhook URL
+  and signing secret are set in the Dashboard.
 - Cards with a linked wallet. `createCardApplication` and `activateFeature` (`provider_data`) take
   `wallet_id` as the other choice to `account_id`, for a business with no card account: the
   wallet becomes the card's linked wallet, and withdrawals and a blocked card's balance go back to it.

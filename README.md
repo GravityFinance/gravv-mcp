@@ -184,7 +184,7 @@ same `idempotency_key` and when to leave it out.
 | `open-account` | a bank account or the business's card account; an application the bank is waiting on; deposit details | `path`: v2, card-account, manage |
 | `onboard-customer` | create and verify a person or a business; resubmit; read KYC documents | `path`: person-hosted, person-s2s, business, resubmit, documents |
 | `send-payout` | ACH, wire, RTP, SWIFT, SEPA, Faster Payments, or between own accounts | `rail`: ach, wire, rtp, swift, sepa, fps, book |
-| `send-remittance` | a bank account or mobile wallet abroad | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
+| `send-remittance` | a bank account or mobile wallet abroad, in about 60 countries | `country`: NG, GH, KE, RW, ZM, UG, CG, CI, BJ, MX, BR, CO, IN, HK, or xof |
 | `send-crypto` | USDC or USDT to a wallet; USDT to USDC between own wallets | `path`: same-network, cross-network, convert |
 | `convert-currency` | quote and place an FX order; settlement instructions; follow or cancel | `path`: quote-and-order, settlement-instruction, manage |
 | `issue-card` | verify a cardholder and issue a card; fund, limit, freeze, close | `path`: hosted-kyc, own-kyc, fund, limit, freeze-or-block, close, another-card |
