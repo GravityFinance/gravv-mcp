@@ -22,6 +22,9 @@ documented endpoint now has a tool or a stated reason it has none.
   2026 (Nigeria, Ghana and Kenya among them; MTN-only advice removed; Hong Kong still not
   available), treats a quote with the payee as the live route check, and says the webhook URL
   and signing secret are set in the Dashboard.
+- `listCards` takes `funding`: `wallet` (cards with a linked wallet), `account` (cards on the
+  card account with no linked wallet) or both, comma-separated. `total_items` counts only the
+  matching cards.
 - Cards with a linked wallet. `createCardApplication` and `activateFeature` (`provider_data`) take
   `wallet_id` as the other choice to `account_id`, for a business with no card account: the
   wallet becomes the card's linked wallet, and withdrawals and a blocked card's balance go back to it.

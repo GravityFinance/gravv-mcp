@@ -5209,6 +5209,10 @@ export const TOOLS: GeneratedTool[] = [
           "type": "string",
           "description": "`virtual`, `physical` or both, comma-separated"
         },
+        "funding": {
+          "type": "string",
+          "description": "`wallet` (cards with a linked wallet), `account` (cards on your card account with no linked wallet) or both, comma-separated"
+        },
         "customer_id": {
           "type": "string"
         },
@@ -5225,6 +5229,7 @@ export const TOOLS: GeneratedTool[] = [
       "items_per_page",
       "status",
       "card_type",
+      "funding",
       "customer_id",
       "card_id"
     ],
