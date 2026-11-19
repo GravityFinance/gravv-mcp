@@ -785,6 +785,14 @@ paths:
             type: string
           description: '`virtual`, `physical` or both, comma-separated'
         - in: query
+          name: funding
+          schema:
+            type: string
+          description: >-
+            `wallet` (cards with a linked wallet), `account` (cards on your card
+            account with no linked wallet) or both, comma-separated
+          example: wallet
+        - in: query
           name: customer_id
           schema:
             type: string
