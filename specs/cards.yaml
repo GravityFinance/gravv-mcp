@@ -900,9 +900,17 @@ paths:
                       available:
                         type: number
                         description: >-
-                          What a withdrawal from this card may take: the group's
-                          balance for an `active`, `freeze` or `blocked` card. Left out
+                          What a withdrawal from this card may take: the part of the
+                          group's balance that can leave the card, for an `active`,
+                          `freeze` or `blocked` card. Merchant refunds a card can spend
+                          but not withdraw are kept out (see `refund_credit`). Left out
                           for a card that cannot be withdrawn from.
+                      refund_credit:
+                        type: number
+                        description: >-
+                          Merchant refunds the card can spend but that cannot be
+                          withdrawn, in US dollars: `group_balance` minus `available`.
+                          Sent only when above 0.
                       currency:
                         type: string
                         example: USD
