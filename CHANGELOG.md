@@ -86,6 +86,9 @@ documented endpoint now has a tool or a stated reason it has none.
 
 ### Changed
 
+- `getCardBalance`: `available` is now what can leave the card, and the new `refund_credit`
+  (sent only when above 0) is the merchant refunds a card can spend but not withdraw.
+
 - The accounts tools follow the corrected accounts reference: `account_type` is `operating`,
   `regular`, `card` or `default`; `category` takes only `main` and `sub_account` when you open
   an account; `getAccountCapabilities` takes `account_type`; and `createAccount` (card account)
